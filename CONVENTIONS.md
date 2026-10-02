@@ -1,157 +1,49 @@
-# Conventions
+# Development conventions
 
-## 1. General principles
+## Implementation choices
 
-This repository favors:
+Runtime, storage, sandbox, key provider and deployment are not selected by this baseline. Record those choices in ADRs with security properties, performance evidence, recovery behavior and adapter contracts. Deterministic control services may be implemented independently of the agent runtime.
 
-- explicit contracts,
-- small public APIs,
-- deterministic behavior,
-- benchmark-backed optimization,
-- safe Rust,
-- low allocation,
-- dependency restraint.
+Use small typed interfaces for authorization, corpus access, atomic budget/state operations, execution and disclosure. Avoid vendor-specific SDKs in core contracts. Engine invocation uses a pinned binary/package and versioned artifact schema rather than source imports.
 
-Architecture should optimize both maintainability and hot-path performance.
+## Repository versus operational data
 
-## 2. Language
+The repository may contain code, schemas, public synthetic controls, architecture and safe examples. Protected corpora, seeds, operational ledgers, raw observations, detailed reports, keys and environment-specific access information remain in separately controlled stores.
 
-Primary implementation language: Rust.
+Do not create a tracked protected-data folder even if the repository is private. Gitignore is a convenience, not a complete disclosure control. Test public output by allowlist; no exception is granted by a filename or repository visibility.
 
-Documentation, issue titles, commit messages, and public API comments should be in English.
+## Identity and transitions
 
-## 3. Formatting and linting
+Distinguish corpus custody identity, case identity, candidate digest, plan digest, authorization ID, reservation ID, run ID and disclosure receipt. No case identity is exposed publicly for a protected run.
 
-Use standard Rust tooling:
+Version schemas, policies, store migrations and engine protocols separately. Persist transitions with actor, reason code, prior state and authorization reference; reject unexpected transitions. Canonical serialization/digest rules are part of the contract.
 
-```bash
-cargo fmt --all --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-features
-```
+Every mutating operation requires documented idempotency and concurrency semantics. Use transactions or atomic conditional writes for reservations and state changes. Tests must exercise concurrent requests, lease loss, partial failure and restart, not just sequential success.
 
-Exact CI commands may evolve as the workspace is scaffolded.
+## Agents and tools
 
-## 4. Public API discipline
+Agent tools expose bounded deterministic operations with explicit authorized inputs. Do not expose arbitrary shell execution, unrestricted storage reads, free-form signing, or policy mutation as routine agent tools.
 
-Do not expose a public abstraction only because it is convenient internally.
+External messages and scanner output are untrusted data. An instruction found in a report, fixture or webpage grants no authority. An agent's retry request passes the same budget and plan checks as any other request.
 
-Public additions should answer:
+Changes to approval, retention, budget, disclosure or signer policy require an explicit reviewed policy revision. Automations cannot silently amend them to recover a failed job.
 
-- Is this required by an external consumer?
-- Can it be kept private until the behavior is proven?
-- Does it force allocation or dynamic dispatch on hot paths?
-- Does it couple this repository to an implementation detail in another repository?
+## Execution and logging
 
-Prefer private implementation first, public contract later.
+Use structured executable arguments, allowlisted engine/scanner paths and verified candidate bytes. Enforce actual isolation through the runner; record verification of enforcement rather than a descriptive network flag alone.
 
-## 5. Performance-sensitive code
+Logs use fixed reason codes and bounded metadata. Do not interpolate input values, raw stderr, case paths, secret configuration or tokens into logs or exceptions. Use safe synthetic error fixtures to verify redaction/exclusion behavior. Restricted audit logs also minimize data and have explicit access/retention.
 
-Hot-path code should prefer:
+## Testing and performance
 
-- borrowed `&str`,
-- slices,
-- compact enums,
-- integer/range metadata,
-- pre-allocation,
-- single-pass output construction,
-- static dispatch where practical.
+Ordinary CI uses public synthetic conformance data only. Test authorization denial, stale plans, wrong candidate, duplicate dispatch, exhausted budget, concurrent reservation, failure after exposure, cancellation/child cleanup, malicious output, invalid receipts, suppression/composition and recovery.
 
-Avoid by default:
+Do not run protected evaluation merely to validate a PR or refresh a site. Operational acceptance requires approved isolated execution and custody policy. Public controls prove mechanism, not protected-corpus independence.
 
-- cloned matched substrings,
-- `serde_json::Value`,
-- per-finding heap maps,
-- repeated regex compilation,
-- repeated normalization,
-- repeated scanning,
-- mandatory trait-object dispatch where generic/static dispatch is viable.
+Measure coordinator transaction latency, dispatch/worker startup, artifact validation, resource utilization and engine execution separately. Never relax isolation, omit audit writes or reset budgets to improve a benchmark. PII and credential formulas belong in their engines.
 
-## 6. Cross-repository contracts
+## Review and publication
 
-Depend only on documented public APIs.
+PRs state the boundary affected, tested failure modes, backward compatibility, migration/recovery and any policy change. Retain immutable prior evidence rather than editing away incidents or failed runs.
 
-Never import:
-
-- another repository's private module,
-- generated build artifacts that are not a supported contract,
-- test-only internals,
-- unpublished package paths.
-
-If a required contract is missing, create an explicit upstream design issue instead of reaching into internals.
-
-## 7. Commit messages
-
-Prefer concise imperative messages, for example:
-
-```text
-Add deterministic overlap planner
-Avoid substring allocation in replacement pass
-Define reversible capture boundary
-```
-
-A commit should represent one coherent change.
-
-## 8. Tests
-
-Every behavior change should include tests.
-
-Important categories:
-
-- unit tests,
-- property tests,
-- fuzz targets,
-- integration tests,
-- conformance tests,
-- benchmark regression cases.
-
-Performance-sensitive changes should include before/after measurements when practical.
-
-## 9. Benchmarks
-
-Benchmarks should record:
-
-- input size,
-- finding count,
-- runtime,
-- allocation behavior where measurable,
-- binary-size impact for feature changes.
-
-Do not optimize solely from microbenchmarks if the change makes end-to-end composition slower.
-
-## 10. Error messages
-
-Errors must not include matched values.
-
-Use fixed/bounded error vocabulary suitable for logs without exposing source text.
-
-## 11. Feature flags
-
-Features must represent optional capabilities, not arbitrary build modes.
-
-Optional integrations should not inflate the default build.
-
-Feature combinations must be tested.
-
-## 12. Documentation
-
-Every architectural decision that affects:
-
-- repository boundaries,
-- security ownership,
-- binary size,
-- runtime dependencies,
-- public contracts,
-
-should be documented before implementation or in the same change.
-
-## 13. Public-readiness
-
-Before making the repository public:
-
-- remove internal-only references that cannot be understood externally,
-- add license information,
-- add contribution instructions,
-- enable vulnerability reporting,
-- verify examples use synthetic data only,
-- ensure issue templates do not invite submission of live secrets.
+Before public code release, complete license/reporting setup and review the full repository history and assets. Replace deployment-specific material with safe examples; do not describe source publication as permission to query the protected system.

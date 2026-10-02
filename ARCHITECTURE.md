@@ -1,274 +1,78 @@
 # Architecture
 
-## 1. Scope
-
-`anonymizer` is the composition layer that transforms a source document using findings produced by external recognizers.
-
-It owns:
-
-- finding normalization,
-- overlap arbitration across sources,
-- replacement planning,
-- irreversible placeholder generation,
-- optional reversible-token orchestration,
-- final output construction.
-
-It does not own:
-
-- canonical credential detection,
-- statistical NER,
-- original-value storage,
-- authorization,
-- persistence,
-- cryptography,
-- restoration.
-
-## 2. Ecosystem boundary
-
-```text
-                       +-------------------+
-                       |      fastner      |
-                       | independent NER   |
-                       +---------+---------+
-                                 |
-                                 | Entity spans
-                                 v
-+-------------------+     +------+-------+
-|   redact-secret   |---->|  anonymizer  |
-| canonical core    |     | orchestration|
-+-------------------+     +------+-------+
-                                 |
-                                 | optional reversible capture
-                                 v
-                       +---------+----------+
-                       | redact-secret-vault|
-                       | mapping + authority|
-                       +--------------------+
-```
-
-Dependency direction must remain one-way.
-
-`redact-secret` and `fastner` must remain usable without this repository.
-
-## 3. Runtime boundary is not repository boundary
-
-The project must support a zero-serialization native Rust path.
-
-Repository separation exists for:
-
-- ownership,
-- release cadence,
-- independent benchmarking,
-- independent public API evolution,
-- clearer security responsibility.
-
-It must not imply mandatory:
-
-- subprocess execution,
-- HTTP,
-- JSON,
-- Serde,
-- IPC,
-- database access.
-
-## 4. Internal pipeline
-
-Preferred whole-input flow:
-
-```text
-borrowed input
-    |
-    +--> deterministic findings
-    |
-    +--> NER findings
-    |
-    +--> caller findings
-            |
-            v
-     normalize spans
-            |
-            v
-     classify source/type
-            |
-            v
-      overlap arbitration
-            |
-            v
-      replacement plan
-            |
-            v
-     capacity calculation
-            |
-            v
-      allocate output once
-            |
-            v
-        ordered write
-```
+## Design status and trust model
 
-The anonymizer should not rescan text to rediscover findings already supplied by recognizers.
+This is a proposed operational design, not a claim of an implemented sandbox or verified deployment. Protected synthetic data is the initial scope. Real personal data requires a separate approved governance design before ingestion.
 
-## 5. Finding model
+The system assumes engine/scanner code can be buggy or malicious, agent prompts and external content are untrusted, execution can crash, and repeated aggregate queries can reveal a holdout. Custody enforces controls outside the agent and measurement kernel.
 
-The internal finding representation should remain compact.
+## Logical components
 
-Preferred characteristics:
+| Component | Responsibility |
+| --- | --- |
+| Agent interface | Propose plans, request authorized operations, prepare reports |
+| Policy and authorization service | Validate actor, purpose, allowed identities, approval and capabilities |
+| Run coordinator | Atomic budget reservations, leases, state transitions, retry/idempotency |
+| Corpus store | Sealed encrypted populations, access scope, integrity and retention |
+| Isolated execution worker | Enforced process/network/filesystem/resource boundary |
+| Artifact validator | Bind results to plan/candidate/engine and validate measurement contracts |
+| Disclosure service | Projection rules, query budget, suppression, receipt signing |
+| Audit store | Append-only lifecycle/decision trail and integrity verification |
 
-- UTF-8 byte offsets for Rust-native paths.
-- No matched substring ownership.
-- Stable source identity.
-- Bounded type identifiers.
-- Confidence represented compactly.
-- Optional metadata only when it has a demonstrated runtime use.
+These are responsibilities, not mandatory microservices. Start with a small deployment and explicit interfaces. Choose runtime, durable store, isolation platform, key provider, and deployment topology through ADRs and failure tests. Redis, Postgres, or an AWS SDK is not required by the core contract.
 
-Avoid open-ended hot-path structures such as:
+## Data boundaries
 
-```rust
-HashMap<String, serde_json::Value>
-```
+Repository code and public synthetic conformance controls are distinct from operational storage. Operational storage holds protected corpora, seeds, private manifests, budget/audit ledgers, raw observations, result detail, and signing material references.
 
-unless isolated from the core path.
+Use storage contracts for sealed corpus reads, atomic state/budget transactions, private artifact writes, and audit append. Durability, encryption, recovery, and integrity properties are requirements of an adapter; document and test them before production use.
 
-## 6. Overlap arbitration
+An engine receives the authorized corpus and frozen plan only inside the worker. It receives no storage, signing, approval, or organization-wide credentials. Scanner children receive only the files/configuration they need. The orchestration control plane must not expose case bytes to the language model.
 
-Overlap handling is a product contract and must be explicit.
+## Plan and authorization
 
-Candidate policy axes may include:
+A proposed `EvaluationPlan` binds purpose, population custody identity/version, candidate artifact digest, engine/protocol, adapter/scanner identities, activation/configuration, accounting settings, seed policy, resource limits, disclosure policy, and permitted retries.
 
-1. explicit security priority,
-2. source precedence,
-3. specificity,
-4. confidence,
-5. narrower span,
-6. deterministic registration order.
+The authorization record binds an authenticated actor, approval authority, exact plan digest, permitted operation, expiry, and reservation scope. Run count, release/query count, CPU/time/storage budgets are separate controls where needed. Reject stale authorization and changed plans; do not infer permission from a repository issue label or agent message.
 
-The final rule must be deterministic and testable.
+## Lifecycle
 
-The project must not silently alter the meaning of a `redact-secret` finding without an explicit policy decision.
+The minimum run lifecycle is:
 
-## 7. Irreversible mode
+`proposed -> authorized -> reserved -> running -> validating -> completed`
 
-Irreversible mode replaces accepted spans with placeholders.
+Terminal failure states distinguish denied, failed, cancelled, and expired. Disclosure is a separate lifecycle: `prepared -> approved -> released`, or withheld/rejected. Completing execution does not authorize release.
 
-Examples:
+Reserve budget transactionally before acquiring protected bytes. Use unique run IDs, idempotency keys, and compare-and-swap/transactional leases. Record whether a failure occurred before or after protected exposure. Once data was exposed, a crash or cancellation must not silently refund the evaluation budget. Refund rules, recovery, retry limits, and lease expiry are explicit policy.
 
-```text
-Sarah Kim -> <PERSON_1>
-ghp_...   -> <GITHUB_TOKEN_1>
-```
+Resuming a run must prove its exact candidate/plan/state identity and avoid double publication or duplicate budget charges. A retry is auditable; idempotency does not make a new exposure free.
 
-Requirements:
+## Isolation and artifact integrity
 
-- deterministic numbering for deterministic inputs,
-- no matched value in errors,
-- placeholder validation,
-- no overlapping writes,
-- one ordered output pass.
+Use a worker boundary with no external egress by default, no host credentials, restricted writable scratch, least-privilege identity, bounded stdout/stderr, limits for CPU/memory/processes/storage, and timeout/process-tree cleanup. Validate archive/path/symlink behavior before materialization.
 
-## 8. Reversible mode
+A manifest flag cannot enforce isolation. The deployment must prove its sandbox configuration and failure behavior; containers alone are not an assurance statement. Privileged or shared-host execution requires its own explicit risk decision.
 
-Reversible mode delegates token issuance and retention to a vault-facing capability.
+Stage candidate bytes immutably; verify engine/scanner/configuration identity and candidate integrity before and after execution. Validate that results cover the authorized input roster, versions, counters, and failure states. Raw data stays private. Engine measurement logic remains in credential-eval/pii-eval, not duplicated in the custodian.
 
-Conceptually:
+## Disclosure and receipts
 
-```text
-finding span
-   |
-   v
-capture eligible original value
-   |
-   v
-vault issues unpredictable token
-   |
-   v
-anonymizer places token into output
-```
+Private result detail and public aggregate are different contracts. The disclosure service uses an allowlist and explicit policy version. It excludes input text, seeds, case IDs, paths, individual value hashes, raw ranges, free-form errors and sensitive configuration.
 
-The anonymizer must not retain an independent copy of the vault mapping after the operation.
+Define minimum stratum sizes, allowable dimensions, composition rules, and cumulative query/release budgets before enabling repeated public comparisons. Suppressing individual small cells is insufficient when overlapping totals reveal them. Do not add noise silently; any statistical disclosure mechanism needs a versioned policy and stated measurement consequences.
 
-A reversible token must not be treated as a plaintext identifier or as authorization.
+Expose an opaque population release identity or approved keyed commitment, not guessable value-level hashes. Separate internal plan/corpus digests from disclosure-safe identifiers when metadata could reveal protected details.
 
-## 9. Performance rules
+A receipt may bind the disclosure-safe candidate/engine/protocol identities, run scope, policy version, aggregate digest, issuer/key identifier and approved independence claims. The signer accepts only validated approved projections and is isolated from scanner/agent execution. Key rotation/revocation and offline verification are documented.
 
-The following are architectural requirements:
+Signatures attest origin and binding. They do not prove true expectations, an independent reviewer, or scanner quality. State project-owned/custodian-declared evidence honestly.
 
-1. Repository boundaries must not require process boundaries.
-2. Native Rust composition must not require serialization.
-3. Borrow source text whenever possible.
-4. Represent matched locations as ranges.
-5. Avoid per-finding substring allocation.
-6. Do not repeat Unicode normalization if upstream results already guarantee the needed invariant.
-7. Prefer bulk APIs.
-8. Sort/merge findings once.
-9. Construct final output in one ordered pass.
-10. Optional integrations must be feature-gated or otherwise removable from small builds.
-11. Preserve static-linking and LTO opportunities.
-12. Benchmark architecture changes before accepting abstraction overhead.
+## Audit, recovery, and retention
 
-## 10. Binary-size strategy
+Use append-only audit events with integrity checkpoints stored outside the writer's control where practical. Tamper-evident logging is not tamper-proof storage. Retain actor/authorization/plan/state/budget/disclosure references without input values. Separate restricted operational metadata from safe public receipts.
 
-The default crate should not automatically include:
+Retention and deletion schedules cover corpora, observations, results, scratch, backups, and failed runs. Define recovery for crash, partial artifact write, exhausted storage, duplicate dispatch, expired authorization, and unavailable signing/store services. Fail closed on uncertainty about plan identity, authorization, or public release state.
 
-- `fastner` model data,
-- vault persistence backends,
-- database drivers,
-- crypto SDKs,
-- network stacks.
+## Acceptance
 
-Possible feature shape:
-
-```toml
-[features]
-default = []
-core = ["dep:redact-secret"]
-fastner = ["dep:fastner"]
-reversible = ["dep:redact-secret-vault-contract"]
-full = ["core", "fastner", "reversible"]
-```
-
-Exact feature names are not yet fixed.
-
-## 11. Error boundary
-
-Errors must be safe by construction.
-
-Errors may contain:
-
-- fixed error codes,
-- bounded counts,
-- safe configuration identifiers.
-
-Errors must not contain:
-
-- matched values,
-- source fragments,
-- original reversible values,
-- vault secrets,
-- authorization details that should not leave the trusted boundary.
-
-## 12. Streaming
-
-Streaming is not implied by whole-input support.
-
-Streaming introduces:
-
-- incomplete entities,
-- unresolved overlap windows,
-- delayed NER decisions,
-- token issuance before finality,
-- cancellation semantics,
-- rollback concerns.
-
-Streaming should be designed separately and only after whole-input behavior is stable and benchmarked.
-
-## 13. Public-release gate
-
-Before public release:
-
-- API stability policy must exist.
-- Supported dependency versions must be documented.
-- Performance baselines must be reproducible.
-- Binary-size baselines must be recorded.
-- Adversarial Unicode and overlap suites must pass.
-- Reversible mode must pass vault conformance tests.
-- No private/internal dependency path may be required from sibling repositories.
+Public synthetic lifecycle controls must test concurrency, duplicate requests, budget exhaustion, crash after exposure, cancellation, malicious output, filesystem/network denial, cross-run reuse, invalid bindings, suppressed strata, signing refusal and recovery. Protected runs occur only after those controls and operational review pass. Product support decisions remain downstream.

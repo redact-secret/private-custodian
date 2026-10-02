@@ -1,151 +1,46 @@
-# Security Policy
+# Security policy
 
-## Status
+## Status and reporting
 
-This repository is currently private and under active development.
+This repository is an initial design baseline. No production deployment or supported release is claimed.
 
-Security guarantees described here are design goals unless a release explicitly states that they are implemented and qualified.
+Report vulnerabilities privately to a repository maintainer through an established private channel. Use GitHub private vulnerability reporting once configured. Do not put private corpus details, operational IDs, keys, raw logs, or exploit payloads involving protected data in public issues. Before publication, maintainers must document a verified reporting route and incident owner. Response timelines are not yet guaranteed.
 
-## Reporting a vulnerability
+Use a minimal synthetic reproduction with affected revision, boundary crossed, and preconditions. Do not submit real PII, production logs, or real credentials.
 
-Do not open a public issue containing:
+## Assets and adversaries
 
-- live credentials,
-- private personal data,
-- reversible mappings,
-- vault tokens,
-- encryption material,
-- exploit payloads containing sensitive customer data.
+Protected synthetic corpora and seeds, authorization records, frozen candidates, budgets, private observations, audit state, signing keys, and disclosure policy are security assets. Threats include untrusted agents, malicious scanners, compromised dependencies, unauthorized operators, repeated adaptive evaluation, accidental publication, and crash/retry races.
 
-Before this repository becomes public, the maintainers should enable GitHub private vulnerability reporting / Security Advisories and publish the preferred contact path.
+Private repository access is not the security boundary for operational data. A future public release of code must not disclose that data or permit protected execution.
 
-## Security boundary
+## Mandatory boundaries
 
-`anonymizer` transforms findings into anonymized output.
+- Never commit protected corpora, seeds, runtime ledgers, raw findings, signing keys, access tokens, or sensitive storage paths to source control.
+- Keep these assets out of ordinary CI logs, artifacts, caches, screenshots, model prompts and tracing.
+- Give agents neither direct protected-store reads nor signing/approval credentials. Deterministic services enforce access, plan binding and budgets.
+- Separate proposal, execution authorization and disclosure authorization. Agents cannot approve their own work.
+- Freeze exact candidate/engine/scanner/configuration identities and reject mutations or stale observations.
+- Reserve budgets atomically; crash, timeout and retry rules account for data exposure and cumulative queries.
+- Enforce worker isolation, bounded resources, no default external egress and least-privilege mounts/identity.
+- Validate schema and provenance before any result is accepted. Public release uses allowlisted fields and a separate approval policy.
 
-It does **not** guarantee that:
+## Holdout confidentiality
 
-- every secret or PII value was detected,
-- anonymized output is universally safe,
-- a statistical entity prediction is correct,
-- a reversible token is non-sensitive,
-- downstream applications will handle output safely.
+An aggregate can leak information through small groups, overlapping queries, timing, detailed errors, or repeated candidate tuning. Use policy-controlled strata and cumulative disclosure budgets; record all queries, including withheld/failed requests when policy requires it. Do not expose raw fingerprints or per-case identifiers as substitutes for plaintext protection.
 
-Detection quality remains the responsibility of the configured recognizers.
+Agents and developers must not tune against protected failures. Only approved summaries are available downstream. A public conformance control is not private holdout evidence and cannot establish independence.
 
-## Sensitive-data handling
+## Keys, stores, and cleanup
 
-The implementation must avoid copying matched values unless necessary.
+Use separate access scopes for corpus encryption, operational storage, authorization, and receipt signing. Keep key material in an approved runtime provider; define rotation, revocation, access audit and recovery. The public verifier must not need a private key.
 
-Preferred hot-path representation:
+Temporary file deletion is cleanup, not guaranteed secure erasure on every storage medium. Reduce persistence, control mounts and backups, and use encryption/key lifecycle where required. Test retention and deletion behavior, including failed runs and snapshots.
 
-```text
-borrowed input + byte ranges
-```
+## Incident handling
 
-instead of owned matched strings.
+On suspected exposure, stop affected execution/disclosure, preserve restricted audit evidence, revoke affected access/keys, identify released projections and impacted plans, and coordinate private investigation. Do not erase the budget/audit history to hide a failed run. Resume only after the relevant boundary and replay/recovery rules are validated.
 
-No raw matched value may be included in:
+## Public release gate
 
-- errors,
-- debug output,
-- logs,
-- metrics,
-- traces,
-- panic messages,
-- snapshot fixtures,
-- benchmark reports.
-
-## Reversible mode
-
-When reversible mode is enabled:
-
-- mapping ownership belongs to `redact-secret-vault`,
-- token issuance must use the vault contract,
-- authorization belongs to the vault/server authority layer,
-- `anonymizer` must not invent a second mapping store,
-- `anonymizer` must not treat possession of a token as authorization,
-- failures must not leave partially committed mappings without a defined rollback/abort contract.
-
-## Untrusted input
-
-All source text must be treated as untrusted.
-
-The implementation must safely handle:
-
-- malformed UTF-8 at FFI boundaries,
-- invisible Unicode characters,
-- bidi/control characters,
-- overlapping spans,
-- duplicate spans,
-- out-of-range spans,
-- zero-length spans,
-- very large inputs,
-- adversarial finding counts,
-- placeholder-like literals already present in source text.
-
-## Denial-of-service controls
-
-Public APIs should support bounded operation.
-
-At minimum, limits should exist or be inherited for:
-
-- input size,
-- number of findings,
-- number of replacement spans,
-- placeholder length,
-- reversible captures,
-- output growth.
-
-Avoid algorithms with accidental quadratic behavior on attacker-controlled input.
-
-## Unsafe Rust
-
-Prefer safe Rust.
-
-Any future use of `unsafe` requires:
-
-- an explicit architectural justification,
-- a narrowly scoped module,
-- safety invariants in code comments,
-- dedicated tests,
-- benchmark evidence that the unsafe path is materially justified.
-
-## Dependency policy
-
-Prefer a small dependency surface.
-
-New runtime dependencies should be reviewed for:
-
-- transitive size,
-- unsafe code,
-- build scripts,
-- network behavior,
-- filesystem behavior,
-- cryptographic implications,
-- MSRV impact,
-- WASM compatibility where relevant.
-
-## Security testing
-
-Before public release, include:
-
-- fuzz tests for span merging and output construction,
-- property tests for non-overlapping output plans,
-- tests proving no source bytes outside selected spans are altered,
-- Unicode adversarial corpus,
-- token-literal collision tests,
-- reversible abort/rollback tests,
-- large-input resource-bound tests,
-- no-secret-in-error tests.
-
-## Disclosure discipline
-
-Security documentation must distinguish:
-
-- implemented behavior,
-- tested behavior,
-- qualified behavior,
-- planned behavior.
-
-Do not describe a planned control as a current guarantee.
+Review all history and release assets; configure private reporting; choose a license; demonstrate isolation, concurrency/budget recovery and disclosure tests; document limitations and key verification. Keep deployment inventories and protected operational state outside the public repository. Source publication does not change authorized data use.
