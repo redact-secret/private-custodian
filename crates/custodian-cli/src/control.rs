@@ -1619,7 +1619,9 @@ fn rebuild_failed(o: Output, name: &'static str, r: CliReason) -> Output {
     o.with_failure(name, r)
 }
 
-pub(crate) fn export_reason(e: custodian_ledger::ExportError) -> CliReason {
+/// The fixed CLI reason an export failure is reported under. Public so the
+/// daemon's scheduler reports exactly the codes the operator CLI does.
+pub fn export_reason(e: custodian_ledger::ExportError) -> CliReason {
     use custodian_ledger::ExportError as E;
     match e {
         E::Source(s) => s.into(),

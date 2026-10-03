@@ -415,6 +415,7 @@ pub struct PipelineRun {
 /// The private records of a run. Restricted operational data.
 #[derive(Clone, PartialEq, Eq)]
 pub struct PipelineArtifacts {
+    pub result_meta: Option<String>,
     pub aggregates: Option<Vec<u8>>,
     pub execution: Option<String>,
     pub receipt: Option<String>,
@@ -640,46 +641,58 @@ impl SqliteStore {
         })
     }
 
-    /// Keep the aggregate artifact the engine reported, before the attempt is
-    /// settled. Write-once: the same bytes again are a no-op, different bytes
-    /// are `IdentityConflict`.
-    pub fn pipeline_store_aggregates(
+    /// Keep the validated result of a run (its outcome and roster counters as
+    /// `result_meta`, and the aggregate artifact when the engine reported
+    /// one), before the attempt is settled. Write-once: the same values again
+    /// are a no-op, different values are `IdentityConflict`.
+    pub fn pipeline_store_result(
         &self,
         attempt: &RunId,
-        bytes: &[u8],
+        result_meta: &str,
+        aggregates: Option<&[u8]>,
         now: u64,
     ) -> Result<(), StoreError> {
-        if bytes.is_empty() || bytes.len() > MAX_AGGREGATES_BYTES {
+        if result_meta.is_empty()
+            || result_meta.len() > 1024
+            || aggregates.is_some_and(|a| a.is_empty() || a.len() > MAX_AGGREGATES_BYTES)
+        {
             return Err(StoreError::InvalidInput);
         }
         let now_i = secs(now)?;
         self.write(FaultOp::PipelineArtifacts, |tx| {
             load_run(tx, attempt.as_str())?.ok_or(StoreError::NotFound)?;
-            let cur: Option<Option<Vec<u8>>> = tx
+            type Row = (Option<String>, Option<Vec<u8>>);
+            let cur: Option<Row> = tx
                 .query_row(
-                    "SELECT aggregates FROM pipeline_artifacts WHERE attempt_id = ?1",
+                    "SELECT result_meta, aggregates FROM pipeline_artifacts \
+                     WHERE attempt_id = ?1",
                     [attempt.as_str()],
-                    |r| r.get(0),
+                    |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .optional()?;
             match cur {
                 None => {
                     tx.execute(
-                        "INSERT INTO pipeline_artifacts (attempt_id, aggregates, stored_at) \
-                         VALUES (?1, ?2, ?3)",
-                        (attempt.as_str(), bytes, now_i),
+                        "INSERT INTO pipeline_artifacts (attempt_id, result_meta, aggregates, \
+                         stored_at) VALUES (?1, ?2, ?3, ?4)",
+                        (attempt.as_str(), result_meta, aggregates, now_i),
                     )?;
                     Ok(())
                 }
-                Some(None) => {
+                Some((None, None)) => {
                     tx.execute(
-                        "UPDATE pipeline_artifacts SET aggregates = ?1 WHERE attempt_id = ?2",
-                        (bytes, attempt.as_str()),
+                        "UPDATE pipeline_artifacts SET result_meta = ?1, aggregates = ?2 \
+                         WHERE attempt_id = ?3",
+                        (result_meta, aggregates, attempt.as_str()),
                     )?;
                     Ok(())
                 }
-                Some(Some(existing)) if existing == bytes => Ok(()),
-                Some(Some(_)) => Err(StoreError::IdentityConflict),
+                Some((meta, agg))
+                    if meta.as_deref() == Some(result_meta) && agg.as_deref() == aggregates =>
+                {
+                    Ok(())
+                }
+                Some(_) => Err(StoreError::IdentityConflict),
             }
         })
     }
@@ -793,15 +806,16 @@ impl SqliteStore {
         self.read(|tx| {
             Ok(tx
                 .query_row(
-                    "SELECT aggregates, execution, receipt, receipt_digest \
+                    "SELECT result_meta, aggregates, execution, receipt, receipt_digest \
                      FROM pipeline_artifacts WHERE attempt_id = ?1",
                     [attempt.as_str()],
                     |r| {
                         Ok(PipelineArtifacts {
-                            aggregates: r.get(0)?,
-                            execution: r.get(1)?,
-                            receipt: r.get(2)?,
-                            receipt_digest: r.get(3)?,
+                            result_meta: r.get(0)?,
+                            aggregates: r.get(1)?,
+                            execution: r.get(2)?,
+                            receipt: r.get(3)?,
+                            receipt_digest: r.get(4)?,
                         })
                     },
                 )

@@ -108,10 +108,14 @@ BEGIN
 END;
 
 -- The private records of a run. Each column is written once: a second write
--- of different bytes is refused, so the aggregate artifact the receipt names
--- and the receipt itself cannot drift after the fact.
+-- of different bytes is refused, so the validated result, the aggregate
+-- artifact the receipt names and the receipt itself cannot drift after the
+-- fact. `result_meta` is the validated outcome and roster counters of the
+-- worker's result (no case identity, no text); `aggregates` is the private
+-- aggregate artifact the engine reported, if it reported one.
 CREATE TABLE pipeline_artifacts (
     attempt_id     TEXT PRIMARY KEY REFERENCES pipeline_runs (attempt_id),
+    result_meta    TEXT,
     aggregates     BLOB,
     execution      TEXT,
     receipt        TEXT,
@@ -122,6 +126,7 @@ CREATE TABLE pipeline_artifacts (
 
 CREATE TRIGGER pipeline_artifacts_guard BEFORE UPDATE ON pipeline_artifacts
 WHEN NEW.attempt_id <> OLD.attempt_id
+  OR (OLD.result_meta IS NOT NULL AND NEW.result_meta IS NOT OLD.result_meta)
   OR (OLD.aggregates IS NOT NULL AND NEW.aggregates IS NOT OLD.aggregates)
   OR (OLD.execution IS NOT NULL AND NEW.execution IS NOT OLD.execution)
   OR (OLD.receipt IS NOT NULL AND NEW.receipt IS NOT OLD.receipt)

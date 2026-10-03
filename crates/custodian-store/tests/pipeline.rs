@@ -386,21 +386,23 @@ fn aggregates_are_written_once_and_only_for_an_enrolled_run() {
     let (store, a) = approved(&db, 3);
     let at = &a.run.attempt;
     assert_eq!(
-        store.pipeline_store_aggregates(at, b"{}", NOW),
+        store.pipeline_store_result(at, "{}", Some(b"{}"), NOW),
         Err(StoreError::NotFound),
         "not enrolled yet"
     );
     store.pipeline_enroll(&a.run, NOW).unwrap();
-    store.pipeline_store_aggregates(at, b"first", NOW).unwrap();
     store
-        .pipeline_store_aggregates(at, b"first", NOW + 1)
+        .pipeline_store_result(at, "{}", Some(b"first"), NOW)
+        .unwrap();
+    store
+        .pipeline_store_result(at, "{}", Some(b"first"), NOW + 1)
         .unwrap();
     assert_eq!(
-        store.pipeline_store_aggregates(at, b"second", NOW + 2),
+        store.pipeline_store_result(at, "{}", Some(b"second"), NOW + 2),
         Err(StoreError::IdentityConflict)
     );
     assert_eq!(
-        store.pipeline_store_aggregates(at, b"", NOW),
+        store.pipeline_store_result(at, "{}", Some(b""), NOW),
         Err(StoreError::InvalidInput)
     );
     assert_eq!(
@@ -547,7 +549,7 @@ fn none_of_this_touches_a_budget() {
     let before = status(&store, &a.fx);
     store.pipeline_enroll(&a.run, NOW).unwrap();
     store
-        .pipeline_store_aggregates(&a.run.attempt, b"x", NOW)
+        .pipeline_store_result(&a.run.attempt, "{}", Some(b"x"), NOW)
         .unwrap();
     store
         .pipeline_advance(&a.run.attempt, PipelineStep::Closed, "attempt_failed", NOW)
@@ -571,7 +573,7 @@ fn none_of_this_touches_a_budget() {
 /// call is idempotent, so running the script again after a crash converges.
 fn script(store: &SqliteStore, run: &ApprovedRun, t: u64) -> Result<(), StoreError> {
     store.pipeline_enroll(run, t)?;
-    store.pipeline_store_aggregates(&run.attempt, b"agg", t)?;
+    store.pipeline_store_result(&run.attempt, "{}", Some(b"agg"), t)?;
     store.pipeline_advance(&run.attempt, PipelineStep::Dispatched, "dispatched", t)?;
     if let Some(l) = store.queue_lease("c", t, 60)? {
         store.queue_release(l.seq, l.lease_token, t)?;
