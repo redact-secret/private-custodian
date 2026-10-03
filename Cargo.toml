@@ -19,7 +19,7 @@ members = [
 version = "0.0.0"
 edition = "2021"
 publish = false
-license = "UNLICENSED" # No license is granted yet; see README.md "Publication and licensing".
+license = "MIT" # See LICENSE and ADR 0103; covers source only, not protected data or evaluation access.
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

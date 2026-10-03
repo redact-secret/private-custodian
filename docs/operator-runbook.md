@@ -70,8 +70,7 @@ Structural limits that the policy file cannot override: an **agent** identity ma
 **service** identity may hold only `requester` and `auditor`; only a **human** approves, clears, retires,
 rotates, publishes, repairs, imports an activation, or cancels someone else's request. A policy file that
 tries otherwise does not load (`operator_policy_invalid`). One human may hold two identities (for example
-`requester` and `approver`), so the separation is by principal; whether one person may hold both is a human
-decision (section 8).
+`requester` and `approver`), so the separation is by principal; one person may hold both under two separate credentials in solo-maintainer mode (ADR 0103).
 
 ## 3. Using the CLI
 
@@ -305,8 +304,9 @@ These are not automated and not delegated to an agent:
    epochs when no copy reaches the ledger's checkpoint.
 8. Resolving a conflicting or quarantined ledger record, an untrusted ledger, a feed destination that holds
    other bytes, or a suspected key compromise (incident handling, SECURITY.md).
-9. Whether one person may hold both `requester` and `approver` identities, and how credentials are stored
-   and issued.
+9. How credentials are stored and issued. One person may hold both `requester` and `approver` as separate
+   principals with separate credential stores (solo-maintainer mode, ADR 0103); evidence is then labelled
+   `procedural-separation` or `custodian-declared`, never independent.
 10. Anything involving real personal data, a live protected run, or publishing code or evidence: out of scope
     for this runbook and governed by SECURITY.md and the README publication terms.
 

@@ -105,7 +105,7 @@ Not applicable.
 
 Single-operator reality: the same human may hold `requester` and `approver` under two identities, so
 separation of duties is by principal, not by person; the runbook lists it as a human decision. This is
-procedural, as C9 already states.
+procedural, as C9 already states. ADR 0103 accepts this mode for the sole maintainer, with compensating rules.
 
 ## Open risks and revisit triggers
 

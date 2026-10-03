@@ -25,10 +25,10 @@ Nothing here changes repository visibility, chooses a license, publishes anythin
 
 | # | Blocker | Owner role |
 | --- | --- | --- |
-| P1 | **License**: none is granted and none was chosen. Options: Apache-2.0, MIT, MPL-2.0, AGPL-3.0, or stay unlicensed (all rights reserved). Each has consequences for the benchmark and engine repositories and for contributors; the choice is explicit and human | maintainer |
-| P2 | **Private vulnerability reporting route and incident owner** are not configured or documented (SECURITY.md still says they must be before publication). `docs/incident-response.md` is the procedure; the route and the owner are people and settings | maintainer |
+| P1 | **License**: MIT, decided and added by the maintainer ([ADR 0103](adr/0103-solo-maintainer-operating-decisions-license-reporting-and-publication.md)). **Closed** | maintainer |
+| P2 | **Reporting route and incident owner**: decided in ADR 0103 and documented in SECURITY.md (GitHub private vulnerability reporting, no email; owner is the maintainer). Remaining step: enable private vulnerability reporting when the repository becomes public (not available while private) | maintainer |
 | P3 | **Isolation proof on a Linux runner for the release commit**: the `worker-isolation` CI job (`CUSTODIAN_REQUIRE_ISOLATION=1`) is the only isolation evidence; macOS skips. Its green result for the commit to be published is the evidence | maintainer (reads CI) |
-| P4 | **Personal data in tracked files and history** (author email on all commits, one local home path in two tracked helper scripts) and **developer tooling in the tree** (`.claude/` helpers and settings, `.mcp.json` with a floating `@latest` package): scrub, exclude, or accept; rewriting shared history is a maintainer decision | maintainer |
+| P4 | **Personal data in history and developer tooling in the tree**: decided in ADR 0103: no history rewrite; publish a clean one-commit snapshot that excludes `.claude/` and `.mcp.json` and uses the GitHub noreply address. The export itself is done at publication, so this stays a blocker until then | maintainer |
 | P5 | Gate items 5 to 7 re-run green on the exact commit to publish, including `dependency-audit` in CI (added here; it passed on the pull request) | maintainer / CI |
 
 ### Blockers before any protected run, by owner role
@@ -121,8 +121,8 @@ isolation (ADR 0100).
 | --- | --- | --- | --- |
 | 1 | History and assets reviewed | **pass** for secrets and protected data; **open** for P4 | section 2; the only tool finding is a synthetic token constant that was replaced (`crates/custodian-intake/tests/app.rs`, commit `a30e40d3`); no sensitive extension or protected path was ever committed; personal data is P4 |
 | 2 | Deployment material replaced with safe examples | **pass** | no hostnames, inventories, accounts or paths of a deployment in the tree; absolute paths in tests and docs are negative-test inputs or placeholders |
-| 3 | Private reporting configured, route and owner documented | **fail** (P2) | SECURITY.md says it must be done; the procedure is `docs/incident-response.md`; the route is a human setting |
-| 4 | License selected and added | **fail** (P1, human decision) | `UNLICENSED` in `Cargo.toml`, README says none is granted; not chosen here |
+| 3 | Private reporting configured, route and owner documented | **documented; setting pending** (P2) | SECURITY.md and ADR 0103 name the route and the owner; enabling the setting happens at publication |
+| 4 | License selected and added | **pass** (P1) | MIT: `LICENSE`, `Cargo.toml`, README; ADR 0103 |
 | 5 | Isolation demonstrated by failure tests | **not assessable locally** (P3) | CI job `worker-isolation` is the evidence |
 | 6 | Concurrency and recovery tests pass | **pass** (local, synthetic) | section 3 |
 | 7 | Disclosure tests pass | **pass** (local, synthetic) | `custodian-disclosure/tests/*`, `c12_revocation.rs` |
@@ -224,14 +224,11 @@ Disposition vocabulary: **fixed here**, **accepted** (with the rationale and the
 
 ## 7. Human decisions required
 
-1. License (P1): Apache-2.0, MIT, MPL-2.0, AGPL-3.0, or remain unlicensed. Consider contributors, the engine and
-   benchmark repositories, patent grants and whether network-service use should be copyleft. Not chosen here.
-2. Incident owner, backup and the monitored private reporting route (P2); GitHub private vulnerability
-   reporting.
-3. What to do about the author email, the home path and `.claude/` and `.mcp.json` before publication (P4):
-   scrub history, publish from a fresh squashed export, or accept.
-4. Recovery point, retention values, key backup choice, one person holding requester and approver, the isolation
-   risk decision (deployment runbook section 5).
+1. Decided by ADR 0103: license (MIT), reporting route and incident owner (P1, P2), the clean-snapshot
+   publication and the author-address handling (P4), and one person holding requester and approver in
+   solo-maintainer mode.
+2. Still open: recovery point, retention values, key backup choice, the isolation risk decision (deployment
+   runbook section 5).
 5. Whether to implement R-1, R-2's code gate, R-4 and HG-2, HG-3 before or after the first deployment.
 6. Enabling the App webhook, ever (only when a server and every checklist item exist).
 

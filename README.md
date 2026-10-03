@@ -74,4 +74,4 @@ Protected corpora, seeds, keys, ledgers, raw reports, and operational identifier
 
 ## Publication and licensing
 
-Before publishing code, select a license and review repository history, fixtures, examples, logs, and assets. No license is granted by these documents. Operational secrets and protected evidence remain private even if the repository is public; moving code to public access does not grant permission to execute or query protected evaluation.
+The source code is licensed under the MIT License ([LICENSE](LICENSE), [ADR 0103](docs/adr/0103-solo-maintainer-operating-decisions-license-reporting-and-publication.md)). Before publishing code, review the exported tree, fixtures, examples, logs, and assets; publication uses a clean snapshot rather than this repository's history. The license covers source only and grants no right to protected data or to the protected evaluation. Operational secrets and protected evidence remain private even if the repository is public; moving code to public access does not grant permission to execute or query protected evaluation.
