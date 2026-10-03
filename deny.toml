@@ -20,6 +20,8 @@ allow = [
     "Apache-2.0",
     "BSD-1-Clause",
     "BSD-3-Clause",
+    # ring 0.17 (`Apache-2.0 AND ISC`), the RS256 App JWT signer (ADR 0124).
+    "ISC",
     "Unicode-3.0",
     "Unlicense",
     "Zlib",

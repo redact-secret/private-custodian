@@ -78,7 +78,10 @@ settings and move it straight to that store.
 2. Generate a webhook secret of at least 32 random bytes (for example `openssl rand -hex 32`) and store it in the
    secret store. Do not paste it into a shell history, ticket or chat.
 3. Set the same secret in the App's webhook settings.
-4. Deploy the listener behind HTTPS at `<WEBHOOK_URL>`. The listener passes the raw body, the
+4. Deploy the listener (`custodiand`, [daemon.md](daemon.md); it exists in code since S5 but nothing is
+   deployed and the webhook stays Inactive) behind HTTPS at `<WEBHOOK_URL>`. The daemon does not terminate TLS:
+   use your reverse proxy or tunnel. Enabling also needs the App private key as a 0600 file, an HTTPS GitHub
+   client (not built; `github_https_not_built`, ADR 0124) and `github.mode` set deliberately. The listener passes the raw body, the
    `X-Hub-Signature-256`, `X-GitHub-Event`, `X-GitHub-Delivery` and `Content-Type` headers to
    `Intake::handle` and returns its `(status, code)` pair. It must not log bodies or headers.
 5. In the App settings, save the URL, then mark the webhook Active.

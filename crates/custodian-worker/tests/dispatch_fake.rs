@@ -109,6 +109,92 @@ fn partial_and_failed_items_are_partial_never_success() {
     }
 }
 
+// ---- S5: a validated result is kept before the attempt is settled ----------
+
+struct LogSink {
+    log: Log,
+    fail: bool,
+}
+
+impl custodian_worker::ResultSink for LogSink {
+    fn persist(
+        &self,
+        result: &custodian_worker::result::ValidatedResult,
+    ) -> custodian_worker::reason::Result<()> {
+        self.log.lock().unwrap().push(format!(
+            "sink:{}",
+            result.aggregates_bytes().map_or(0, <[u8]>::len)
+        ));
+        if self.fail {
+            Err(R::LedgerUnavailable)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+fn run_with_sink(env: &Env, mode: &str, fail: bool) -> Run {
+    let p = pinned(env, "sink", mode);
+    let plan = plan("credential", &p, &Limits::normal());
+    let lg = log();
+    let ledger = RecLedger::new(&lg);
+    let corpus = RecCorpus::new(&lg, &plan, 3);
+    let job = DispatchJob {
+        plan: &plan,
+        sources: &p.sources,
+    };
+    let sink = LogSink {
+        log: lg.clone(),
+        fail,
+    };
+    let report = dispatcher(env)
+        .run_attempt_with(&job, &ledger, &corpus, &CancelToken::new(), &sink)
+        .unwrap();
+    Run { report, log: lg }
+}
+
+#[test]
+fn the_sink_sees_the_result_before_the_attempt_is_settled() {
+    let env = Env::new("sink-order");
+    let r = run_with_sink(&env, "with-aggregates", false);
+    assert_eq!(r.report.outcome, O::Success);
+    let e = events(&r.log);
+    let at = |s: &str| e.iter().position(|x| x.starts_with(s)).unwrap();
+    assert!(at("ledger:begin_validation") < at("sink:"));
+    assert!(at("sink:") < at("ledger:finish"), "{e:?}");
+    assert!(!e.iter().any(|x| x == "sink:0"), "the aggregates were kept");
+}
+
+#[test]
+fn a_result_that_cannot_be_kept_settles_failed_and_is_never_reported_clean() {
+    let env = Env::new("sink-fail");
+    let r = run_with_sink(&env, "with-aggregates", true);
+    assert_eq!(r.report.outcome, O::Failed);
+    assert_eq!(r.report.reason, R::LedgerUnavailable);
+    assert!(r.report.result.is_none(), "no result escapes a failed keep");
+    assert_eq!(r.report.exposure, Exposure::Exposed);
+    assert_eq!(
+        finish_events(&r.log),
+        vec!["ledger:finish:Failed:StoreUnavailable"]
+    );
+}
+
+#[test]
+fn a_failed_run_never_reaches_the_sink() {
+    let env = Env::new("sink-crash");
+    let r = run_with_sink(&env, "crash", false);
+    assert_eq!(r.report.outcome, O::Failed);
+    assert!(!events(&r.log).iter().any(|x| x.starts_with("sink:")));
+}
+
+#[test]
+fn an_engine_aggregate_that_is_not_an_object_is_a_rejected_result() {
+    let env = Env::new("sink-scalar");
+    let r = run_with_sink(&env, "aggregates-scalar", false);
+    assert_eq!(r.report.outcome, O::Rejected);
+    assert!(!events(&r.log).iter().any(|x| x.starts_with("sink:")));
+}
+
 // ---- crashes and abuse are never clean ------------------------------------
 
 #[test]

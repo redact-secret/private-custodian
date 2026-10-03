@@ -1,0 +1,60 @@
+[package]
+name = "custodian-daemon"
+description = "Service daemon (S5): HTTP intake listener, durable queue consumer, scheduler and the request-to-projection pipeline over the existing control plane. Synthetic data only; nothing deployed; the webhook stays inactive."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "custodian_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "custodiand"
+path = "src/main.rs"
+
+# TEST FIXTURE ONLY (docs/daemon.md): a deliberately tiny "engine" that prints
+# a `worker-result/1` document with an embedded `private-custodian.aggregates/1`
+# artifact for both domains. Real engines do not emit this yet (cross-repo job).
+# It must never be listed in a production artifact directory.
+[[bin]]
+name = "custodian-synthetic-engine"
+path = "src/bin/synthetic_engine.rs"
+
+# The worker's isolation probe (std only), built from the same source so the
+# Linux pipeline test can run the startup self-check without depending on
+# another package's binary. It is a test fixture and never shipped.
+[[bin]]
+name = "custodian-daemon-probe"
+path = "../custodian-worker/src/bin/probe.rs"
+
+# Dependencies: ADR 0123 (listener is std only), ADR 0124 (`ring` for the
+# App's RS256 JWT, `zeroize` and `nix` already in the lock for the signer).
+# Everything else is a path dependency or a workspace-pinned crate.
+[dependencies]
+custodian-core = { path = "../custodian-core" }
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-store = { path = "../custodian-store" }
+custodian-intake = { path = "../custodian-intake" }
+custodian-corpus = { path = "../custodian-corpus" }
+custodian-ledger = { path = "../custodian-ledger" }
+custodian-lifecycle = { path = "../custodian-lifecycle" }
+custodian-disclosure = { path = "../custodian-disclosure" }
+custodian-worker = { path = "../custodian-worker" }
+custodian-cli = { path = "../custodian-cli" }
+nix = { version = "=0.31.3", default-features = false, features = ["signal", "user"] }
+ring = "=0.17.14"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+zeroize = "=1.9.0"
+
+[dev-dependencies]
+custodian-worker = { path = "../custodian-worker", features = ["test-fakes"] }
+custodian-signer = { path = "../custodian-signer" }
+custodian-bridge = { path = "../custodian-bridge" }
+custodian-verify = { path = "../custodian-verify" }

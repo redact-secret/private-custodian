@@ -218,3 +218,11 @@ and operational drills (C12). The store provides the primitives those issues cal
   rows, claims with no queue row, and decided submissions whose events are acknowledged. Hard floors are enforced
   in code; ages are always explicit. ADR 0117.
 - Integrity checks cover the imports; the ledger payload allowlist gains the import and retention keys.
+
+## Migration 0007 (S5, pipeline and queue outcomes)
+
+Additive: `queue_outcomes` (a settled queue item keeps a fixed reason word, never its payload),
+`request_links`, `pipeline_runs` (a monotone step: enrolled, dispatched, assembled, prepared, then released or
+closed; the prepared mark is write-once) and `pipeline_artifacts` (write-once result metadata, aggregates,
+execution record and receipt). New fault points, five new integrity checks, and the `receipt.issued` and
+`queue.settled` outbox events. ADRs 0125 and 0126; [daemon.md](daemon.md).

@@ -125,3 +125,9 @@ signer is on another host or namespace, that disks and swap are encrypted, that 
   non-dumpable boundary).
 * `crates/custodian-cli/tests/s2_remote_signer.rs`, `tests/binary.rs`: export through the real socket;
   unreachable signer writes nothing; configuration validation.
+
+## Liveness (S5)
+
+`Signer::liveness()` lets the daemon's scheduler detect a dead signer. The remote signer sends a probe under an
+unknown domain and expects the refusal `sign_unknown_domain`; it never signs. A failure reports
+`signer_unavailable`. [daemon.md](daemon.md).

@@ -275,3 +275,30 @@ fn the_configured_signer_is_remote_only_when_a_socket_is_configured() {
     host.up();
     assert!(configured.sign(&payload).is_ok());
 }
+
+#[test]
+fn the_liveness_probe_tells_a_live_signer_from_a_dead_one_without_signing() {
+    let kid = custodian_contracts::types::KeyId::parse(&cc::id("key_", 1)).unwrap();
+    let mut host = SignerHost::new(&kid);
+    let remote = ConfiguredSigner::Remote(host.remote());
+    // Down: the same fixed code a signing call returns.
+    assert_eq!(remote.liveness(), Err(SignRefusal::SignerUnavailable));
+    // The always-refusing stand-in is never live.
+    let absent = ConfiguredSigner::Unavailable(UnavailableSigner::new(kid.clone()));
+    assert_eq!(absent.liveness(), Err(SignRefusal::SignerUnavailable));
+    // Up: live, and the probe signed nothing.
+    host.up();
+    assert_eq!(remote.liveness(), Ok(()));
+    assert_eq!(remote.liveness(), Ok(()));
+    assert_eq!(host.engine.stats().snapshot().signed, 0);
+    // A server that runs as another uid is not a live signer.
+    let strict = ConfiguredSigner::Remote(RemoteSigner::new(
+        kid.clone(),
+        UnixSocketTransport::new(host.sock.clone(), Duration::from_secs(3))
+            .expecting_signer_uid(custodian_signer::effective_uid().wrapping_add(1)),
+    ));
+    assert_eq!(strict.liveness(), Err(SignRefusal::SignerUnavailable));
+    // Killed again: not live.
+    host.down();
+    assert_eq!(remote.liveness(), Err(SignRefusal::SignerUnavailable));
+}
