@@ -30,7 +30,9 @@ spent again (including a second execution of an approved request). The drill mea
 (`spend_after_the_last_export_is_the_documented_unrecoverable_window`): without an export the restore passes
 `startup_check` and the request runs twice; with an export after the approval the same restore is refused.
 
-Operating rules until the code gate in ADR 0101 exists:
+The code gate now exists for dispatch (ADR 0116): with the gate enforced, `start` and the exposure record are
+refused (`store_export_pending`) until the budget-affecting events are exported. The rules below still apply to
+spend that predates the gate and to backups themselves. Operating rules:
 
 1. Run `repair export` after every approval and before the worker is started for it.
 2. Take a database backup at least as often as the operator accepts to lose spend. The recovery point is the
@@ -91,9 +93,9 @@ destruction (protected-storage.md).
 | --- | --- | --- |
 | Runtime database, live | life of the deployment; history tables are append-only and are never trimmed | none; a successor store is a new lineage |
 | Database backups | the newest N plus one per week for M weeks **(decide N, M)** | delete the file, expire cloud or snapshot copies on the same day, record it; a backup is as sensitive as the database |
-| Intake queue rows (`done`) | keep until the matching submission is terminal plus a short window **(decide)**; no code deletes them today | not implemented: retention needs a reviewed deletion tool (register HG-4); until then they accumulate within the bounded queue |
-| Pending and cancelled submissions | the same; bounded by `MAX_PENDING_SUBMISSIONS` (1024) | not implemented (HG-4) |
-| Delivery replay claims | at least as long as GitHub can redeliver **(decide)** | not implemented (HG-4) |
+| Intake queue rows (`done`) | keep until the matching submission is terminal plus a short window **(decide)**; `repair retention` can delete them (ADR 0117) | `repair retention` with explicit ages; hard floor 1 day |
+| Pending and cancelled submissions | the same; bounded by `MAX_PENDING_SUBMISSIONS` (1024) | `repair retention` expires stale pending ones and purges acknowledged decided ones (floors 1 and 7 days) |
+| Delivery replay claims | at least as long as GitHub can redeliver **(decide)** | `repair retention` (floor 7 days; only claims with no queue row) |
 | Sealed epochs (protected root) | retired is not deleted: as long as receipts, revocation or dispute handling may refer to them **(decide)** | protected-storage.md "Retention and deletion": confirm no dependency, retire, final verification record, remove the epoch directory, expire its backups on the same schedule |
 | Failed or abandoned staging epochs, worker staging | removed at the end of every run; sweep leftovers weekly **(decide)** | `discard_staging`; ordinary deletion |
 | Private ledger | life of the deployment | never rewritten; corrections are superseding records |
@@ -165,3 +167,6 @@ feed. Do not resume protected execution until the re-issue design is implemented
 
 Operator credentials are rotated by a reviewed policy revision (runbook 2.2); the GitHub App private key and
 webhook secret by docs/github-app.md (key and secret rotation). None of these are stored in this repository.
+
+The retention tool takes every age explicitly and has hard floors; the values in the table stay proposals until
+the maintainer approves them. Nothing unacknowledged by the ledger is deleted.

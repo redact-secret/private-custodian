@@ -106,6 +106,8 @@ never appear.
 | `repair ledger-reconcile --confirm-store-id S` | operator (human) | Re-write identical bytes for events the ledger lost and acknowledge ones it holds. A conflicting record is never repaired. | store id |
 | `repair feed-deliver --confirm-feed-id F` | operator (human) | Deliver committed feed envelopes the destination lacks. | feed id |
 | `repair clear-reconcile --confirm-store-id S --confirm-checkpoint-seq N` | operator (human) | Clear the restore block, **only** if the ledger is trustworthy and the store is at or past the ledger's checkpoint. | store id and local checkpoint sequence |
+| `legacy apply --extract F --handoff F --confirm-handoff-digest D --confirm-report-digest D` | operator (human, `legacy_import` permission) | Write reviewed legacy consumed units into the budget store (additive, idempotent). Does **not** carry contamination marks: record those with `lifecycle report`. Refusals: `handoff_not_ready`, `import_refused` (exit 5). | handoff digest, report digest |
+| `repair retention --confirm-store-id S --queue-done-min-age-secs N --claim-min-age-secs N --decided-submission-min-age-secs N --pending-submission-max-age-secs N [--batch-limit N]` | operator (human) | One retention pass over the queue, claims and submissions; ages are mandatory and below the code floors are refused. | store id |
 | `credential-digest --token-file F` | none | Print the digest to put in the operator policy. | none |
 
 Allowed `--reason` words for `lifecycle`: `results_exposed`, `tuned_on_results`, `integrity_alarm`,
@@ -191,6 +193,10 @@ pending, and disclosure stays closed because an exposed run's terminal event is 
    identical bytes and acknowledges.
 3. A conflicting record (`conflicting` > 0, or files under `quarantine/`) is never repaired automatically: it
    needs a human (section 8) and the incident procedure in SECURITY.md.
+
+*Dispatch gate*: in a deployment `start` and the exposure record are also refused with `store_export_pending` while
+budget-affecting events are unexported (ADR 0116). During a ledger outage this keeps dispatch closed and changes
+no budget. Restore the ledger, run `repair export`, then dispatch. Do not weaken the gate to proceed.
 
 *Untrusted ledger* (`verify ledger` reports findings; commands exit 8 with `ledger_untrusted`): the store is
 **write-blocked** (persisted). Do not clear the block to get going again.
