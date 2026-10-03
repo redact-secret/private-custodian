@@ -230,3 +230,12 @@ PopulationsCorpus::new(&ProtectedPopulations<S>, Authorization)
 The caller reserves first (`reserve_request`), passes the attempt id to `StoreRunLedger`, and stores
 `ValidatedResult::private_bytes()` privately if the report carries one. The dispatcher never signs,
 discloses or exports.
+
+## Aggregates channel and the daemon pipeline (S5)
+
+`worker-result/1` may embed an optional `aggregates` object (the `private-custodian.aggregates/1` artifact). It
+travels on stdout, not through `/scratch`: scratch is namespace-private tmpfs, and a writable host bind would
+widen the boundary. The dispatcher hands the validated result to a `ResultSink` before the attempt is settled.
+Real engines do not emit it yet; `custodian-synthetic-engine` does. The `worker-isolation` CI job also runs the
+daemon pipeline with the engine inside the real sandbox (`custodian-daemon/tests/linux_pipeline.rs`). ADR 0127;
+[daemon.md](daemon.md).

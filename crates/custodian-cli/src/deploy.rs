@@ -143,6 +143,9 @@ impl Signer for UnavailableSigner {
     fn sign(&self, _payload: &ApprovedPayload) -> Result<Signature, SignRefusal> {
         Err(SignRefusal::SignerUnavailable)
     }
+    fn liveness(&self) -> Result<(), SignRefusal> {
+        Err(SignRefusal::SignerUnavailable)
+    }
 }
 
 /// The deployment's signer: remote when a socket is configured, otherwise
@@ -169,6 +172,12 @@ impl Signer for ConfiguredSigner {
         match self {
             Self::Unavailable(s) => s.sign(payload),
             Self::Remote(s) => s.sign(payload),
+        }
+    }
+    fn liveness(&self) -> Result<(), SignRefusal> {
+        match self {
+            Self::Unavailable(s) => s.liveness(),
+            Self::Remote(s) => s.liveness(),
         }
     }
 }
@@ -211,6 +220,9 @@ impl PublicPopulations for KeyedPopulations<'_> {
 /// Everything opened from a deployment config. Owns the objects; borrow a
 /// [`Parts`] from it with [`Deployment::parts`].
 pub struct Deployment {
+    /// Where the runtime store lives. The daemon opens its intake and queue
+    /// connections on the same file (S5).
+    pub store_path: PathBuf,
     pub store: SqliteStore,
     pub authority: PolicyAuthority,
     pub populations: ProtectedPopulations<FsEpochStore>,
@@ -299,6 +311,7 @@ impl Deployment {
             }
         };
         Ok(Self {
+            store_path: c.store_path,
             store,
             authority,
             populations,
@@ -327,9 +340,20 @@ impl Deployment {
     /// Wire the control plane. `names` must outlive the returned parts; build
     /// it with [`Deployment::names`] first.
     pub fn parts<'a>(&'a self, names: &'a KeyedPopulations<'a>) -> Parts<'a, FsEpochStore> {
+        self.parts_with_clock(names, std::sync::Arc::new(SystemClock))
+    }
+
+    /// Like [`Deployment::parts`] with an injected clock. Production passes
+    /// the system clock (use `parts`); the daemon's tests pass a manual one so
+    /// fixture time and wiring time agree.
+    pub fn parts_with_clock<'a>(
+        &'a self,
+        names: &'a KeyedPopulations<'a>,
+        clock: std::sync::Arc<dyn custodian_store::Clock>,
+    ) -> Parts<'a, FsEpochStore> {
         Parts {
             store: &self.store,
-            clock: std::sync::Arc::new(SystemClock),
+            clock,
             authority: &self.authority,
             populations: &self.populations,
             ledger: &self.ledger,

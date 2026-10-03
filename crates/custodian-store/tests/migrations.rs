@@ -11,9 +11,9 @@ use custodian_store::migrations::{self, Migration, APPLICATION_ID, MIGRATIONS};
 use custodian_store::secure_fs::mode_of;
 use custodian_store::{SqliteStore, StoreConfig, StoreError};
 
-/// A synthetic migration after the last real one (the real list has six).
+/// A synthetic migration after the last real one (the real list has seven).
 const V2: Migration = Migration {
-    version: 7,
+    version: 8,
     name: "synthetic-add-note",
     sql: "CREATE TABLE synthetic_note (id INTEGER PRIMARY KEY, body TEXT NOT NULL) STRICT;",
 };
@@ -80,7 +80,7 @@ fn forward_upgrade_applies_only_pending_migrations_and_keeps_data() {
         reserve(&store, &fx).unwrap();
     }
     let store = SqliteStore::open_with(db.path(), StoreConfig::default(), &v1_and_v2()).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 7);
+    assert_eq!(store.schema_version().unwrap(), 8);
     assert_eq!(status(&store, &fx).held, 1);
     store.integrity_check().unwrap();
 }
@@ -149,7 +149,7 @@ fn a_failing_migration_rolls_back_completely() {
         provision(&store, &fx, 1);
     }
     let bad = Migration {
-        version: 7,
+        version: 8,
         name: "synthetic-bad",
         sql: "CREATE TABLE synthetic_half (id INTEGER); SELECT * FROM table_that_does_not_exist;",
     };

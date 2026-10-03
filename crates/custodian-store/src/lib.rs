@@ -24,6 +24,7 @@ pub mod migrations;
 pub mod model;
 mod ops;
 mod outbox;
+mod pipeline;
 mod port;
 mod reconcile;
 mod retention;
@@ -54,5 +55,10 @@ pub use model::{
 };
 pub use ops::budget_scope_key;
 pub use outbox::BUDGET_AFFECTING_KINDS;
+pub use pipeline::{
+    ApprovedRun, AssembledRecords, PipelineArtifacts, PipelineRun, PipelineStep, PreparedMark,
+    QueueOutcome, QueueOutcomeRecord, QueueSettle, RequestLinkRecord, MAX_AGGREGATES_BYTES,
+    MAX_DEFER_SECS,
+};
 pub use retention::{RetentionPolicy, RetentionReport};
 pub use store::{ExportGate, SqliteStore, StoreConfig};

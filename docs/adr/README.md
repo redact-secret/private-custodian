@@ -62,6 +62,13 @@ ADR.
 | [0120](0120-bound-release-flow-v2-signing-gate-and-ledger-domain.md) | Bound release flow: prepare for a destination, v2 signing gate, ledger domain | Accepted; implemented, not deployed |
 | [0121](0121-consumer-destination-verification-and-the-unbound-v1-outcome.md) | Consumer destination verification and the unbound v1 outcome | Accepted; implemented, not deployed |
 | [0122](0122-destination-binding-rollout-compatibility-and-hg-2-disposition.md) | Destination binding rollout, compatibility and the HG-2 disposition | Accepted; implemented, not deployed |
+| [0123](0123-std-only-http-listener-for-the-daemon.md) | A std-only HTTP/1.1 listener for the service daemon | Accepted; implemented, not deployed |
+| [0124](0124-rs256-app-jwt-with-ring-and-an-offline-github-adapter.md) | RS256 App JWT with ring, and the GitHub adapter behind a trait with an offline fake | Accepted; implemented, not deployed |
+| [0125](0125-queue-consumer-poison-handling-scheduler-and-migration-0007.md) | Queue consumer, poison handling, scheduler and migration 0007 | Accepted; implemented, not deployed |
+| [0126](0126-request-to-projection-pipeline-steps-and-crash-resume.md) | Request-to-projection pipeline: steps, idempotence and crash resume | Accepted; implemented, not deployed |
+| [0127](0127-receipt-assembly-and-the-aggregates-channel.md) | Receipt assembly from a dispatch report and the aggregates channel | Accepted; fixture only, real engines do not emit it |
+| [0128](0128-daemon-configuration-process-model-and-shutdown.md) | Daemon configuration, process model and shutdown | Accepted; implemented, not deployed |
+| [0129](0129-daemon-verification-claims-fixtures-and-dispositions.md) | Daemon verification claims, fixtures and release-readiness dispositions | Accepted; implemented, not deployed |
 
 Accepted (design) means the decision is frozen for downstream issues (C2 to C12). It does not mean any of it
 is implemented or deployed. See each ADR's status table.

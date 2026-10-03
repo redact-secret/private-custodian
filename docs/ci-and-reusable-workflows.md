@@ -63,7 +63,7 @@ custodian-verify --bundle DIR --keys FILE --feed-id ID --expect FILE --now UNIX_
   (1 to 8 digits; revocations in ascending sequence). The manifest is the bridge manifest; the documents are the
   canonical bytes of released projection envelopes and revocation envelopes.
 - `--keys` is the pinned public keys file `private-custodian.verify-keys/1`: key id, 64-hex public key,
-  purposes (`projection`, `revocation`; no ledger purpose is accepted), `valid_from`, optional `retired_at` and
+  purposes (`projection` for major 1, `projection_v2` for the destination-bound major 2, `revocation`; no ledger purpose is accepted), `valid_from`, optional `retired_at` and
   `revoked_at`. Public material only.
 - `--feed-id` is the pinned revocation feed id.
 - `--expect` is the expectations file `private-custodian.verify-expectations/1`: `domain`, `candidate`, `config`,

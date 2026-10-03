@@ -63,6 +63,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "retention",
         sql: include_str!("../migrations/0006_retention.sql"),
     },
+    Migration {
+        version: 7,
+        name: "pipeline",
+        sql: include_str!("../migrations/0007_pipeline.sql"),
+    },
 ];
 
 /// Highest schema version this binary knows.

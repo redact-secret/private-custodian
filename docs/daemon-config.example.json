@@ -1,0 +1,83 @@
+{
+  "schema": "private-custodian.daemon-config/1",
+  "deployment_config_path": "/PLACEHOLDER/etc/private-custodian/cli-config.json",
+  "intake": {
+    "config_path": "/PLACEHOLDER/etc/private-custodian/intake.json",
+    "webhook_secret_path": "/PLACEHOLDER/etc/private-custodian/secrets/webhook-secret"
+  },
+  "listener": {
+    "bind": "127.0.0.1:8787",
+    "path": "/PLACEHOLDER-webhook-path",
+    "allow_non_loopback": false,
+    "max_connections": 32,
+    "max_request_line_bytes": 2048,
+    "max_head_bytes": 16384,
+    "max_headers": 48,
+    "first_byte_timeout_secs": 5,
+    "head_timeout_secs": 10,
+    "body_timeout_secs": 10,
+    "write_timeout_secs": 5
+  },
+  "github": {
+    "mode": "disabled"
+  },
+  "requests_dir": "/PLACEHOLDER/var/private-custodian/requests",
+  "artifacts_dir": "/PLACEHOLDER/var/private-custodian/artifacts",
+  "worker": {
+    "sandbox": "none",
+    "staging_dir": "/PLACEHOLDER/var/private-custodian/staging",
+    "verification_max_age_secs": 3600
+  },
+  "release": {
+    "disclosure_policy_path": "/PLACEHOLDER/etc/private-custodian/disclosure-policy.json",
+    "policy_activation": {
+      "activation_id": "pac_placeholderreplacewithreal",
+      "sequence": 1
+    },
+    "destination": "placeholder-destination",
+    "approvals_dir": "/PLACEHOLDER/var/private-custodian/release-approvals",
+    "output_dir": "/PLACEHOLDER/var/private-custodian/released",
+    "provision_budgets_from_policy": true
+  },
+  "attestation": {
+    "authorship": "project_authored",
+    "review": "project_reviewed"
+  },
+  "required_activations": [
+    {
+      "policy": {
+        "kind": "approval",
+        "domain": "credential",
+        "name": "placeholder-approval-policy",
+        "version": 1
+      },
+      "activation_id": "pac_placeholderreplacewithreal",
+      "sequence": 1
+    }
+  ],
+  "queue": {
+    "workers": 1,
+    "owner": "custodiand",
+    "lease_secs": 120,
+    "max_attempts": 5,
+    "backoff_base_secs": 5,
+    "backoff_max_secs": 300,
+    "poll_ms": 500
+  },
+  "schedule": {
+    "recover_secs": 60,
+    "reconcile_registry_secs": 300,
+    "deliver_pending_secs": 60,
+    "export_secs": 30,
+    "checkpoint_secs": 300,
+    "startup_check_secs": 300,
+    "signer_liveness_secs": 60
+  },
+  "pipeline": {
+    "owner": "custodiand",
+    "worker_actor": "custodiand",
+    "lease_secs": 300,
+    "poll_ms": 500,
+    "shutdown_grace_secs": 30
+  }
+}

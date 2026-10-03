@@ -206,3 +206,40 @@ fn allowlist_roots_must_exist_be_absolute_and_not_world_writable() {
     fs::set_permissions(&env.art, fs::Permissions::from_mode(0o777)).unwrap();
     assert!(ArtifactAllowlist::new(std::slice::from_ref(&env.art)).is_err());
 }
+
+// ---- S5: the embedded aggregate artifact (ADR 0127) ---------------------------
+
+fn doc_with(domain: &str, aggregates: &str) -> Vec<u8> {
+    format!(
+        "{{\"schema\":\"private-custodian.worker-result/1\",\"domain\":\"{domain}\",\
+         \"protocol\":{{\"name\":\"synthetic-protocol\",\"version\":\"1\"}},\"status\":\"complete\",\
+         \"roster\":{{\"expected\":5,\"observed\":5,\"failed\":0}},\"aggregates\":{aggregates}}}"
+    )
+    .into_bytes()
+}
+
+#[test]
+fn an_embedded_aggregate_object_is_kept_as_private_bytes_and_nothing_else_is_interpreted() {
+    let p = protocol("credential");
+    let d = EvaluationDomain::Credential;
+    // Absent: valid, nothing to keep.
+    let none = validate_result(&doc("credential", "complete", 5, 5, 0), d, &p, 5).unwrap();
+    assert!(none.aggregates_bytes().is_none());
+    // Present: the object is re-serialized; the worker does not read it.
+    let with = validate_result(&doc_with("credential", "{\"b\":2,\"a\":[1]}"), d, &p, 5).unwrap();
+    assert_eq!(with.aggregates_bytes().unwrap(), b"{\"a\":[1],\"b\":2}");
+    assert_eq!(with.outcome, O::Success);
+    // Anything but an object is malformed.
+    for bad in ["7", "\"text\"", "[1]", "true"] {
+        assert_eq!(
+            validate_result(&doc_with("credential", bad), d, &p, 5).err(),
+            Some(R::ResultMalformed),
+            "{bad}"
+        );
+    }
+    // The extra field never lifts the other checks.
+    assert_eq!(
+        validate_result(&doc_with("pii", "{}"), d, &p, 5).err(),
+        Some(R::ResultMismatch)
+    );
+}

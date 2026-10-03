@@ -133,6 +133,29 @@ const COVERED_ELSEWHERE: &[(FaultOp, &str)] = &[
         FaultOp::RetentionPurge,
         "custodian-store/tests/retention.rs::a_crash_during_a_pass_leaves_a_consistent_store_and_the_next_pass_converges",
     ),
+    // S5 (migration 0007): the daemon's queue and pipeline bookkeeping. The
+    // store-level windows are swept in custodian-store/tests/pipeline.rs; the
+    // cross-step windows with a restart in custodian-daemon/tests/crash.rs.
+    (
+        FaultOp::QueueSettle,
+        "custodian-store/tests/pipeline.rs::crash_injection_at_every_pipeline_boundary_loses_and_duplicates_nothing",
+    ),
+    (
+        FaultOp::QueueRelease,
+        "custodian-store/tests/pipeline.rs::crash_injection_at_every_pipeline_boundary_loses_and_duplicates_nothing",
+    ),
+    (
+        FaultOp::PipelineEnroll,
+        "custodian-store/tests/pipeline.rs::crash_injection_at_every_pipeline_boundary_loses_and_duplicates_nothing",
+    ),
+    (
+        FaultOp::PipelineStep,
+        "custodian-store/tests/pipeline.rs::crash_injection_at_every_pipeline_boundary_loses_and_duplicates_nothing",
+    ),
+    (
+        FaultOp::PipelineArtifacts,
+        "custodian-store/tests/pipeline.rs::crash_injection_at_every_pipeline_boundary_loses_and_duplicates_nothing",
+    ),
 ];
 
 // ---- the main pipeline script ------------------------------------------------

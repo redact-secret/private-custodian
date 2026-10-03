@@ -352,6 +352,11 @@ fn library_code_has_no_ad_hoc_logging_or_printing() {
         "custodian-service/src/main.rs",
         "custodian-signer/src/main.rs",
         "custodian-worker/src/bin/",
+        // The daemon binary prints its version only; it reports through the
+        // reviewed fixed-code `EventLog`. The synthetic engine is a fixture
+        // that prints a result document (docs/daemon.md).
+        "custodian-daemon/src/main.rs",
+        "custodian-daemon/src/bin/",
     ];
     let mut files = Vec::new();
     walk_sources(&crates, &mut files);
@@ -374,7 +379,13 @@ fn library_code_has_no_ad_hoc_logging_or_printing() {
             "tracing::",
             "log::",
         ] {
-            if body.contains(needle) {
+            // A `use` of this repository's own `log` module (for example
+            // `use crate::log::EventLog`) is not a logging framework.
+            let found = body
+                .lines()
+                .filter(|l| !l.trim_start().starts_with("use ") && !l.contains("pub use "))
+                .any(|l| l.contains(needle));
+            if found {
                 offenders.push(format!("{rel}: {needle}"));
             }
         }

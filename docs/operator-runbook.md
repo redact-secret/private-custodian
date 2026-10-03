@@ -318,10 +318,10 @@ These are not automated and not delegated to an agent:
 
 ## 9. Not covered yet (unwired for deployment)
 
-* No long-running service, HTTP listener, queue-consumer daemon or live GitHub App exists; the pieces
-  (`Intake`, `ExecutionGate`, the durable queue, `Service::start`) are libraries exercised in tests.
-* The `custodian` binary has no signer: `repair export` and `feed publish` report `signer_unavailable` until a
-  deployment supplies an isolated signer transport.
+* A service daemon (`custodiand`: listener, queue consumer, scheduler, pipeline) exists in code since S5 but is
+  not deployed, no live GitHub App exists and no HTTPS client is built: [daemon.md](daemon.md).
+* The `custodian` binary has no signer of its own: `repair export` and `feed publish` report
+  `signer_unavailable` until a deployment supplies the isolated signer transport (S2, `signer.md`).
 * No private-ledger repository, key provider, feed destination or real operator policy exists.
 * Everything above is exercised only against synthetic data. C12 added the cross-layer suite, the restore drill and the readiness record: [backup-recovery.md](backup-recovery.md), [incident-response.md](incident-response.md), [deployment-runbook.md](deployment-runbook.md), [release-readiness.md](release-readiness.md).
 
