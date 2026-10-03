@@ -24,6 +24,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use custodian_contracts::canonical::Contract;
 use custodian_contracts::common::Signature;
 use custodian_contracts::public::PublicProjection;
+use custodian_contracts::public_v2::PublicProjectionV2;
 use custodian_contracts::revocation::RevocationEnvelope;
 use custodian_contracts::types::KeyId;
 use custodian_ledger::{
@@ -140,6 +141,12 @@ impl WindowedSigner {
         let (issued, fresh_until) = match payload.domain() {
             SignDomain::PublicProjection => {
                 match PublicProjection::decode_canonical(payload.canonical_bytes()) {
+                    Ok(p) => (p.issued_at.secs(), p.fresh_until.secs()),
+                    Err(_) => return true,
+                }
+            }
+            SignDomain::PublicProjectionV2 => {
+                match PublicProjectionV2::decode_canonical(payload.canonical_bytes()) {
                     Ok(p) => (p.issued_at.secs(), p.fresh_until.secs()),
                     Err(_) => return true,
                 }
