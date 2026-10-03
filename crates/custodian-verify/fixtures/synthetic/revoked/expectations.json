@@ -1,0 +1,21 @@
+{
+  "candidate": "sha256:ba4e586d9645eeb9e880309cb85bbedde21738fc2fc5efb76fc73e3d2dede376",
+  "config": "sha256:c7375948cc05269ff8643754615d605a6a54c7f5a0ef83c118a8f3adb7245e0a",
+  "destination": "benchmarks-feed",
+  "domain": "credential",
+  "policies": [
+    {
+      "domain": "credential",
+      "kind": "disclosure",
+      "name": "synthetic-disclosure",
+      "version": 1
+    }
+  ],
+  "populations": [
+    {
+      "id": "ppr_synthetic000000000001",
+      "kind": "opaque"
+    }
+  ],
+  "schema": "private-custodian.verify-expectations/1"
+}

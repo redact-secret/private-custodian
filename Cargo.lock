@@ -237,6 +237,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "custodian-verify"
+version = "0.0.0"
+dependencies = [
+ "custodian-bridge",
+ "custodian-contracts",
+ "custodian-ledger",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "custodian-worker"
 version = "0.0.0"
 dependencies = [
