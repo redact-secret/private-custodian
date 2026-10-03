@@ -18,7 +18,8 @@ use crate::error::ContractError;
 use crate::types::*;
 
 schema_tag!(
-    /// Schema tag for `PublicProjection` v1.
+    /// Schema tag for `PublicProjection` v1. v1 carries no destination: see
+    /// `public_v2` for the major that does (ADR 0119).
     PublicProjectionSchema,
     "private-custodian.public-projection/1"
 );
@@ -104,34 +105,54 @@ impl Contract for PublicProjection {
     const DOMAIN: DomainTag = DomainTag::PublicProjection;
 
     fn validate(&self) -> Result<(), ContractError> {
-        if self.protocol.domain != self.domain || self.disclosure_policy.domain != self.domain {
+        validate_common(
+            self.domain,
+            &self.protocol,
+            &self.disclosure_policy,
+            self.issued_at,
+            self.fresh_until,
+            &self.cells,
+        )
+    }
+}
+
+/// Cross-field checks shared by every projection major, so v1 and v2 can
+/// never drift apart on what a well-formed projection is.
+pub(crate) fn validate_common(
+    domain: EvaluationDomain,
+    protocol: &ProtocolRef,
+    disclosure_policy: &PolicyRef,
+    issued_at: Timestamp,
+    fresh_until: Timestamp,
+    cells: &BoundedVec<AggregateCell, 256>,
+) -> Result<(), ContractError> {
+    if protocol.domain != domain || disclosure_policy.domain != domain {
+        return Err(ContractError::Inconsistent);
+    }
+    if disclosure_policy.kind != PolicyKind::Disclosure {
+        return Err(ContractError::Inconsistent);
+    }
+    if fresh_until <= issued_at
+        || fresh_until.secs() - issued_at.secs() > MAX_PROJECTION_FRESHNESS_SECS
+    {
+        return Err(ContractError::Inconsistent);
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for cell in cells.as_slice() {
+        if !seen.insert((cell.stratum.as_str(), cell.metric.as_str())) {
             return Err(ContractError::Inconsistent);
         }
-        if self.disclosure_policy.kind != PolicyKind::Disclosure {
-            return Err(ContractError::Inconsistent);
-        }
-        if self.fresh_until <= self.issued_at
-            || self.fresh_until.secs() - self.issued_at.secs() > MAX_PROJECTION_FRESHNESS_SECS
+        if let CellValue::Reported {
+            numerator,
+            denominator,
+        } = &cell.value
         {
-            return Err(ContractError::Inconsistent);
-        }
-        let mut seen = std::collections::BTreeSet::new();
-        for cell in self.cells.as_slice() {
-            if !seen.insert((cell.stratum.as_str(), cell.metric.as_str())) {
+            if numerator > denominator {
                 return Err(ContractError::Inconsistent);
             }
-            if let CellValue::Reported {
-                numerator,
-                denominator,
-            } = &cell.value
-            {
-                if numerator > denominator {
-                    return Err(ContractError::Inconsistent);
-                }
-            }
         }
-        Ok(())
     }
+    Ok(())
 }
 
 impl PublicProjection {

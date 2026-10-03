@@ -5,13 +5,18 @@
 //!
 //! Two steps, because the release approval binds the projection digest:
 //!
-//! 1. [`DisclosureService::prepare`] validates, charges and builds. Nothing
-//!    leaves the private boundary.
+//! 1. [`DisclosureService::prepare_bound`] validates, charges and builds a
+//!    public projection v2 whose signed payload carries the intended
+//!    destination (ADR 0119, 0120). Nothing leaves the private boundary.
+//!    [`DisclosureService::prepare`] is the legacy v1 path with no
+//!    destination in the payload; it stays for stored-document compatibility
+//!    and its releases are labelled "no destination binding" by consumers.
 //! 2. [`DisclosureService::release`] needs a release `Approval` (a scope
 //!    separate from execution approval), a current disclosure-policy
 //!    activation, a destination the policy allows, a cleared precondition and
 //!    an acknowledged charge audit. It writes the `policy` and `publication`
-//!    ledger records durably, signs through `ApprovedPayload::projection`, and
+//!    ledger records durably, signs through `ApprovedPayload::projection_v2`
+//!    (or `projection` for the legacy path), and
 //!    only then hands a [`ReleasedEnvelope`] to the sink.
 //!
 //! A public projection is never produced by deleting fields from an internal
@@ -29,6 +34,9 @@ use custodian_contracts::policy::{check_current, ObservedActivation};
 use custodian_contracts::public::{
     AggregateCell, CellValue, FeedRef, PublicProjection, PublicProjectionEnvelope,
     PublicProjectionSchema, ScopeKind,
+};
+use custodian_contracts::public_v2::{
+    AnyProjectionEnvelope, PublicProjectionEnvelopeV2, PublicProjectionV2,
 };
 use custodian_contracts::request::{EvaluationPlan, EvaluationRequest};
 use custodian_contracts::reservation::Reservation;
@@ -120,7 +128,13 @@ pub struct PrepareInput<'a> {
 /// A built, unsigned projection awaiting a release approval. The digest is
 /// what the approval must bind.
 pub struct PreparedRelease {
+    /// The version-neutral fields in the v1 shape. For a bound (v2) release
+    /// this is a review view only; the signed document is `v2`.
     projection: PublicProjection,
+    /// Present when prepared with [`DisclosureService::prepare_bound`].
+    v2: Option<PublicProjectionV2>,
+    /// The destination bound at prepare time (v2 only).
+    destination: Option<DestinationId>,
     digest: ProjectionDigest,
     policy_digest: DocumentDigest,
     execution_id: ExecutionId,
@@ -140,9 +154,23 @@ impl core::fmt::Debug for PreparedRelease {
 }
 
 impl PreparedRelease {
-    /// The public projection the approver reviews. Public by construction.
+    /// The version-neutral projection fields the approver reviews. Public by
+    /// construction. For a bound (v2) release this is the v1-shaped view of
+    /// the common fields: it is not what is signed and its digest is not
+    /// [`Self::digest`]; see [`Self::projection_v2`].
     pub fn projection(&self) -> &PublicProjection {
         &self.projection
+    }
+
+    /// The v2 projection that will be signed, when prepared with a destination.
+    pub fn projection_v2(&self) -> Option<&PublicProjectionV2> {
+        self.v2.as_ref()
+    }
+
+    /// The destination bound into the signed payload; `None` on the legacy
+    /// v1 path.
+    pub fn destination(&self) -> Option<&DestinationId> {
+        self.destination.as_ref()
     }
 
     /// The digest a release `Approval` must bind.
@@ -232,9 +260,42 @@ impl DisclosureService<'_> {
     /// on, the attempt is counted whatever happens next (released, withheld,
     /// failed): the policy has no refund. A retry with the same release key
     /// replays the charge and recomputes the same projection.
+    ///
+    /// This is the legacy v1 path: the projection has no destination, so a
+    /// consumer cannot verify one from the envelope. New releases should use
+    /// [`Self::prepare_bound`].
     pub fn prepare(&self, input: &PrepareInput<'_>, now: Timestamp) -> Res<PreparedRelease> {
+        self.prepare_inner(input, None, now)
+    }
+
+    /// Like [`Self::prepare`], but builds a public projection v2 whose signed
+    /// payload carries `destination`, so the release approval (which binds
+    /// the v2 digest) covers it and a consumer verifies the binding from the
+    /// envelope alone. The destination must be on the policy's allowlist; a
+    /// refusal happens before anything is charged. `release` refuses a
+    /// different destination.
+    pub fn prepare_bound(
+        &self,
+        input: &PrepareInput<'_>,
+        destination: &DestinationId,
+        now: Timestamp,
+    ) -> Res<PreparedRelease> {
+        self.prepare_inner(input, Some(destination), now)
+    }
+
+    fn prepare_inner(
+        &self,
+        input: &PrepareInput<'_>,
+        destination: Option<&DestinationId>,
+        now: Timestamp,
+    ) -> Res<PreparedRelease> {
         let policy = input.policy;
         policy.validate()?;
+        if let Some(d) = destination {
+            if !policy.allows_destination(d) {
+                return Err(R::DestinationNotAllowed);
+            }
+        }
         let plan = &input.request.plan;
         let max_age = policy.state_max_age_secs.get();
 
@@ -365,9 +426,15 @@ impl DisclosureService<'_> {
             revocation_feed: input.feed.clone(),
         };
         projection.validate().map_err(|_| R::PolicyInvalid)?;
-        let digest = projection
-            .projection_digest()
-            .map_err(|_| R::PolicyInvalid)?;
+        let v2 = destination.map(|d| PublicProjectionV2::bind(&projection, d.clone()));
+        let digest = match &v2 {
+            Some(p) => {
+                p.validate().map_err(|_| R::PolicyInvalid)?;
+                p.projection_digest()
+            }
+            None => projection.projection_digest(),
+        }
+        .map_err(|_| R::PolicyInvalid)?;
 
         // 6. Record what this release reveals, conditional on the history we
         // checked against. A concurrent release makes this a conflict.
@@ -377,6 +444,8 @@ impl DisclosureService<'_> {
 
         Ok(PreparedRelease {
             projection,
+            v2,
+            destination: destination.cloned(),
             digest,
             policy_digest: policy.document_digest()?,
             execution_id: input.execution.execution_id.clone(),
@@ -500,6 +569,13 @@ impl DisclosureService<'_> {
         if !policy.allows_destination(request.destination) {
             return Err(R::DestinationNotAllowed);
         }
+        // A bound projection was prepared, digested and approved for one
+        // destination; releasing it anywhere else is refused.
+        if let Some(bound) = &prepared.destination {
+            if bound != request.destination {
+                return Err(R::DestinationMismatch);
+            }
+        }
         if now >= projection.fresh_until {
             return Err(R::PolicyStale);
         }
@@ -545,14 +621,24 @@ impl DisclosureService<'_> {
         self.eligible(prepared, now)?;
 
         // Sign only through the approved-payload gate; the signer re-validates.
-        let approved = ApprovedPayload::projection(
-            projection,
-            approval,
-            &prepared.execution_id,
-            request.policy_activation,
-            now,
-            max_age,
-        )
+        let approved = match &prepared.v2 {
+            Some(v2) => ApprovedPayload::projection_v2(
+                v2,
+                approval,
+                &prepared.execution_id,
+                request.policy_activation,
+                now,
+                max_age,
+            ),
+            None => ApprovedPayload::projection(
+                projection,
+                approval,
+                &prepared.execution_id,
+                request.policy_activation,
+                now,
+                max_age,
+            ),
+        }
         .map_err(|_| R::SigningRefused)?;
         let signature = self.signer.sign(&approved).map_err(|e| match e {
             SignRefusal::SignerUnavailable => R::SignerUnavailable,
@@ -591,13 +677,17 @@ impl DisclosureService<'_> {
 
         // The last gate before bytes leave.
         self.eligible(prepared, now)?;
-        let released = ReleasedEnvelope::new(
-            PublicProjectionEnvelope {
+        let envelope = match &prepared.v2 {
+            Some(v2) => AnyProjectionEnvelope::V2(PublicProjectionEnvelopeV2 {
+                payload: v2.clone(),
+                signature,
+            }),
+            None => AnyProjectionEnvelope::V1(PublicProjectionEnvelope {
                 payload: projection.clone(),
                 signature,
-            },
-            request.destination.clone(),
-        );
+            }),
+        };
+        let released = ReleasedEnvelope::new(envelope, request.destination.clone());
         sink.deliver(&released).map_err(|_| R::DeliveryFailed)?;
         Ok(released)
     }

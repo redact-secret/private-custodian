@@ -7,6 +7,7 @@ use custodian_contracts::approval::Approval;
 use custodian_contracts::execution::{ExecutionRecord, InternalReceipt};
 use custodian_contracts::policy::{ObservedActivation, PolicyActivation};
 use custodian_contracts::public::{PublicProjection, PublicProjectionEnvelope};
+use custodian_contracts::public_v2::PublicProjectionV2;
 use custodian_contracts::request::EvaluationRequest;
 use custodian_contracts::reservation::Reservation;
 use custodian_contracts::revocation::{RevocationEnvelope, SignedRevocationEnvelope};
@@ -258,6 +259,23 @@ pub fn projection_json() -> Value {
 
 pub fn projection_envelope_json() -> Value {
     json!({"payload": projection_json(), "signature": sig()})
+}
+
+/// The v2 projection: the v1 fixture plus the signed destination, under the
+/// v2 schema tag.
+pub fn projection_v2_json() -> Value {
+    let mut v = projection_json();
+    v["schema"] = json!("private-custodian.public-projection/2");
+    v["destination"] = json!("synthetic-benchmarks");
+    v
+}
+
+pub fn projection_v2_envelope_json() -> Value {
+    json!({"payload": projection_v2_json(), "signature": sig()})
+}
+
+pub fn projection_v2() -> PublicProjectionV2 {
+    parse(&projection_v2_json())
 }
 
 pub fn revocation_json() -> Value {

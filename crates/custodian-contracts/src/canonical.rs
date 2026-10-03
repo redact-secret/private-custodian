@@ -31,12 +31,16 @@ pub enum DomainTag {
     Execution,
     InternalReceipt,
     PublicProjection,
+    /// Public projection major 2 (destination inside the signed payload).
+    /// A separate tag, so a v1 and a v2 document never share a digest or a
+    /// signing input (ADR 0119).
+    PublicProjectionV2,
     RevocationEnvelope,
     PolicyActivation,
 }
 
 impl DomainTag {
-    pub const ALL: [DomainTag; 9] = [
+    pub const ALL: [DomainTag; 10] = [
         Self::Request,
         Self::Plan,
         Self::Approval,
@@ -44,6 +48,7 @@ impl DomainTag {
         Self::Execution,
         Self::InternalReceipt,
         Self::PublicProjection,
+        Self::PublicProjectionV2,
         Self::RevocationEnvelope,
         Self::PolicyActivation,
     ];
@@ -58,6 +63,7 @@ impl DomainTag {
             Self::Execution => "private-custodian/v1/execution",
             Self::InternalReceipt => "private-custodian/v1/internal-receipt",
             Self::PublicProjection => "private-custodian/v1/public-projection",
+            Self::PublicProjectionV2 => "private-custodian/v2/public-projection",
             Self::RevocationEnvelope => "private-custodian/v1/revocation-envelope",
             Self::PolicyActivation => "private-custodian/v1/policy-activation",
         }

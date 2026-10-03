@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use custodian_contracts::canonical::Contract;
 use custodian_contracts::common::{Signature, SignatureAlgorithm};
 use custodian_contracts::public::PublicProjectionEnvelope;
+use custodian_contracts::public_v2::{AnyProjectionEnvelope, PublicProjectionEnvelopeV2};
 use custodian_contracts::revocation::SignedRevocationEnvelope;
 use custodian_contracts::types::{KeyId, Timestamp};
 use ed25519_dalek::{Signature as DalekSignature, VerifyingKey};
@@ -272,6 +273,35 @@ impl Verifier {
             &env.signature,
             env.payload.issued_at,
         )
+    }
+
+    /// Verify a v2 projection under the v2 domain only. A key authorized for
+    /// the v1 projection domain is not thereby authorized for v2.
+    pub fn verify_projection_v2(
+        &self,
+        env: &PublicProjectionEnvelopeV2,
+    ) -> Result<(), VerifyError> {
+        env.payload
+            .validate()
+            .map_err(|_| VerifyError::PayloadInvalid)?;
+        let canonical = env
+            .payload
+            .canonical_bytes()
+            .map_err(|_| VerifyError::PayloadInvalid)?;
+        self.verify_bytes(
+            SignDomain::PublicProjectionV2,
+            &canonical,
+            &env.signature,
+            env.payload.issued_at,
+        )
+    }
+
+    /// Verify a projection of either major, each under its own domain.
+    pub fn verify_any_projection(&self, env: &AnyProjectionEnvelope) -> Result<(), VerifyError> {
+        match env {
+            AnyProjectionEnvelope::V1(e) => self.verify_projection(e),
+            AnyProjectionEnvelope::V2(e) => self.verify_projection_v2(e),
+        }
     }
 
     pub fn verify_revocation(&self, env: &SignedRevocationEnvelope) -> Result<(), VerifyError> {

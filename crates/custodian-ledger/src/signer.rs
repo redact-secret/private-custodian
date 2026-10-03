@@ -16,6 +16,7 @@ use custodian_contracts::canonical::Contract;
 use custodian_contracts::common::{Signature, SignatureAlgorithm};
 use custodian_contracts::policy::ObservedActivation;
 use custodian_contracts::public::PublicProjection;
+use custodian_contracts::public_v2::PublicProjectionV2;
 use custodian_contracts::revocation::RevocationEnvelope;
 use custodian_contracts::types::{ExecutionId, KeyId, ProjectionDigest, SignatureValue, Timestamp};
 use custodian_contracts::ContractError;
@@ -160,6 +161,36 @@ impl ApprovedPayload {
         })
     }
 
+    /// A v2 public projection (destination inside the payload), only with a
+    /// release approval that binds exactly this v2 digest, so the approval
+    /// covers the destination (ADR 0119).
+    pub fn projection_v2(
+        payload: &PublicProjectionV2,
+        approval: &Approval,
+        execution_id: &ExecutionId,
+        current: &ObservedActivation,
+        now: Timestamp,
+        max_state_age_secs: u64,
+    ) -> Result<Self, SignRefusal> {
+        payload.validate().map_err(map_contract)?;
+        let digest = payload.projection_digest().map_err(map_contract)?;
+        approval
+            .check_for_release(
+                execution_id,
+                &digest,
+                &payload.disclosure_policy,
+                current,
+                now,
+                max_state_age_secs,
+            )
+            .map_err(|_| SignRefusal::NotApproved)?;
+        Ok(Self {
+            domain: SignDomain::PublicProjectionV2,
+            canonical: payload.canonical_bytes().map_err(map_contract)?,
+            release_digest: Some(digest),
+        })
+    }
+
     /// A revocation envelope. Authorization of the revocation decision itself
     /// belongs to the caller (operator CLI, C10); the signer enforces shape,
     /// validity and domain.
@@ -189,6 +220,14 @@ impl ApprovedPayload {
         match domain {
             SignDomain::PublicProjection => {
                 let p = PublicProjection::decode_canonical(canonical).map_err(map_contract)?;
+                let digest = p.projection_digest().map_err(map_contract)?;
+                if release_digest != Some(&digest) {
+                    return Err(SignRefusal::NotApproved);
+                }
+                release = Some(digest);
+            }
+            SignDomain::PublicProjectionV2 => {
+                let p = PublicProjectionV2::decode_canonical(canonical).map_err(map_contract)?;
                 let digest = p.projection_digest().map_err(map_contract)?;
                 if release_digest != Some(&digest) {
                     return Err(SignRefusal::NotApproved);

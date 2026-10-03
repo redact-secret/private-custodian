@@ -39,7 +39,7 @@ Nothing here changes repository visibility, chooses a license, publishes anythin
 | D2 | Worker engines do not yet emit `worker-result/1` and `private-custodian.aggregates/1`; no production code assembles an execution record or internal receipt from a dispatch report (HG-5, R-3) | engineering with the engine repositories |
 | D3 | Restore with no newer copy has no executable procedure (R-1); a key compromise cannot be recovered from (R-4) | engineering |
 | D4 | Real disclosure policy, operator policy, keys, pinned roots, ledger deploy key, independent checkpoint, encrypted storage, monitored contact: all human provisioning in `docs/deployment-runbook.md` (HG-8, HG-9) | maintainer, operations |
-| D5 | Legacy consumed-budget write (HG-3) and destination binding (HG-2) designs exist; neither is implemented | engineering |
+| D5 | Legacy consumed-budget write (HG-3) design exists and is not implemented. Destination binding (HG-2) is implemented in code (S4, ADR 0119 to 0122); what remains is deployment: a production caller of `prepare_bound` (D1) and benchmarks adopting `require_destination_binding()` | engineering |
 
 ## 2. Evidence: what ran, where
 
@@ -50,7 +50,7 @@ Nothing here changes repository visibility, chooses a license, publishes anythin
 | `cargo test --workspace --locked` | local and CI | see section 2.1 |
 | Real bubblewrap isolation tests | **CI only** (`worker-isolation`, Linux); skipped on macOS | not assessable locally; see P3 |
 | C12 suite (`crates/custodian-cli/tests/c12_*.rs`) | local and CI, deterministic, bounded | section 2.1 |
-| Second-implementation golden vectors (`verify_golden.py`) | local; CI step added | 10 of 10 vectors reproduced |
+| Second-implementation golden vectors (`verify_golden.py`) | local; CI step added | 10 of 10 vectors reproduced; 11 of 11 plus the destination-binding shape check after S4 |
 | `cargo deny check` (cargo-deny 0.20.2, RustSec database fetched 2026-10-03) | local; CI job `dependency-audit` added and passed on the pull request | advisories ok, bans ok, licenses ok, sources ok |
 | `cargo audit` | not installed | not run (cargo-deny reads the same RustSec database) |
 | gitleaks 8.30.1, full history, 54 commits, all refs | local, redacted | 1 finding, triaged below; 0 in the working tree (excluding untracked `target/`) |
@@ -195,7 +195,7 @@ Disposition vocabulary: **fixed here**, **accepted** (with the rationale and the
 | ID | Gap | Disposition |
 | --- | --- | --- |
 | HG-1 | C9: a contamination recorded after the last release-time eligibility check still lets that release go out | **accepted, bounded, tested.** It cannot be closed locally (bytes cannot be un-sent). Guaranteed and asserted: the obligation is durable and blocks all later use at once; `feed_ref` refuses until it is published; the next feed envelope revokes the release for any syncing consumer; a consumer that stops syncing sees `Stale` when the feed head expires (`c12_revocation.rs`). Operating rules: publish the feed immediately after a contamination, keep `ttl_secs` short (incident-response.md section 3) |
-| HG-2 | C8/C11: `PublicProjection` has no destination field, so a consumer cannot verify destination binding without catalog access | **blocker (design recorded)**: schema major 2 with a signed `destination`, new domain tag (ADR 0102). Until then destination binding is enforced by the bridge service and the signed publication decision in the private ledger, and every description says so. Owner: engineering; maintainer approves the schema |
+| HG-2 | C8/C11: `PublicProjection` has no destination field, so a consumer cannot verify destination binding without catalog access | **fixed in code (S4, issue 31, ADR 0119 to 0122)**: public projection major 2 carries `destination` in the signed payload under the new domain tag `private-custodian/v2/public-projection`; the release approval binds the v2 digest; a consumer verifies binding from the envelope alone (`destination_mismatch`); v1 stays verifiable and is labelled `destination_unbound`. Evidence: `custodian-contracts/tests/{destination,golden,schemas}.rs`, `testdata/verify_golden.py`, `custodian-ledger/tests/destination.rs`, `custodian-disclosure/tests/destination.rs`, `custodian-bridge/tests/destination.rs`. Synthetic data and test keys; project-maintained, not independent validation. **Remaining (deployment, not design)**: a production caller of `prepare_bound` (no daemon, D1), benchmarks adopting the checks, the signing key authorized for the v2 domain. Owner: engineering, maintainer |
 | HG-3 | C11: nothing writes consumed legacy budget units into the runtime store | **blocker (not small, design recorded)**: migration 0005, `budget_imports`, extended invariants, `legacy apply` (ADR 0102). No legacy population may be handed off before it exists. Owner: engineering |
 | HG-4 | C10: no daemon, listener or queue consumer; no isolated signer process (`signer_unavailable`); no feed destination, ledger remote or real operator policy; no retention for pending submissions and the intake queue; ADR 0081 narrowed C9 (automation cannot publish the feed) | **blocker for deployment** (not for publishing code). C12 supplies the human provisioning plan and a proposed retention schedule that needs approval (`docs/deployment-runbook.md`, `docs/backup-recovery.md` section 5). Retention deletion tooling is not implemented. The ADR 0081 narrowing is accepted: publishing the feed is a human operator act. Owner: engineering, then operations |
 | HG-5 | C6: no seccomp, no cgroup controllers; no production host proven; no engine-side `worker-result/1`; verification expires after 3600 s | **seccomp and cgroups: accepted** with a recorded risk decision required at deployment (runbook step 5); **production host: human**; **engine side: blocker** (engine repositories); **expiry: blocker for a daemon** (it must re-run the self-check; documented). Owner: engineering, operations |
@@ -203,7 +203,7 @@ Disposition vocabulary: **fixed here**, **accepted** (with the rationale and the
 | HG-7 | C3: no HTTP transport, RS256 signer or listener; the webhook must stay inactive | **blocker for intake**; the runbook keeps the webhook Inactive until every checklist item exists; enabling is a human act. Owner: engineering, maintainer |
 | HG-8 | C7: Git history is mutable; checkpoints need an independent copy; signing key and pinned roots not created (must be generated on the signer host) | **human provisioning**, specified in runbook step 3 and 4; the independent copy is demonstrated to be the thing that shows a rolled-back ledger (`c12_keys_and_ledger.rs`). Owner: maintainer |
 | HG-9 | C8: policy values in tests are placeholders | **human**: a reviewed disclosure policy and activation are runbook step 8; nothing is released without them. Owner: maintainer |
-| HG-10 | C2/C7: no second-language canonicalization implementation | **fixed here**: `verify_golden.py` (standard library only, written from ADR 0004, with negative controls) reproduces all 10 golden vectors and runs in CI. Not covered: Ed25519 verification by a second implementation (ledger.md documents a manual OpenSSL check; consumer-side verification is benchmarks' own) |
+| HG-10 | C2/C7: no second-language canonicalization implementation | **fixed here**: `verify_golden.py` (standard library only, written from ADR 0004, with negative controls) reproduces all golden vectors (11 after S4, including the v2 projection and its destination-binding shape check) and runs in CI. Not covered: Ed25519 verification by a second implementation (ledger.md documents a manual OpenSSL check; consumer-side verification is benchmarks' own) |
 
 ### 6.2 Found by C12
 
@@ -229,7 +229,7 @@ Disposition vocabulary: **fixed here**, **accepted** (with the rationale and the
    solo-maintainer mode.
 2. Still open: recovery point, retention values, key backup choice, the isolation risk decision (deployment
    runbook section 5).
-5. Whether to implement R-1, R-2's code gate, R-4 and HG-2, HG-3 before or after the first deployment.
+5. Whether to implement R-1, R-2's code gate, R-4 and HG-3 before or after the first deployment (HG-2 is implemented in code, S4).
 6. Enabling the App webhook, ever (only when a server and every checklist item exist).
 
 ## 8. Results of the final checks

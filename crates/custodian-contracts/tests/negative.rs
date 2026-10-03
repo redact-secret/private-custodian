@@ -703,7 +703,13 @@ fn domain_separation_is_effective() {
     let payload = approval().canonical_bytes().unwrap();
     let mut seen = std::collections::BTreeSet::new();
     for tag in DomainTag::ALL {
-        assert!(tag.as_str().starts_with("private-custodian/v1/"));
+        // Every tag is v1 except the projection major 2 tag (ADR 0119).
+        let prefix = if tag == DomainTag::PublicProjectionV2 {
+            "private-custodian/v2/"
+        } else {
+            "private-custodian/v1/"
+        };
+        assert!(tag.as_str().starts_with(prefix));
         assert!(!tag.as_str().as_bytes().contains(&0));
         assert!(seen.insert(tag.as_str()), "duplicate tag");
         let mut expected = tag.as_str().as_bytes().to_vec();

@@ -33,7 +33,9 @@ pub mod tag;
 pub mod testing;
 pub mod wire;
 
-pub use consumer::{BridgeConsumer, ConsumerPins, ResponseOutcome, VerifiedProjection};
+pub use consumer::{
+    BridgeConsumer, ConsumerPins, ResponseOutcome, VerificationOutcome, VerifiedProjection,
+};
 pub use reason::{BridgeReason, Rejection};
 pub use service::{ApprovedCatalog, BridgeService, CatalogUnavailable, ReleaseQuery};
 pub use wire::{BridgeManifest, BridgeRequest, BridgeResponse};

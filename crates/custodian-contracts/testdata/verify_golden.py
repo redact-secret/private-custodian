@@ -21,6 +21,7 @@ any document. Run: python3 crates/custodian-contracts/testdata/verify_golden.py
 import hashlib
 import json
 import os
+import re
 import sys
 
 MAX_INT = 2**53 - 1
@@ -111,6 +112,44 @@ def negative_controls():
     assert d == "e40cf9eb35e482e790cc78c51035e6ee07cc8667ed46acad19326af063951acc", d
 
 
+LABEL = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+V1_DOMAIN = "private-custodian/v1/public-projection"
+V2_DOMAIN = "private-custodian/v2/public-projection"
+
+
+def check_destination_binding(here, recorded):
+    """Public projection major 2 (ADR 0119), checked from the rules alone.
+
+    v1 has no destination and is digested under the v1 tag; v2 has exactly one
+    more member, `destination` (a bounded label, never a URL), a schema tag
+    ending /2, and is digested under the v2 tag. The same bytes digest
+    differently under the two tags, and a v2 body re-tagged /1 or a v1 body
+    re-tagged /2 does not match the shape of the other major.
+    """
+    with open(os.path.join(here, "public-projection.canonical.json"), "rb") as f:
+        v1 = parse(f.read())
+    with open(os.path.join(here, "public-projection-v2.canonical.json"), "rb") as f:
+        v2_raw = f.read()
+    v2 = parse(v2_raw)
+    assert recorded["public-projection"][0] == V1_DOMAIN
+    assert recorded["public-projection-v2"][0] == V2_DOMAIN
+    assert v1["schema"] == "private-custodian.public-projection/1"
+    assert v2["schema"] == "private-custodian.public-projection/2"
+    assert "destination" not in v1, "v1 must stay without a destination"
+    assert set(v2) - set(v1) == {"destination"}, "v2 adds exactly the destination"
+    assert set(v1) - set(v2) == set()
+    assert LABEL.match(v2["destination"]), "destination must be a bounded label"
+    assert digest(V1_DOMAIN, v2_raw) != digest(V2_DOMAIN, v2_raw), "tags must separate"
+    assert recorded["public-projection"][1] != recorded["public-projection-v2"][1]
+    # Shape mismatches a strict reader of either major must refuse.
+    retagged_down = dict(v2, schema=v1["schema"])
+    retagged_up = dict(v1, schema=v2["schema"])
+    assert "destination" in retagged_down and "destination" not in retagged_up
+    for bad in ("https://example.invalid/x", "A", "", "a" * 65, "a b", "a:b"):
+        assert not LABEL.match(bad), bad
+    print("destination binding: v1 unbound, v2 bound, tags separate (second implementation)")
+
+
 def main():
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden")
     negative_controls()
@@ -135,6 +174,7 @@ def main():
             failures += 1
     if failures:
         raise SystemExit("%d golden vector(s) differ" % failures)
+    check_destination_binding(here, recorded)
     print("all %d golden vectors reproduced by the second implementation" % len(recorded))
 
 

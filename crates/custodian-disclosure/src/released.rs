@@ -29,15 +29,16 @@
 //!
 //! # What a verifier can and cannot check
 //!
-//! `PublicProjection` has no destination field (adding one is a new schema
-//! major). The destination binding therefore lives in the signed `publication`
-//! ledger record. Anyone holding that record (operators, auditors, the
-//! publisher gate in front of a destination) can verify that this exact
-//! envelope was approved for this destination. A public consumer without the
-//! ledger can verify the signature and digest only.
+//! A public projection v2 carries the destination inside the signed payload
+//! (ADR 0119), so [`verify_release`] and any public consumer check the
+//! binding from the envelope alone. A v1 projection has no destination field;
+//! for it the binding lives only in the signed `publication` ledger record,
+//! and [`verify_release`] reports it as
+//! [`DestinationBinding::Unbound`](custodian_contracts::public_v2::DestinationBinding)
+//! even when the ledger decision names the destination. A public consumer
+//! without the ledger can verify a v1 signature and digest only.
 
-use custodian_contracts::canonical::to_canonical_bytes;
-use custodian_contracts::public::PublicProjectionEnvelope;
+use custodian_contracts::public_v2::{AnyProjectionEnvelope, DestinationBinding};
 use custodian_contracts::types::{DestinationId, ProjectionDigest};
 use custodian_ledger::record::RecordBody;
 use custodian_ledger::{SignedLedgerRecord, Verifier};
@@ -47,7 +48,7 @@ use crate::reason::DisclosureReason;
 /// A signed projection approved for one destination.
 #[derive(Clone, PartialEq, Eq)]
 pub struct ReleasedEnvelope {
-    envelope: PublicProjectionEnvelope,
+    envelope: AnyProjectionEnvelope,
     destination: DestinationId,
 }
 
@@ -55,20 +56,26 @@ impl core::fmt::Debug for ReleasedEnvelope {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ReleasedEnvelope")
             .field("destination", &self.destination.as_str())
+            .field("major", &self.envelope.major())
             .finish()
     }
 }
 
 impl ReleasedEnvelope {
-    pub(crate) fn new(envelope: PublicProjectionEnvelope, destination: DestinationId) -> Self {
+    pub(crate) fn new(envelope: AnyProjectionEnvelope, destination: DestinationId) -> Self {
         Self {
             envelope,
             destination,
         }
     }
 
-    pub fn envelope(&self) -> &PublicProjectionEnvelope {
+    pub fn envelope(&self) -> &AnyProjectionEnvelope {
         &self.envelope
+    }
+
+    /// Whether the envelope proves its destination (v2) or not (v1).
+    pub fn binding(&self) -> DestinationBinding {
+        self.envelope.binding()
     }
 
     pub fn destination(&self) -> &DestinationId {
@@ -77,7 +84,9 @@ impl ReleasedEnvelope {
 
     /// Canonical bytes of the envelope: what a destination serves.
     pub fn to_bytes(&self) -> Result<Vec<u8>, DisclosureReason> {
-        to_canonical_bytes(&self.envelope).map_err(|_| DisclosureReason::EnvelopeInvalid)
+        self.envelope
+            .canonical_bytes()
+            .map_err(|_| DisclosureReason::EnvelopeInvalid)
     }
 }
 
@@ -86,6 +95,10 @@ impl ReleasedEnvelope {
 pub struct VerifiedRelease {
     pub projection_digest: ProjectionDigest,
     pub destination: DestinationId,
+    /// `Bound` for a v2 envelope (the destination was also checked inside the
+    /// signed payload); `Unbound` for v1, where only the ledger decision
+    /// names the destination.
+    pub binding: DestinationBinding,
 }
 
 /// Verify a released envelope against its signed publication decision.
@@ -101,14 +114,19 @@ pub fn verify_release(
     expected_destination: &DestinationId,
     verifier: &Verifier,
 ) -> Result<VerifiedRelease, DisclosureReason> {
-    let env = PublicProjectionEnvelope::decode(envelope_bytes)
+    let env = AnyProjectionEnvelope::decode(envelope_bytes)
         .map_err(|_| DisclosureReason::EnvelopeInvalid)?;
-    if to_canonical_bytes(&env).map_err(|_| DisclosureReason::EnvelopeInvalid)? != envelope_bytes {
+    if env
+        .canonical_bytes()
+        .map_err(|_| DisclosureReason::EnvelopeInvalid)?
+        != envelope_bytes
+    {
         return Err(DisclosureReason::EnvelopeInvalid);
     }
     verifier
-        .verify_projection(&env)
+        .verify_any_projection(&env)
         .map_err(|_| DisclosureReason::SignatureInvalid)?;
+    let common = env.common_fields();
     verifier
         .verify_ledger_record(decision)
         .map_err(|_| DisclosureReason::SignatureInvalid)?;
@@ -119,26 +137,33 @@ pub fn verify_release(
         return Err(DisclosureReason::EnvelopeInvalid);
     };
     let digest = env
-        .payload
         .projection_digest()
         .map_err(|_| DisclosureReason::EnvelopeInvalid)?;
     if digest != body.projection_digest {
         return Err(DisclosureReason::DigestMismatch);
     }
-    if body.projection_id != env.payload.projection_id
-        || body.receipt_id != env.payload.receipt_id
-        || body.signature_key_id != env.signature.key_id
+    if body.projection_id != common.projection_id
+        || body.receipt_id != common.receipt_id
+        || body.signature_key_id != env.signature().key_id
     {
         return Err(DisclosureReason::BindingMismatch);
     }
-    if d.disclosure_policy != env.payload.disclosure_policy {
+    if d.disclosure_policy != common.disclosure_policy {
         return Err(DisclosureReason::PolicyMismatch);
     }
     if d.destination != *expected_destination {
         return Err(DisclosureReason::DestinationMismatch);
     }
+    // v2: the signed payload must name the same destination as the decision
+    // and as the one the caller expects. v1 has nothing to compare.
+    if let Some(signed) = env.destination() {
+        if signed != expected_destination || *signed != d.destination {
+            return Err(DisclosureReason::DestinationMismatch);
+        }
+    }
     Ok(VerifiedRelease {
         projection_digest: digest,
         destination: d.destination.clone(),
+        binding: env.binding(),
     })
 }

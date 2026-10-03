@@ -1,4 +1,4 @@
-//! JSON Schema generation. The checked-in files under `schemas/v1/` must equal
+//! JSON Schema generation. The checked-in files under `schemas/v<major>/` must equal
 //! this output byte for byte (drift test in `tests/schemas.rs`).
 
 use schemars::generate::SchemaSettings;
@@ -9,6 +9,7 @@ use crate::approval::Approval;
 use crate::execution::{ExecutionRecord, InternalReceipt};
 use crate::policy::PolicyActivation;
 use crate::public::PublicProjectionEnvelope;
+use crate::public_v2::PublicProjectionEnvelopeV2;
 use crate::request::EvaluationRequest;
 use crate::reservation::Reservation;
 use crate::revocation::SignedRevocationEnvelope;
@@ -23,19 +24,26 @@ pub enum Visibility {
 }
 
 pub struct SchemaEntry {
-    /// File name under `schemas/v1/`.
+    /// Directory under `schemas/` (`v1`, `v2`).
+    pub dir: &'static str,
+    /// File name inside `dir`.
     pub file: &'static str,
     pub visibility: Visibility,
     pub schema: Value,
 }
 
-fn gen<T: JsonSchema>(file: &'static str, visibility: Visibility) -> SchemaEntry {
+fn gen<T: JsonSchema>(
+    dir: &'static str,
+    file: &'static str,
+    visibility: Visibility,
+) -> SchemaEntry {
     let schema = SchemaSettings::draft2020_12()
         .into_generator()
         .into_root_schema_for::<T>();
     let mut value = serde_json::to_value(&schema).unwrap_or(Value::Null);
     strip_null(&mut value);
     SchemaEntry {
+        dir,
         file,
         visibility,
         schema: value,
@@ -84,14 +92,15 @@ fn strip_null(v: &mut Value) {
 pub fn all_schemas() -> Vec<SchemaEntry> {
     use Visibility::*;
     vec![
-        gen::<EvaluationRequest>("request.schema.json", Internal),
-        gen::<Approval>("approval.schema.json", Internal),
-        gen::<Reservation>("reservation.schema.json", Internal),
-        gen::<ExecutionRecord>("execution.schema.json", Internal),
-        gen::<InternalReceipt>("internal-receipt.schema.json", Internal),
-        gen::<PolicyActivation>("policy-activation.schema.json", Internal),
-        gen::<PublicProjectionEnvelope>("public-projection.schema.json", Public),
-        gen::<SignedRevocationEnvelope>("revocation-envelope.schema.json", Public),
+        gen::<EvaluationRequest>("v1", "request.schema.json", Internal),
+        gen::<Approval>("v1", "approval.schema.json", Internal),
+        gen::<Reservation>("v1", "reservation.schema.json", Internal),
+        gen::<ExecutionRecord>("v1", "execution.schema.json", Internal),
+        gen::<InternalReceipt>("v1", "internal-receipt.schema.json", Internal),
+        gen::<PolicyActivation>("v1", "policy-activation.schema.json", Internal),
+        gen::<PublicProjectionEnvelope>("v1", "public-projection.schema.json", Public),
+        gen::<PublicProjectionEnvelopeV2>("v2", "public-projection.schema.json", Public),
+        gen::<SignedRevocationEnvelope>("v1", "revocation-envelope.schema.json", Public),
     ]
 }
 

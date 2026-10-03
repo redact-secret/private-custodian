@@ -14,6 +14,7 @@ use custodian_contracts::canonical::{domain_digest, signing_input, to_canonical_
 use custodian_contracts::execution::{ExecutionRecord, InternalReceipt};
 use custodian_contracts::policy::PolicyActivation;
 use custodian_contracts::public::PublicProjection;
+use custodian_contracts::public_v2::PublicProjectionV2;
 use custodian_contracts::request::{EvaluationPlan, EvaluationRequest};
 use custodian_contracts::reservation::Reservation;
 use custodian_contracts::revocation::RevocationEnvelope;
@@ -62,6 +63,9 @@ fn vectors() -> Vec<Vector> {
             canonical: projection.canonical_bytes().unwrap(),
         },
         contract::<RevocationEnvelope>("revocation-envelope", &revocation_json()),
+        // Added with public projection major 2 (ADR 0119). Appended, so the
+        // v1 lines above are byte-for-byte what they were.
+        contract::<PublicProjectionV2>("public-projection-v2", &projection_v2_json()),
     ]
 }
 
@@ -118,6 +122,7 @@ fn stored_v1_documents_still_decode_canonically() {
     PolicyActivation::decode_canonical(&read("policy-activation")).unwrap();
     PublicProjection::decode_canonical(&read("public-projection")).unwrap();
     RevocationEnvelope::decode_canonical(&read("revocation-envelope")).unwrap();
+    PublicProjectionV2::decode_canonical(&read("public-projection-v2")).unwrap();
     let plan: EvaluationPlan = serde_json::from_slice(&read("plan")).unwrap();
     plan.validate().unwrap();
 }
@@ -142,5 +147,32 @@ fn digest_construction_matches_external_sha256() {
     let _ = (
         signing_input(DomainTag::Plan, b"{}"),
         ProjectionDigest::from_raw([0; 32]),
+    );
+}
+
+/// The v1 vectors recorded before major 2 existed are frozen: these lines are
+/// what the first release wrote and must never change (no reinterpretation).
+#[test]
+fn legacy_v1_projection_vector_is_frozen() {
+    let digests = std::fs::read_to_string(dir().join("digests.txt")).unwrap();
+    assert!(digests.lines().any(|l| l
+        == "public-projection private-custodian/v1/public-projection sha256:a5bf82488ffb8a6787aac5fca43f2879fdc58d803bcc7d843992fdeec9f01622"));
+    assert!(digests
+        .lines()
+        .any(|l| l.starts_with("public-projection-v2 private-custodian/v2/public-projection ")));
+}
+
+/// The same fields hash differently under v1 and v2: new domain tag, new
+/// schema tag, one more field.
+#[test]
+fn v1_and_v2_digests_never_coincide() {
+    assert_ne!(
+        projection().projection_digest().unwrap(),
+        projection_v2().projection_digest().unwrap()
+    );
+    let v2_bytes = projection_v2().canonical_bytes().unwrap();
+    assert_ne!(
+        domain_digest(DomainTag::PublicProjection, &v2_bytes),
+        domain_digest(DomainTag::PublicProjectionV2, &v2_bytes)
     );
 }

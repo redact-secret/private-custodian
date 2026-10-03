@@ -61,8 +61,9 @@ Per projection, in this order, rejecting at the first failure:
 
 | # | Check | Rejection code |
 | --- | --- | --- |
-| 1 | At most 65,536 bytes; strict parse (unknown and duplicate fields, wrong schema tag, out-of-bound values rejected); bytes equal the canonical encoding. An envelope without a signature fails here | `malformed` |
-| 2 | Ed25519 signature over `private-custodian/v1/public-projection \|\| 0x00 \|\| canonical(payload)` verifies under a pinned key that is authorized for that domain, not revoked and valid at `issued_at` | `bad_signature`, `key_not_acceptable` |
+| 1 | At most 65,536 bytes; strict parse of exactly major 1 or 2, chosen by the payload's schema tag (unknown and duplicate fields, wrong or relabelled schema tag, out-of-bound values rejected); bytes equal the canonical encoding. An envelope without a signature fails here | `malformed` |
+| 2 | Ed25519 signature over `<domain> \|\| 0x00 \|\| canonical(payload)` verifies under a pinned key that is authorized for that major's domain (`private-custodian/v1/public-projection` for v1, `private-custodian/v2/public-projection` for v2), not revoked and valid at `issued_at` | `bad_signature`, `key_not_acceptable` |
+| 2b | Destination (after the signature): a v2 projection's signed `destination` equals the pinned destination; a v1 projection has none and is accepted as `DestinationUnbound`, or refused when `require_destination_binding()` is set | `destination_mismatch`; `destination_unbound` (only when binding is required) |
 | 3 | `domain` equals the pinned and requested domain | `wrong_domain` |
 | 4 | `candidate` equals the candidate digest benchmarks froze and requested | `wrong_candidate` |
 | 5 | `population` is in the request filter (if any) and in the product's pinned population list | `wrong_population` |
@@ -87,7 +88,7 @@ What the consumer cannot verify, and what to do about it:
 
 | Limit | Consequence |
 | --- | --- |
-| Destination binding lives only in the signed private `publication` record. The channel label in the manifest is routing, not proof | Treat the channel as part of the transport's own authentication; a destination field needs a new projection schema major (open) |
+| A v1 projection has no destination, so its destination binding lives only in the signed private `publication` record. The channel label in the manifest is routing, not proof for either major | Treat a v1 result as `destination_unbound`: authentic and unchanged, but never evidence that it was approved for your destination. Call `BridgeConsumer::require_destination_binding()` once the custodian issues v2, and keep `destination_unbound` results out of any destination-specific claim |
 | The configuration digest is not in the public projection | Benchmarks binds configuration on its own side; the candidate digest is the public binding |
 | Omission cannot be detected | Absence never validates anything; rely only on what was verified |
 | Population and policy meaning | The product decides which public populations and disclosure policy versions it accepts |
@@ -115,7 +116,7 @@ retirement gates; this document. Not done here and owned elsewhere: everything b
 | Owner | Deliverable | Depends on | Notes |
 | --- | --- | --- | --- |
 | private-custodian (later) | A real `ApprovedCatalog` over release records; a transport that serves the bridge; writing consumed legacy units into the budget store; cutover tooling through the operator CLI | C10, C12 | Not in C11 |
-| private-custodian (later) | Destination field in the public projection (new schema major) | ADR | Open since ADR 0063 |
+| private-custodian | Destination field in the public projection (new schema major) | ADR 0119 to 0122 | Done in S4 (issue 31), synthetic data and test keys. Remaining: a production caller of `prepare_bound`, and the signing key authorized for the v2 domain |
 | pii-eval (`worker-result/1`) | Emit `private-custodian.worker-result/1` on stdout inside a custodian-authorized run, within the 64 KiB bound, with domain, protocol and roster counters only | custodian `docs/worker-isolation.md` | Not present in the repository today; pii-eval issue 13 owns the job contract jointly |
 | pii-eval (aggregate artifact) | Emit the strict, closed `private-custodian.aggregates/1` artifact (domain, protocol, roster, integer numerator and denominator per policy stratum and metric, at most 256 cells, 64 KiB), bound to the receipt's roster counters | custodian `PrivateAggregates`, `docs/disclosure.md` | Never case identities, paths, seeds, ranges, per-case hashes, messages. Not present today |
 | pii-eval | Keep the protected artifact internal (no publication code path); reject `population-binding-mismatch` and `run-class-mismatch`; synthetic custodian round trip that validates domain, candidate, activation and population bindings (issue 13) | custodian jobs | |
@@ -142,8 +143,11 @@ These are drafts for the maintainer to paste. Nothing has been posted to any rep
 > `docs/benchmarks-integration.md` of private-custodian, with a Rust reference consumer and a synthetic round
 > trip. Product policy, support status and the public review ledger stay with benchmarks. Legacy lifecycles
 > stay authoritative until a reviewed handoff; a metadata-only importer, dry-run report and handoff record exist
-> but no cutover has been run. Destination binding is not consumer-verifiable today (it is in the private
-> publication record); we propose a destination field in a future projection schema major.
+> but no cutover has been run. Update (S4, issue 31): public projection major 2 carries the destination inside
+> the signed payload, so benchmarks verifies destination binding from the envelope alone
+> (`destination_mismatch` on a different destination). v1 projections still verify and are labelled
+> `destination_unbound`; treat them as authentic but not destination-bound, and use
+> `require_destination_binding()` once v2 is issued.
 
 ### redact-secret-benchmarks issue 664 (P4 parity)
 
@@ -208,6 +212,7 @@ These are drafts for the maintainer to paste. Nothing has been posted to any rep
 | Benchmarks client and CI verification, support re-evaluation | yes (benchmarks) | no | no |
 | Engine `worker-result/1` and aggregate artifact emission | yes (engines) | no | no |
 | Real catalog, transport and serving endpoint | yes (C10, C12) | no | no |
-| Destination field in the public projection | open | no | no |
+| Destination field in the public projection (v2), `destination_unbound` label for v1 | yes | yes (synthetic) | no |
+| Benchmarks client adopting the destination checks | yes (benchmarks) | no | no |
 | Legacy import tooling, handoff record, gates | yes | yes (synthetic) | no |
 | Any legacy population handed off | yes | no | no |
