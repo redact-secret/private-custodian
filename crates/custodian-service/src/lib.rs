@@ -3,17 +3,18 @@
 //! [`ControlService`] orders the lifecycle over the core ports: authorize,
 //! check plan binding, reserve budget atomically, only then open protected
 //! bytes, execute, validate, complete. Disclosure is a separate step that a
-//! completed run does not imply. Adapters (request intake, SQLite, protected
-//! storage, workers, ledger export) plug in behind the traits and are planned
-//! work in later issues.
+//! completed run does not imply. This scaffold orders the run lifecycle only;
+//! disclosure is the typed `custodian_disclosure::DisclosureService` (the core
+//! `Disclosure` port was retired in C10, ADR 0084). The deployed startup
+//! sequence, the operator CLI and the durable adapters are in
+//! `custodian-cli`.
 
 #![forbid(unsafe_code)]
 
 use custodian_core::ports::{
-    Authorizer, CorpusAccess, Disclosure, ExecutionOutcome, Executor, ProjectionId, Refusal,
-    RunRequest, StateStore,
+    Authorizer, CorpusAccess, ExecutionOutcome, Executor, Refusal, RunRequest, StateStore,
 };
-use custodian_core::{ActorId, ReasonCode, RunId, RunState};
+use custodian_core::{ReasonCode, RunId, RunState};
 
 /// Result of a run request.
 #[derive(Debug)]
@@ -25,29 +26,26 @@ pub struct RunReport {
     pub outcome: Option<ExecutionOutcome>,
 }
 
-pub struct ControlService<A, C, S, E, D> {
+pub struct ControlService<A, C, S, E> {
     pub authorizer: A,
     pub corpus: C,
     pub store: S,
     pub executor: E,
-    pub disclosure: D,
 }
 
-impl<A, C, S, E, D> ControlService<A, C, S, E, D>
+impl<A, C, S, E> ControlService<A, C, S, E>
 where
     A: Authorizer,
     C: CorpusAccess,
     S: StateStore,
     E: Executor,
-    D: Disclosure,
 {
-    pub fn new(authorizer: A, corpus: C, store: S, executor: E, disclosure: D) -> Self {
+    pub fn new(authorizer: A, corpus: C, store: S, executor: E) -> Self {
         Self {
             authorizer,
             corpus,
             store,
             executor,
-            disclosure,
         }
     }
 
@@ -109,24 +107,5 @@ where
             replay: false,
             outcome: Some(outcome),
         })
-    }
-
-    /// Prepare a disclosure projection. Only a completed run qualifies, and
-    /// preparing does not approve or release anything.
-    pub fn prepare_disclosure(
-        &self,
-        report: &RunReport,
-        requester: &ActorId,
-    ) -> Result<ProjectionId, Refusal> {
-        let record = self
-            .store
-            .get(&report.run)
-            .ok_or(Refusal(ReasonCode::DisclosureNotPermitted))?;
-        let outcome = report
-            .outcome
-            .as_ref()
-            .filter(|_| record.state == RunState::Completed)
-            .ok_or(Refusal(ReasonCode::DisclosureNotPermitted))?;
-        self.disclosure.prepare(&report.run, outcome, requester)
     }
 }

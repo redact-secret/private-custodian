@@ -144,7 +144,7 @@ Record completion in the private operations log. Items marked (C6), (C12) depend
       `IntakeConfig::from_json`, which rejects unknown fields and empty allowlists.
 - [ ] Credential manifest validated with `validate_assignments`; worker environment validated with
       `validate_worker_environment`.
-- [ ] Durable `DeliveryStore`, `InstallationRegistry` and `IntakeQueue` in place (they are not provided by the C4 store as merged; see ADR 0010). Do not enable the webhook
+- [ ] Durable `DeliveryStore`, `InstallationRegistry` and `IntakeQueue` in place: `SqliteStore` implements all three (store migration 0004, ADR 0083); share one database with the control plane so the App path and the operator CLI use the same idempotency keys and budgets. A queue-consumer loop (`queue_lease`, gate, `reserve_request`, `queue_complete`) is still deployment work. Do not enable the webhook
       on the in-memory doubles.
 - [ ] Transport adapter pins the GitHub API host, does not follow redirects, bounds time and response size.
 - [ ] Listener serves HTTPS only, passes raw bytes, never logs bodies, headers or tokens.

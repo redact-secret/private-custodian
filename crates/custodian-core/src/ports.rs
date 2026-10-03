@@ -6,7 +6,7 @@
 //! so no input value, path or secret can travel through an error.
 
 use crate::ids::{ActorId, AuthorizationId, IdempotencyKey, PlanDigest, PopulationId, RunId};
-use crate::lifecycle::{DisclosureState, Exposure, ReasonCode, RunState};
+use crate::lifecycle::{Exposure, ReasonCode, RunState};
 
 /// A refusal carrying only a fixed reason code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,11 +86,6 @@ pub struct ExecutionOutcome {
     pub total: u32,
 }
 
-/// Identity of a prepared disclosure projection (disclosure-safe, not a
-/// corpus or plan digest).
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ProjectionId(pub String);
-
 /// Authenticates the actor and issues or refuses an authorization.
 pub trait Authorizer: Send + Sync {
     fn authorize(&self, request: &RunRequest) -> Result<Authorization, Refusal>;
@@ -126,16 +121,8 @@ pub trait Executor: Send + Sync {
     ) -> Result<ExecutionOutcome, Refusal>;
 }
 
-/// Disclosure lifecycle: prepare, approve (by someone other than the
-/// requester), release. Release without approval is refused.
-pub trait Disclosure: Send + Sync {
-    fn prepare(
-        &self,
-        run: &RunId,
-        outcome: &ExecutionOutcome,
-        requester: &ActorId,
-    ) -> Result<ProjectionId, Refusal>;
-    fn approve(&self, projection: &ProjectionId, approver: &ActorId) -> Result<(), Refusal>;
-    fn release(&self, projection: &ProjectionId) -> Result<(), Refusal>;
-    fn state(&self, projection: &ProjectionId) -> Option<DisclosureState>;
-}
+// Retired port (C10, ADR 0084): the `Disclosure` trait, `ProjectionId` and the
+// in-memory double that lived here were a scaffold for a disclosure lifecycle
+// the typed `custodian_disclosure::DisclosureService` now implements, with
+// signed receipts, budgets and eligibility. Nothing in this crate depends on
+// a disclosure seam, so a second, weaker one cannot be wired by mistake.

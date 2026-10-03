@@ -39,7 +39,7 @@ seeds, keys, raw findings or input values, and its errors never echo them.
 | `attempt`, `request_attempts`, `history`, `budget_status`, `reservation` | Reads in one WAL snapshot. |
 | `verify_invariants()`, `integrity_check()`, `backup_to(dest)`, `schema_version()` | Integrity and operations. |
 
-## Schema (migration 0001; migration 0002 adds `disclosure_charges` and `disclosure_history`, see docs/disclosure.md; migration 0003 adds the epoch standing, event, rotation and revocation-feed tables, see docs/lifecycle-and-revocation.md)
+## Schema (migration 0001; migration 0002 adds `disclosure_charges` and `disclosure_history`, see docs/disclosure.md; migration 0003 adds the epoch standing, event, rotation and revocation-feed tables, see docs/lifecycle-and-revocation.md; migration 0004 adds the durable intake tables, submissions and the policy activation history, see ADR 0083 and docs/operator-runbook.md)
 
 All tables are `STRICT`. History tables are append-only by trigger.
 
@@ -199,5 +199,5 @@ event is acknowledged.
 ## Not in scope here
 
 GitHub intake (C3), protected storage (C5), the worker sandbox and the recovery scheduler (C6), signing and
-the ledger write (C7), the disclosure policy and its decisions (C8; the store only holds the release budgets and history), epoch standing, rotation and revocation (C9: migration 0003 and the use gates are in this store, see [lifecycle-and-revocation.md](lifecycle-and-revocation.md)), the operator CLI (C10),
+the ledger write (C7), the disclosure policy and its decisions (C8; the store only holds the release budgets and history), epoch standing, rotation and revocation (C9: migration 0003 and the use gates are in this store, see [lifecycle-and-revocation.md](lifecycle-and-revocation.md)), the operator CLI (C10: `crates/custodian-cli`; the store provides the intake ports, submissions and activation history of migration 0004),
 and operational drills (C12). The store provides the primitives those issues call.

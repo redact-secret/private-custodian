@@ -64,6 +64,11 @@ pub enum StoreError {
     /// The epoch the request draws on is contaminated, possibly changed or
     /// retired (C9). Nothing was changed.
     EpochBlocked,
+    /// A submission already has a decision (approved elsewhere, approved
+    /// before, or cancelled). Repeat approvals are refused, never re-applied.
+    AlreadyDecided,
+    /// The approver is the requester. Nobody approves their own request.
+    SelfApproval,
     /// Fault injection fired (tests only; never produced without an injector).
     InjectedCrash(FaultPoint),
     /// Any other SQLite failure.
@@ -83,7 +88,8 @@ impl StoreError {
                 ReasonCode::InvalidTransition
             }
             Self::IdentityConflict => ReasonCode::DuplicateRequest,
-            Self::EpochBlocked => ReasonCode::AuthorizationDenied,
+            Self::EpochBlocked | Self::SelfApproval => ReasonCode::AuthorizationDenied,
+            Self::AlreadyDecided => ReasonCode::DuplicateRequest,
             _ => ReasonCode::StoreUnavailable,
         }
     }
@@ -114,6 +120,8 @@ impl fmt::Display for StoreError {
             Self::Invariant(_) => "store_invariant",
             Self::InvalidInput => "store_invalid_input",
             Self::EpochBlocked => "store_epoch_blocked",
+            Self::AlreadyDecided => "store_already_decided",
+            Self::SelfApproval => "store_self_approval",
             Self::InjectedCrash(_) => "store_injected_crash",
             Self::Database => "store_database",
         };

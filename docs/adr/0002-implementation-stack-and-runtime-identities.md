@@ -100,7 +100,9 @@ signer refusal and idempotent export (C7). Ledger and audit are tamper-evident, 
 
 ## Adapter contract
 
-`custodian_core::ports`: `Authorizer`, `CorpusAccess`, `StateStore`, `Executor`, `Disclosure`. No port
+`custodian_core::ports`: `Authorizer`, `CorpusAccess`, `StateStore`, `Executor`, `Disclosure` (the `Disclosure`
+port was retired in C10, [ADR 0084](0084-retire-the-core-disclosure-port.md); disclosure is the typed
+`custodian_disclosure::DisclosureService`). No port
 mentions SQLite, filesystem, GitHub or a cloud.
 
 ## Failure and recovery

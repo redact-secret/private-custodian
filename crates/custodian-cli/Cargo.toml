@@ -1,0 +1,37 @@
+[package]
+name = "custodian-cli"
+description = "Operator CLI and service startup wiring: authenticated roles, the same authorization, idempotency and budget control plane as the request edge (C10). Synthetic data only; no credentials."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "custodian_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "custodian"
+path = "src/main.rs"
+
+# No new third-party crate (ADR 0080): argument parsing is std, hashing is the
+# workspace-pinned sha2, JSON is the workspace-pinned serde_json.
+[dependencies]
+custodian-core = { path = "../custodian-core" }
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-store = { path = "../custodian-store" }
+custodian-intake = { path = "../custodian-intake" }
+custodian-corpus = { path = "../custodian-corpus" }
+custodian-ledger = { path = "../custodian-ledger" }
+custodian-lifecycle = { path = "../custodian-lifecycle" }
+custodian-disclosure = { path = "../custodian-disclosure" }
+custodian-worker = { path = "../custodian-worker" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+
+[dev-dependencies]
+custodian-worker = { path = "../custodian-worker", features = ["test-fakes"] }
