@@ -16,6 +16,7 @@ members = [
     "crates/custodian-verify",
     "crates/custodian-signer",
     "crates/custodian-daemon",
+    "crates/custodian-worker-microvm",
 ]
 
 [workspace.package]

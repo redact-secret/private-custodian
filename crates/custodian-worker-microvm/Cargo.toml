@@ -1,0 +1,21 @@
+[package]
+name = "custodian-worker-microvm"
+description = "Offline remote-worker contract experiment; not a deployed or verified sandbox."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-worker = { path = "../custodian-worker" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+
+[[bin]]
+name = "custodian-microvm-synthetic-health"
+path = "../../deploy/aws/microvm/health.rs"
