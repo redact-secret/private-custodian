@@ -35,6 +35,7 @@ pub use fault::{CrashOnce, FaultInjector, FaultOp, FaultPhase, FaultPoint, NoFau
 pub use intake::{
     ApproveCommand, ApproveOutcome, LeasedRequest, SubmissionChannel, SubmissionRecord,
     SubmissionStatus, SubmitCommand, Submitted, CLAIM_WINDOW_SECS, MAX_PENDING_QUEUE,
+    MAX_PENDING_SUBMISSIONS,
 };
 pub use lifecycle::{
     EpochEventCommand, EpochEventOutcome, EpochEventRecord, EpochStandingRecord, FeedAppend,

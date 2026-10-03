@@ -251,9 +251,8 @@ parameter, so a Check cannot carry a finer code, a value or an identity.
   reference and `fresh_until`; revocation of an already-released projection is a signed revocation envelope
   (C7 `ApprovedPayload::revocation`), not a disclosure operation. There is no default eligibility:
   `testing::UncheckedEligibility` exists for tests and says so.
-- **C10 (operations).** The core `Disclosure` port (opaque string identities) is not implemented: it cannot
-  carry a digest-bound `Approval`. The typed `DisclosureService` replaces it; retire or adapt the port when the
-  control service is wired.
+- **C10 (operations).** The core `Disclosure` port was retired in C10 (ADR 0084): it could not carry a
+  digest-bound `Approval`. The typed `DisclosureService` replaces it and `custodian_cli::Service::disclosure_service` wires it over the one shared eligibility.
 - **C11 (benchmarks).** Consume `PublicProjectionEnvelope` plus `RevocationLog`. Destination binding needs the
   `publication` record or a schema major that adds a destination field.
 - **Engines.** The private aggregate artifact (`private-custodian.aggregates/1`) is the input contract. The

@@ -100,6 +100,7 @@ pub enum CliReason {
     InvalidChange,
     RotationInvalid,
     StoreBehindLedger,
+    SubmissionLimit,
     // -- lookup
     NotFound,
     // -- availability
@@ -123,7 +124,7 @@ pub enum CliReason {
 }
 
 impl CliReason {
-    pub const ALL: [CliReason; 41] = [
+    pub const ALL: [CliReason; 42] = [
         Self::UsageError,
         Self::InvalidDocument,
         Self::DocumentTooLarge,
@@ -149,6 +150,7 @@ impl CliReason {
         Self::InvalidChange,
         Self::RotationInvalid,
         Self::StoreBehindLedger,
+        Self::SubmissionLimit,
         Self::NotFound,
         Self::StoreUnavailable,
         Self::LedgerUnavailable,
@@ -194,6 +196,7 @@ impl CliReason {
             Self::InvalidChange => "invalid_change",
             Self::RotationInvalid => "rotation_invalid",
             Self::StoreBehindLedger => "store_behind_ledger",
+            Self::SubmissionLimit => "submission_limit",
             Self::NotFound => "not_found",
             Self::StoreUnavailable => "store_unavailable",
             Self::LedgerUnavailable => "ledger_unavailable",
@@ -227,7 +230,7 @@ impl CliReason {
             ConfirmationMismatch | AlreadyDecided | IdempotencyConflict | BudgetExhausted
             | StalePolicy | PolicyNotCurrent | ApprovalExpired | ApprovalNotBound
             | EpochBlocked | NotClearable | InvalidChange | RotationInvalid | StoreBehindLedger
-            | PendingObligations => ExitClass::Refused,
+            | SubmissionLimit | PendingObligations => ExitClass::Refused,
             NotFound => ExitClass::NotFound,
             StoreUnavailable
             | LedgerUnavailable

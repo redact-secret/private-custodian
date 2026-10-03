@@ -852,3 +852,30 @@ fn an_observation_is_stamped_with_the_time_of_the_read() {
         .is_none());
     let _ = Contract::validate(&fx.obs.activation);
 }
+
+#[test]
+fn the_number_of_waiting_submissions_is_bounded() {
+    let db = TempDb::new("c10-sub-limit");
+    let (store, fx) = setup(&db, 5);
+    {
+        let raw = rusqlite::Connection::open(db.path()).unwrap();
+        let tx = raw.unchecked_transaction().unwrap();
+        for n in 0..custodian_store::MAX_PENDING_SUBMISSIONS {
+            tx.execute(
+                "INSERT INTO submissions (request_id, idempotency_key, request_digest, \
+                 plan_digest, document, requester, submitted_by, channel, submitted_at, status) \
+                 VALUES (?1, ?2, 'd', 'p', '{}', 'r', 'r', 'cli', 1, 'pending')",
+                (format!("req_filler{n}"), format!("idk_filler{n}")),
+            )
+            .unwrap();
+        }
+        tx.commit().unwrap();
+    }
+    assert_eq!(submit(&store, &fx).err(), Some(StoreError::Constraint));
+    assert_eq!(store.submission(&fx.request_id()).unwrap(), None);
+    // A cancelled filler frees a slot.
+    store
+        .cancel_submission("req_filler0", &requester(), ActorKind::Human, ts(NOW))
+        .unwrap();
+    assert_eq!(submit(&store, &fx).unwrap(), Submitted::New);
+}

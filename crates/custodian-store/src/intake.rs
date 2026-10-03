@@ -48,6 +48,10 @@ pub const CLAIM_WINDOW_SECS: u64 = 300;
 /// Most requests that may wait in the queue (state `queued` or `leased`).
 /// At capacity the queue refuses; it never evicts.
 pub const MAX_PENDING_QUEUE: i64 = 4096;
+/// Most submissions that may wait for a decision. A flood of requests from one
+/// identity cannot grow the table without bound; at the limit `submit_request`
+/// refuses with `StoreError::Constraint` and records nothing.
+pub const MAX_PENDING_SUBMISSIONS: i64 = 1024;
 
 fn unavailable<T>(r: Result<T, StoreError>) -> Result<T, IntakeReason> {
     r.map_err(|_| IntakeReason::StoreUnavailable)
@@ -602,6 +606,14 @@ impl SqliteStore {
                 let raw = load_submission(tx, &rid)?.ok_or(StoreError::Corrupt)?;
                 return Ok(Submitted::Replay(raw.parse()?.status));
             }
+            let waiting: i64 = tx.query_row(
+                "SELECT COUNT(*) FROM submissions WHERE status = 'pending'",
+                [],
+                |r| r.get(0),
+            )?;
+            if waiting >= MAX_PENDING_SUBMISSIONS {
+                return Err(StoreError::Constraint);
+            }
             // A blocked epoch takes no new request. The reservation checks
             // again; failing here just spares the approver the wait.
             gate_epoch(tx, &epoch_key("contract", None, Some(&document))?)?;
@@ -920,7 +932,7 @@ impl SqliteStore {
             custodian_contracts::policy::ActivationStatus::Revoked => "revoked",
             custodian_contracts::policy::ActivationStatus::Superseded => "superseded",
         };
-        let kind = serde_json::to_value(&activation.policy.kind)
+        let kind = serde_json::to_value(activation.policy.kind)
             .ok()
             .and_then(|v| v.as_str().map(str::to_owned))
             .ok_or(StoreError::InvalidInput)?;

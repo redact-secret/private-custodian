@@ -777,14 +777,13 @@ fn contamination_blocks_new_use_and_a_permanent_one_is_never_clearable() {
     assert_eq!(o.field("new_contamination").unwrap(), "exposed");
     // A permanent report also retires the epoch, in the same call.
     assert_eq!(o.field("also_retired").unwrap(), true);
-    assert_eq!(
+    assert!(
         w.rw.store
             .epoch_standing(w.rw.epoch.as_str())
             .unwrap()
             .unwrap()
             .standing
-            .retired,
-        true
+            .retired
     );
     // Replay with the same key; a different change under the same key conflicts.
     assert_eq!(w.run(Who::Operator, &report).field("replay").unwrap(), true);
@@ -1155,6 +1154,7 @@ fn all_strings(v: &serde_json::Value, out: &mut Vec<String>) {
 }
 
 #[test]
+#[allow(clippy::vec_init_then_push)]
 fn output_carries_no_protected_canary_path_credential_or_free_text() {
     let w = World::new(2);
     // A protected epoch whose bytes are a canary, plus every command's output.

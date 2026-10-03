@@ -61,7 +61,7 @@ deleted, and the version rises by exactly one per change.
 
 The kind rules hold whatever the authority answers (`custodian_lifecycle::authorize`): a lenient authority
 that permits an agent everything still cannot make it clear, retire, rotate or publish. The authority is
-supplied by the deployment (C10); the library has no default. Residual risk: an authorized reporter can
+supplied by the deployment; C10 implements it over a reviewed operator policy file (`custodian_cli::PolicyAuthority`, ADR 0081) and is stricter than this table for automation: a `service` identity holds no operator role in the CLI. The library itself still has no default. Residual risk: an authorized reporter can
 block an epoch (an availability cost, deliberately on the safe side). An agent can only cause a reversible
 block, never a public contamination.
 
@@ -253,7 +253,7 @@ reference; C11 implements the equivalent in its own repository):
    whatever support was derived from each that stopped being `Valid` (`FeedConsumer::reevaluate` reports only
    losses; regaining validity is not a trigger). Product support decisions stay the consumer's.
 
-## 6. Operator-only actions (for C10)
+## 6. Operator-only actions (implemented by C10: the `custodian lifecycle` and `custodian feed` commands, see docs/operator-runbook.md)
 
 All run through the same authorization as everything else; none is an agent tool. Each takes an
 `OperatorAuthorization { actor, kind, authorization }` and an idempotency key; a repeat with the same key and
@@ -332,6 +332,7 @@ Startup sequence addition: after the store opens and `recover` runs, call `recon
 | Epoch manager, rotation, registry mirror and sweep | yes | yes | no |
 | Eligibility, dispatch guard, prepare and release wiring | yes | yes | no |
 | Feed publisher, destination contract, `MemoryFeed`, `DirFeed`, reference consumer | yes | yes | no |
-| Operator CLI over these APIs | yes (C10) | no | no |
-| Real feed destination, signer process, key provider, authority | yes (C10 to C12) | no | no |
+| Operator CLI over these APIs (`custodian-cli`, ADR 0080 to 0082) | yes (C10) | yes (synthetic tests) | no |
+| Authority over a reviewed operator policy file (ADR 0081), activation source over the store (ADR 0083) | yes (C10) | yes (synthetic tests) | no |
+| Real feed destination, signer process, key provider | yes (C12) | no | no |
 | Benchmarks-side consumer and legacy contamination import | yes (C11) | no | no |

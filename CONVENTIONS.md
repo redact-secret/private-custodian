@@ -10,9 +10,11 @@ Rust rules: `custodian-core` stays std-only with no I/O, no network and no vendo
 
 `custodian-lifecycle` adds no third-party crate (ADR 0070); it orchestrates epoch standing, eligibility and the revocation feed over the core rule, the store and the ledger, and the standing rule itself lives in `custodian-core` like the run and disclosure state machines.
 
+`custodian-cli` adds no third-party crate (ADR 0080): argument parsing is the standard library, and the control plane it exposes is the same store transactions the request edge uses; it holds no key and no credential, and prints only fixed codes, numbers and strict identifiers. `custodian-store` now depends on `custodian-intake` for the port types it implements (ADR 0083).
+
 `custodian-disclosure` adds no third-party crate (ADR 0060); it is the only place a public projection is built, and it reuses `custodian-intake` only to render Checks from fixed reason codes.
 
-Use small typed interfaces for authorization, corpus access, atomic budget/state operations, execution and disclosure (`custodian_core::ports`). Avoid vendor-specific SDKs in core contracts. Measurement engines never depend on GitHub; GitHub is confined to the request-facing App adapter and the ledger-writer. Engine invocation uses a pinned binary/package and versioned artifact schema rather than source imports.
+Use small typed interfaces for authorization, corpus access, atomic budget/state operations and execution (`custodian_core::ports`); disclosure is the typed `custodian_disclosure::DisclosureService` (the core `Disclosure` port was retired, ADR 0084). Avoid vendor-specific SDKs in core contracts. Measurement engines never depend on GitHub; GitHub is confined to the request-facing App adapter and the ledger-writer. Engine invocation uses a pinned binary/package and versioned artifact schema rather than source imports.
 
 ## Repository versus operational data
 

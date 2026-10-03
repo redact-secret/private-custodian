@@ -390,7 +390,10 @@ impl<'a, S: EpochBlobStore> Control<'a, S> {
                 submitted_by: who.actor(),
                 now,
             })
-            .map_err(CliReason::from)?;
+            .map_err(|e| match e {
+                custodian_store::StoreError::Constraint => CliReason::SubmissionLimit,
+                other => other.into(),
+            })?;
         let base = Output::ok(name, "submitted")
             .id("request_id", rid)
             .id("plan_digest", plan_digest.as_str());
@@ -890,6 +893,13 @@ impl<'a, S: EpochBlobStore> Control<'a, S> {
                     .num(
                         "outbox_unacknowledged",
                         store.outbox_pending_count().map_err(CliReason::from)?,
+                    )
+                    .num(
+                        "store_checkpoint_seq",
+                        store
+                            .latest_checkpoint()
+                            .map_err(CliReason::from)?
+                            .map_or(0, |c| c.seq),
                     )
                     .id("store_id", &store.store_id().map_err(CliReason::from)?);
                 Ok(if blocked {
