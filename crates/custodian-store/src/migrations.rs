@@ -96,8 +96,7 @@ pub fn migrate(conn: &mut Connection, list: &[Migration], now: i64) -> Result<u3
     };
 
     let known = i64::try_from(list.len()).map_err(|_| StoreError::MigrationFailed)?;
-    let mut expected = 1i64;
-    for (version, checksum) in &applied {
+    for (expected, (version, checksum)) in (1i64..).zip(&applied) {
         if *version > known {
             return Err(StoreError::SchemaTooNew);
         }
@@ -109,7 +108,6 @@ pub fn migrate(conn: &mut Connection, list: &[Migration], now: i64) -> Result<u3
         if list[idx].checksum() != *checksum {
             return Err(StoreError::MigrationChecksum);
         }
-        expected += 1;
     }
 
     let current = u32::try_from(applied.len()).map_err(|_| StoreError::MigrationFailed)?;

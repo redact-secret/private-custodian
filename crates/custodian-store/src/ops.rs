@@ -128,6 +128,7 @@ fn intake_from_contracts(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn push_transition(
     tx: &Transaction<'_>,
     attempt_id: &str,

@@ -222,9 +222,8 @@ fn holder_resumes_after_restart_with_its_lease() {
     // Crash at each boundary after start; the worker still holds its lease
     // value, the store restarts, the worker repeats the step (every step is
     // idempotent for the holder) and completes. Nothing is charged twice.
-    for i in 2..STEPS.len() {
+    for (i, op) in STEPS.iter().copied().enumerate().skip(2) {
         for phase in PHASES {
-            let op = STEPS[i];
             let label = format!("{op:?}/{phase:?}");
             let db = TempDb::new("resume");
             let fx = fixture(1);

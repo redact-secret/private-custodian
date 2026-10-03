@@ -104,15 +104,13 @@ impl SqliteStore {
                 ))
             })?;
             let mut prev = GENESIS_CHAIN.to_owned();
-            let mut expect = 1i64;
-            for row in rows {
+            for (expect, row) in (1i64..).zip(rows) {
                 let (seq, payload, digest, chain) = row?;
                 let actual = crate::migrations::hex(&Sha256::digest(payload.as_bytes()));
                 if seq != expect || actual != digest || chain_of(&prev, seq, &digest) != chain {
                     return Err(StoreError::Invariant("outbox_chain"));
                 }
                 prev = chain;
-                expect += 1;
             }
             Ok(())
         })
