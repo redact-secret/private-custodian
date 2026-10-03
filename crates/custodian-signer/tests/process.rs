@@ -11,7 +11,9 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use common::*;
-use custodian_ledger::{ApprovedPayload, KeyEntry, Keyring, SignDomain, SignRefusal, Signer, Verifier};
+use custodian_ledger::{
+    ApprovedPayload, KeyEntry, Keyring, SignDomain, SignRefusal, Signer, Verifier,
+};
 
 const BIN: &str = env!("CARGO_BIN_EXE_custodian-signer");
 
@@ -81,8 +83,18 @@ fn finish(mut child: Child) -> (Option<i32>, String, String) {
     let _ = child.kill();
     let status = child.wait().unwrap();
     let (mut out, mut err) = (String::new(), String::new());
-    child.stdout.take().unwrap().read_to_string(&mut out).unwrap();
-    child.stderr.take().unwrap().read_to_string(&mut err).unwrap();
+    child
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut out)
+        .unwrap();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut err)
+        .unwrap();
     (status.code(), out, err)
 }
 
@@ -216,7 +228,10 @@ fn linux_process_boundary_keeps_same_uid_readers_out_of_signer_memory() {
         .lines()
         .find(|l| l.starts_with("Max core file size"))
         .unwrap();
-    assert!(core.split_whitespace().rev().take(3).any(|w| w == "0"), "{core}");
+    assert!(
+        core.split_whitespace().rev().take(3).any(|w| w == "0"),
+        "{core}"
+    );
     assert!(core.matches('0').count() >= 2, "{core}");
 
     // With PR_SET_DUMPABLE off, /proc/<pid>/{mem,environ} are not readable by

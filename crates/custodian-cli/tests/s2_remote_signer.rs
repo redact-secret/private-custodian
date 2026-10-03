@@ -19,8 +19,7 @@ use custodian_cli::command::RepairCommand;
 use custodian_cli::deploy::{ConfiguredSigner, UnavailableSigner};
 use custodian_cli::Command;
 use custodian_ledger::{
-    ApprovedPayload, KeyEntry, Keyring, LedgerRecord, RemoteSigner, SignDomain, SignRefusal,
-    Signer,
+    ApprovedPayload, KeyEntry, Keyring, LedgerRecord, RemoteSigner, SignDomain, SignRefusal, Signer,
 };
 use custodian_signer::{
     start, FileKeyProvider, RunningServer, ServerConfig, SignerSetup, SigningEngine, SystemClock,

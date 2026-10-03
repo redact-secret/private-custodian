@@ -40,13 +40,7 @@ fn reply(env: &Env, bytes: &[u8]) -> Result<Vec<u8>, Option<Reject>> {
 }
 
 fn framed(issued_at: u64, body: &[u8]) -> Vec<u8> {
-    let mut v = header(
-        b"PCSG",
-        1,
-        1,
-        issued_at,
-        u32::try_from(body.len()).unwrap(),
-    );
+    let mut v = header(b"PCSG", 1, 1, issued_at, u32::try_from(body.len()).unwrap());
     v.extend_from_slice(body);
     v
 }
@@ -276,8 +270,14 @@ fn malformed_oversize_and_wrong_version_frames_are_rejected_with_fixed_codes() {
     assert!(text.contains("sign_payload_invalid"));
     assert!(!text.contains("CANARY"));
     // Unknown fields are refused by the wire parser.
-    let v = reply(&env, &framed(T0, br#"{"domain":"x","payload":"","extra":1}"#)).unwrap();
-    assert!(String::from_utf8(v).unwrap().contains("sign_payload_invalid"));
+    let v = reply(
+        &env,
+        &framed(T0, br#"{"domain":"x","payload":"","extra":1}"#),
+    )
+    .unwrap();
+    assert!(String::from_utf8(v)
+        .unwrap()
+        .contains("sign_payload_invalid"));
 
     assert_eq!(engine.stats().snapshot().signed, 0);
     assert_still_signs(&env);
@@ -437,10 +437,8 @@ fn the_client_refuses_a_server_running_as_another_uid() {
     let _server = env.server(engine);
     let me = custodian_signer::effective_uid();
     let payload = ApprovedPayload::ledger_record(&checkpoint_record(NOW)).unwrap();
-    let ok = custodian_ledger::RemoteSigner::new(
-        key_id(),
-        env.transport().expecting_signer_uid(me),
-    );
+    let ok =
+        custodian_ledger::RemoteSigner::new(key_id(), env.transport().expecting_signer_uid(me));
     ok.sign(&payload).unwrap();
     let wrong = custodian_ledger::RemoteSigner::new(
         key_id(),

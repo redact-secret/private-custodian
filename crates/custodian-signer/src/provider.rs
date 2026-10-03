@@ -161,14 +161,19 @@ fn decode_seed(buf: &[u8]) -> Result<SecretSeed, KeyProviderError> {
         _ => return Err(KeyProviderError::Malformed),
     };
     let mut seed = [0u8; 32];
-    for (i, pair) in body.chunks_exact(2).enumerate() {
-        match (hex_val(pair[0]), hex_val(pair[1])) {
-            (Some(h), Some(l)) => seed[i] = (h << 4) | l,
+    let mut ok = true;
+    for (i, byte) in seed.iter_mut().enumerate() {
+        match (hex_val(body[2 * i]), hex_val(body[2 * i + 1])) {
+            (Some(h), Some(l)) => *byte = (h << 4) | l,
             _ => {
-                seed.zeroize();
-                return Err(KeyProviderError::Malformed);
+                ok = false;
+                break;
             }
         }
+    }
+    if !ok {
+        seed.zeroize();
+        return Err(KeyProviderError::Malformed);
     }
     let out = SecretSeed::from_provider_bytes(seed);
     seed.zeroize();

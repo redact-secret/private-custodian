@@ -73,11 +73,6 @@ impl Clock for ManualClock {
 /// Receives fixed event codes (never payloads, keys or paths).
 pub type EventSink = Arc<dyn Fn(&'static str) + Send + Sync>;
 
-/// Writes `custodian-signer: <code>` lines to stderr.
-pub fn stderr_sink() -> EventSink {
-    Arc::new(|code| eprintln!("custodian-signer: {code}"))
-}
-
 /// Drops events.
 pub fn silent_sink() -> EventSink {
     Arc::new(|_| {})

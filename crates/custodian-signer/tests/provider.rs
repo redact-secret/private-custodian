@@ -51,7 +51,11 @@ fn an_open_directory_is_refused() {
     let env = Env::new();
     for m in [0o755, 0o750, 0o705, 0o770] {
         mode(&env.root, m);
-        assert_eq!(load(&env), Err(KeyProviderError::InsecureDirectory), "{m:o}");
+        assert_eq!(
+            load(&env),
+            Err(KeyProviderError::InsecureDirectory),
+            "{m:o}"
+        );
     }
     mode(&env.root, 0o700);
     load(&env).unwrap();
@@ -151,7 +155,12 @@ fn provider_errors_name_neither_paths_nor_key_bytes() {
 fn hardening_applies_in_a_child_process() {
     let exe = std::env::current_exe().unwrap();
     let out = Command::new(exe)
-        .args(["--exact", "hardening_child", "--nocapture", "--test-threads=1"])
+        .args([
+            "--exact",
+            "hardening_child",
+            "--nocapture",
+            "--test-threads=1",
+        ])
         .env("PCSG_HARDEN_CHILD", "1")
         .env("PCSG_CANARY_SECRET", "canary-env-value")
         .output()

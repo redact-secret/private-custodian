@@ -31,8 +31,8 @@ pub mod server;
 pub use client::UnixSocketTransport;
 pub use config::{ConfigError, SignerConfig, CONFIG_SCHEMA};
 pub use engine::{
-    silent_sink, stderr_sink, Clock, EventSink, ManualClock, SignerSetup, SigningEngine, Stats,
-    StatsSnapshot, SystemClock,
+    silent_sink, Clock, EventSink, ManualClock, SignerSetup, SigningEngine, Stats, StatsSnapshot,
+    SystemClock,
 };
 pub use frame::Reject;
 pub use platform::{harden_process, Hardening};

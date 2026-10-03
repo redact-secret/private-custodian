@@ -54,17 +54,16 @@ pub struct HardenError;
 pub fn harden_process() -> Result<Hardening, HardenError> {
     use nix::sys::resource::{getrlimit, setrlimit, Resource};
     setrlimit(Resource::RLIMIT_CORE, 0, 0).map_err(|_| HardenError)?;
-    let core_dumps_disabled =
-        matches!(getrlimit(Resource::RLIMIT_CORE), Ok((0, 0)));
+    let core_dumps_disabled = matches!(getrlimit(Resource::RLIMIT_CORE), Ok((0, 0)));
     if !core_dumps_disabled {
         return Err(HardenError);
     }
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(target_os = "linux")]
     let dumpable_off = {
         nix::sys::prctl::set_dumpable(false).map_err(|_| HardenError)?;
-        nix::sys::prctl::get_dumpable().map_or(false, |d| !d)
+        matches!(nix::sys::prctl::get_dumpable(), Ok(false))
     };
-    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    #[cfg(not(target_os = "linux"))]
     let dumpable_off = false;
 
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));

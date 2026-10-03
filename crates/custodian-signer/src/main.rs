@@ -12,8 +12,13 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use custodian_signer::{
-    harden_process, start, stderr_sink, FileKeyProvider, SignerConfig, SigningEngine, SystemClock,
+    harden_process, start, EventSink, FileKeyProvider, SignerConfig, SigningEngine, SystemClock,
 };
+
+/// Event lines on stderr: fixed codes only.
+fn stderr_sink() -> EventSink {
+    Arc::new(|code| eprintln!("custodian-signer: {code}"))
+}
 
 fn fail(code: &str, exit: u8) -> ExitCode {
     eprintln!("custodian-signer: {code}");

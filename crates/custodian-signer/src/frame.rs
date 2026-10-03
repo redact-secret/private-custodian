@@ -96,11 +96,7 @@ pub enum IoFail {
     Closed,
 }
 
-fn read_exact_by(
-    s: &mut UnixStream,
-    buf: &mut [u8],
-    deadline: Instant,
-) -> Result<(), IoFail> {
+fn read_exact_by(s: &mut UnixStream, buf: &mut [u8], deadline: Instant) -> Result<(), IoFail> {
     let mut off = 0;
     while off < buf.len() {
         let now = Instant::now();
@@ -228,10 +224,7 @@ pub fn write_response(
 /// Client side: read one response frame. `Err(None)` is a dead or slow signer
 /// or a response that violates the framing; `Err(Some(r))` is a signer
 /// rejection.
-pub fn read_response(
-    s: &mut UnixStream,
-    timeout: Duration,
-) -> Result<Vec<u8>, Option<Reject>> {
+pub fn read_response(s: &mut UnixStream, timeout: Duration) -> Result<Vec<u8>, Option<Reject>> {
     let deadline = Instant::now() + timeout;
     let mut h = [0u8; RESPONSE_HEADER_LEN];
     read_exact_by(s, &mut h, deadline).map_err(|_| None)?;
