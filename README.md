@@ -16,7 +16,8 @@ This project coordinates frozen candidates, protected synthetic corpora, executi
 | Protected population storage, sealing and reviewed registry (`custodian-corpus`, [docs/protected-storage.md](docs/protected-storage.md)) | yes | yes (filesystem adapter, synthetic tests) | no |
 | SQLite runtime store: transactional budgets, durable run state, leases, audit outbox ([docs/state-store.md](docs/state-store.md)) | yes | yes (synthetic tests; no listener, no ledger writer) | no |
 | Signed receipts, ledger record layout, idempotent outbox export, checkpoints and startup rollback check (`custodian-ledger`, [docs/ledger.md](docs/ledger.md)) | yes | yes (test-generated keys, local-repository and in-memory backends; no signer process, no private-ledger repository, no service wiring) | no |
-| Request-facing App, isolated workers, signer process, live private-ledger | yes | no | no |
+| Isolated bounded workers: dispatcher, sandbox trait (Linux bubblewrap, fail-closed elsewhere), startup self-check (`custodian-worker`, [docs/worker-isolation.md](docs/worker-isolation.md)) | yes | yes (synthetic tests; Linux isolation tests run in CI, skipped elsewhere) | no |
+| Request-facing App, signer process, live private-ledger | yes | no | no |
 
 First deployment (planned): a Rust policy/state core and control service, a SQLite runtime store, protected populations in a restricted directory behind an adapter, and a separate restricted private-ledger repository for signed audit exports. The database and protected storage are infrastructure, not extra repositories. Eventual publication is code only: the private ledger, runtime database, protected corpora, raw results, secrets and operational history remain private. Rationale and limits: [ADR 0002](docs/adr/0002-implementation-stack-and-runtime-identities.md).
 

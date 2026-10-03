@@ -93,3 +93,8 @@ Public synthetic lifecycle controls must test concurrency, duplicate requests, b
 ## Request edge (C3)
 
 `crates/custodian-intake` is the request-facing App adapter (Z1): signed webhook intake with event, installation, repository and actor allowlists, delivery replay protection, fork/cross-repository/comment/workflow denial, an execution gate that requires a separate approval record, App JWT and scoped installation-token logic behind traits, and sanitized Check output. It validates and enqueues; it never evaluates. It depends on `custodian-core` and `custodian-contracts`, and holds only the request-facing App credential. Decisions and limits: [ADR 0010](docs/adr/0010-github-app-request-intake.md); operator guide: [docs/github-app.md](docs/github-app.md). Implemented as a library with in-memory doubles; no listener, durable store or live App is deployed.
+
+## Worker boundary (C6)
+
+`crates/custodian-worker` runs pinned engines inside a `Sandbox`: bubblewrap namespaces, a read-only root, size-capped scratch, rlimits, bounded output and process-tree cleanup on Linux, and a refusing backend that runs nothing elsewhere. A dispatcher cannot be built without a startup self-check that ran a probe inside that sandbox and recorded the verification. Identities are verified before protected input access and again after staging and after execution; `record_exposure` is committed before the corpus opens; worker output is a strict bounded document mapped to `ExecutionOutcome`, and a crash is never clean. Decisions: ADR 0040 to 0042. Supported deployment and the list of what is not claimed: [docs/worker-isolation.md](docs/worker-isolation.md). Implemented against synthetic data; nothing is deployed and no production host has been proven.
+

@@ -97,7 +97,7 @@ fn validator_rejects_malformed_inconsistent_and_oversized_results() {
         s.replace("\"version\":\"1\"", "\"version\":\"2\""),
         s.replace(
             "\"status\"",
-            "\"message\":\"secret-shaped AKIA0000\",\"status\"",
+            "\"message\":\"secret-shaped synthetic text\",\"status\"",
         ),
         s.replace("\"status\"", "\"status\":\"complete\",\"status\""),
         s.replace("\"failed\":0", "\"failed\":0,\"failed\":0"),

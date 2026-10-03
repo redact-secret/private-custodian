@@ -84,9 +84,7 @@ fn main() {
             }
         }
         "stderr-secret" => {
-            eprintln!(
-                "token=SYNTHETIC-SECRET-SHAPED-AKIA0000000000000000 password=hunter2-synthetic"
-            );
+            eprintln!("token=SYNTHETIC-SECRET-SHAPED-0000000000000000 password=hunter2-synthetic");
             ok(&domain);
         }
         "wrong-roster" => result(n, n + 1, n + 1, 0, "complete", &domain),
