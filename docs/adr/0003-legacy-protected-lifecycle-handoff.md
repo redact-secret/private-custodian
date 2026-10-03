@@ -45,3 +45,9 @@ them. The inventory and per-lifecycle map are in [../responsibility-map.md](../r
 Legacy facts live in benchmark-side files whose exact schemas C11 must read. Where the legacy lifecycle
 records a custodian only by local convention, the importer must not invent provenance. Revisit if a legacy
 record cannot be classified: keep it consumed and flag it.
+
+## Update (C11)
+
+The import tooling, dry-run report and handoff record now exist as synthetic-tested library code (ADR 0091 and
+0092, `docs/legacy-migration.md`). The status table above is unchanged for the handoff itself: no population has
+been handed off and nothing is deployed.

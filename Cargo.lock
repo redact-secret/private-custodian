@@ -98,6 +98,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "custodian-bridge"
+version = "0.0.0"
+dependencies = [
+ "custodian-contracts",
+ "custodian-core",
+ "custodian-corpus",
+ "custodian-disclosure",
+ "custodian-ledger",
+ "custodian-lifecycle",
+ "custodian-store",
+ "custodian-worker",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "custodian-contracts"
 version = "0.0.0"
 dependencies = [

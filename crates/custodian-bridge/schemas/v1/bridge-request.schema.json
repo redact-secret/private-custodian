@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "EvaluationDomain": {
+      "description": "Evaluation domain. Plan, protocol, population and policies must all agree.",
+      "enum": [
+        "credential",
+        "pii"
+      ],
+      "type": "string"
+    },
+    "PublicPopulationRef": {
+      "description": "Disclosure-safe population identity. Either a random opaque reference or a\nkeyed commitment; never a plain hash of population content.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^ppr_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "kind": {
+              "const": "opaque",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "commitment": {
+              "maxLength": 76,
+              "minLength": 76,
+              "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "key_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^key_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "kind": {
+              "const": "keyed_commitment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "key_id",
+            "commitment"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "What benchmarks asks the custodian for.",
+  "properties": {
+    "candidate": {
+      "description": "The frozen candidate: SHA-256 of the exact candidate bytes.",
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "config": {
+      "description": "The frozen configuration digest benchmarks holds for that candidate.\nThe custodian uses it to find the approved release; it is not in the\npublic projection, so a consumer cannot check it there.",
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "domain": {
+      "$ref": "#/$defs/EvaluationDomain"
+    },
+    "feed_id": {
+      "description": "The revocation feed benchmarks has pinned.",
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^fed_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "known_sequence": {
+      "description": "The last feed sequence benchmarks has verified (0 for none).",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "populations": {
+      "description": "Public population references benchmarks will accept. Empty means any\npopulation the product pins on its own side.",
+      "items": {
+        "$ref": "#/$defs/PublicPopulationRef"
+      },
+      "maxItems": 8,
+      "type": "array"
+    },
+    "schema": {
+      "const": "private-custodian.bridge-request/1"
+    }
+  },
+  "required": [
+    "schema",
+    "domain",
+    "candidate",
+    "config",
+    "feed_id",
+    "known_sequence",
+    "populations"
+  ],
+  "title": "BridgeRequest",
+  "type": "object"
+}

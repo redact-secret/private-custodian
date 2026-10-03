@@ -1,0 +1,28 @@
+[package]
+name = "custodian-bridge"
+description = "Benchmarks bridge (C11): a bounded request and response contract, a reference consumer that verifies approved projections and revocation updates with public inputs only, and a deterministic legacy-lifecycle metadata import. Synthetic data only."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+# No new third-party crate (ADR 0090): serde, serde_json, sha2 and schemars are
+# the exact versions the workspace already pins.
+[dependencies]
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-ledger = { path = "../custodian-ledger" }
+custodian-disclosure = { path = "../custodian-disclosure" }
+custodian-lifecycle = { path = "../custodian-lifecycle" }
+schemars = "=1.2.2"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+
+[dev-dependencies]
+custodian-core = { path = "../custodian-core" }
+custodian-store = { path = "../custodian-store" }
+custodian-corpus = { path = "../custodian-corpus" }
+custodian-worker = { path = "../custodian-worker", features = ["test-fakes"] }

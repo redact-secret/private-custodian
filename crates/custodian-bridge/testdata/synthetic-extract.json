@@ -1,0 +1,59 @@
+{
+  "schema": "private-custodian.legacy-extract/1",
+  "extracted_at": 1800000000,
+  "review": {
+    "reviewer_role": "maintainer",
+    "review_ref": "synthetic-review-1",
+    "reviewed_at": 1800000010
+  },
+  "scopes": [
+    {
+      "lifecycle": "holdout",
+      "domain": "credential",
+      "scope": {"kind": "population_epoch", "population": "synthetic-population-a", "epoch": "synthetic-epoch-1"},
+      "declared_limit": 1,
+      "attempts": [{"run": "synthetic-run-0001", "state": "complete", "source": 1}],
+      "reported_consumed": 1,
+      "reported_receipts": 1,
+      "independence": {"claim": "custodian-declared"},
+      "contamination": {"state": "none_recorded", "source": 2},
+      "sources": [
+        {"kind": "manifest", "locator": "synthetic/holdout/manifest.json", "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000001", "observed_at": 1800000000},
+        {"kind": "aggregate", "locator": "synthetic/evidence/aggregate.json", "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000002", "observed_at": 1800000000},
+        {"kind": "custodian-statement", "locator": "synthetic-reviewed-no-mark", "observed_at": 1800000000}
+      ]
+    },
+    {
+      "lifecycle": "pii-protected",
+      "domain": "pii",
+      "scope": {"kind": "population_epoch", "population": "synthetic-population-b", "epoch": "synthetic-epoch-1", "family": "synthetic-family-x"},
+      "declared_limit": 1,
+      "attempts": [],
+      "independence": {"claim": "custodian-declared"},
+      "contamination": {"state": "none_recorded", "source": 1},
+      "sources": [
+        {"kind": "unspent-attestation", "locator": "synthetic/evidence/unspent-attestation.json", "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000003", "observed_at": 1800000000},
+        {"kind": "custodian-statement", "locator": "synthetic-reviewed-no-mark", "observed_at": 1800000000}
+      ]
+    },
+    {
+      "lifecycle": "blind",
+      "domain": "credential",
+      "scope": {"kind": "candidate_epoch", "candidate": "synthetic-candidate-identity", "epoch": "synthetic-blind-epoch-1"},
+      "declared_limit": 1,
+      "attempts": [{"run": "synthetic-blind-run-0001", "state": "reserved"}],
+      "reported_receipts": 1,
+      "independence": {
+        "claim": "procedural-separation",
+        "organisational_independence_claimed": false,
+        "evidence_class": "custodian-blind",
+        "statement_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000009"
+      },
+      "contamination": {"state": "none_recorded", "source": 1},
+      "sources": [
+        {"kind": "blind-aggregate", "locator": "synthetic/reports/blind-aggregate.json", "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000004", "observed_at": 1800000000},
+        {"kind": "custodian-statement", "locator": "synthetic-reviewed-no-mark", "observed_at": 1800000000}
+      ]
+    }
+  ]
+}
