@@ -182,7 +182,7 @@ event is acknowledged.
   reconciles consumed budget with the ledger by a reviewed procedure and calls `clear_reconcile`. The
   block persists across restarts.
 - Do not copy only the main file of a live database; use `backup_to`.
-- Restoring never lowers consumed budget by design. Operational runbooks and drills belong to C12.
+- Restoring never lowers consumed budget by design. The restore drill and its limits (including the window between the last export and the loss) are in [backup-recovery.md](backup-recovery.md) and `crates/custodian-cli/tests/c12_restore_drill.rs`.
 
 ## Tests
 

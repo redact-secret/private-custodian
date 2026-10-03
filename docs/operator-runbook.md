@@ -39,10 +39,12 @@ independent validation, and custody does not establish ground truth.
 | deployment config (`--config`, or `CUSTODIAN_CONFIG`) | paths to the store, operator policy, protected root, ledger clone, pinned roots, feed directory; the feed id; two public key identifiers | credentials, keys |
 | operator policy (`private-custodian.operator-policy/1`) | identities (`act_...`), kind, roles, SHA-256 digest of each credential, validity window, optional limits | the credentials themselves |
 | pinned roots | the ledger signing **public** keys, obtained out of band | private keys |
-| credential file (`--token-file`, or `CUSTODIAN_TOKEN_FILE`) | one credential, 32 bytes or more, mode 0600 | anything else |
+| credential file (`--token-file`, or `CUSTODIAN_TOKEN_FILE`) | one credential, 32 bytes or more; a regular file (not a link) with no group or other access, else `unauthenticated` | anything else |
 
 The deployment config, policy, roots and credentials are **not committed** to this repository. The repository
-contains only synthetic fixtures.
+contains only synthetic fixtures. The operator policy and the pinned roots are read only if they are regular
+files (not links) that are not group or other writable (anyone who can write them can add an operator or a trust
+anchor); otherwise the deployment is `not_configured`. Put them in a root-owned directory.
 
 ### 2.2 Creating and rotating a credential
 
@@ -213,11 +215,17 @@ checkpoint detects.
    refuse (`store_behind_ledger`, exit 5) and no flag changes that. Do this instead:
    1. Look for a newer copy that contains the ledger's checkpoint (a later backup, the original file if it
       survived). Restore that one and go back to step 2.
-   2. If none exists, **do not fabricate consumption.** Decide with the owners (section 8) which epochs may
-      have spent budget after the snapshot (the ledger's audit records show it by sequence and request id).
-      `lifecycle retire` each of them (`--reason operator_decision`) and, if work must continue,
-      `lifecycle rotate` to a new reviewed epoch with its own budget. Spent and held units of the old epochs
-      stay as they are in whatever copy you keep; they can no longer be used.
+   2. If none exists, **do not fabricate consumption, and stop.** This is an incident
+      (docs/incident-response.md, class H). The earlier text of this runbook said to `lifecycle retire` the
+      epochs that may have spent budget after the snapshot; **that is not executable**: while the store is
+      write-blocked every state-changing command, `lifecycle retire` and `lifecycle rotate` included, is refused
+      with `store_needs_reconcile` (exit 8), and `repair clear-reconcile` is refused with `store_behind_ledger`.
+      The C12 drill pins this (`c12_restore_drill.rs`). What may be done today is read-only: `verify`,
+      `reconcile`, and working out from the ledger's audit records (by sequence and request id) which epochs may
+      have spent budget after the snapshot. The way to continue is a new store and a new ledger lineage with new
+      reviewed epochs and their own budgets; that procedure is designed but not implemented
+      (ADR 0101, decision 2; register R-1 in docs/release-readiness.md), so protected execution against the
+      old store does not resume.
    3. Keep the blocked copy for the incident record; do not delete the ledger.
 4. **`contained`** but the store is blocked (for example the flag was set before the restore): continue.
 5. Clear the block only when all of these hold: `verify all` shows a clean ledger, `store_checkpoint:
@@ -309,7 +317,7 @@ These are not automated and not delegated to an agent:
 * The `custodian` binary has no signer: `repair export` and `feed publish` report `signer_unavailable` until a
   deployment supplies an isolated signer transport.
 * No private-ledger repository, key provider, feed destination or real operator policy exists.
-* Everything above is exercised only against synthetic data (C12 owns operational acceptance).
+* Everything above is exercised only against synthetic data. C12 added the cross-layer suite, the restore drill and the readiness record: [backup-recovery.md](backup-recovery.md), [incident-response.md](incident-response.md), [deployment-runbook.md](deployment-runbook.md), [release-readiness.md](release-readiness.md).
 
 ## 10. Evidence map
 
