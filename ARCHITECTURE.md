@@ -2,7 +2,7 @@
 
 ## Design status and trust model
 
-This is a proposed operational design, not a claim of an implemented sandbox or verified deployment. Protected synthetic data is the initial scope. Real personal data requires a separate approved governance design before ingestion.
+This is a proposed operational design, not a claim of an implemented sandbox or verified deployment. Only a synthetic, in-memory scaffold exists (see "Chosen stack" below); nothing is deployed. Trust zones and the threat model are frozen in [ADR 0001](docs/adr/0001-trust-boundaries-and-threat-model.md). Protected synthetic data is the initial scope. Real personal data requires a separate approved governance design before ingestion.
 
 The system assumes engine/scanner code can be buggy or malicious, agent prompts and external content are untrusted, execution can crash, and repeated aggregate queries can reveal a holdout. Custody enforces controls outside the agent and measurement kernel.
 
@@ -19,7 +19,19 @@ The system assumes engine/scanner code can be buggy or malicious, agent prompts 
 | Disclosure service | Projection rules, query budget, suppression, receipt signing |
 | Audit store | Append-only lifecycle/decision trail and integrity verification |
 
-These are responsibilities, not mandatory microservices. Start with a small deployment and explicit interfaces. Choose runtime, durable store, isolation platform, key provider, and deployment topology through ADRs and failure tests. Redis, Postgres, or an AWS SDK is not required by the core contract.
+These are responsibilities, not mandatory microservices. Start with a small deployment and explicit interfaces. Choose isolation platform, key provider, and remaining deployment details through ADRs and failure tests. Redis, Postgres, or an AWS SDK is not required by the core contract.
+
+## Chosen stack (design baseline)
+
+[ADR 0002](docs/adr/0002-implementation-stack-and-runtime-identities.md) records these choices. They are planned unless marked otherwise.
+
+- **Rust policy/state core** (`crates/custodian-core`, std only, no I/O) holds identities, lifecycle, refund policy and the ports for authorization, corpus access, atomic budget/state, execution and disclosure. A control-service crate (`crates/custodian-service`) orders the lifecycle over those ports, and `crates/custodian-contracts` is a placeholder until C2. Implemented: scaffold with in-memory synthetic doubles only.
+- **SQLite-first runtime store** behind the state port: run state, budgets, idempotency keys and the audit outbox in one control-service-owned database. Single host; exit by adapter.
+- **Filesystem-first protected storage** in a restricted directory behind the corpus port.
+- **Restricted private-ledger repository** for signed audit exports written only by a separate ledger-writer identity. It is an outside tamper-evident copy, not the budget authority, and benchmarks cannot read it. The public review ledger is benchmark-owned and different.
+- **No GitHub in measurement.** Engines run as pinned binaries in the worker; GitHub appears only in the request-facing App adapter and the ledger-writer.
+- **Identities:** request-facing App, control service, runtime DB, protected storage, isolated workers, receipt signer, ledger-writer. Roles and prohibitions are in ADR 0002; ownership across repositories is in the [responsibility map](docs/responsibility-map.md).
+- **Eventual publication is code only.** The database, protected storage, private ledger, corpora, keys, raw results and operational history stay private.
 
 ## Data boundaries
 
@@ -69,10 +81,10 @@ Signatures attest origin and binding. They do not prove true expectations, an in
 
 ## Audit, recovery, and retention
 
-Use append-only audit events with integrity checkpoints stored outside the writer's control where practical. Tamper-evident logging is not tamper-proof storage. Retain actor/authorization/plan/state/budget/disclosure references without input values. Separate restricted operational metadata from safe public receipts.
+Use append-only audit events with integrity checkpoints stored outside the writer's control where practical; the private-ledger export is the first such copy. Tamper-evident logging is not tamper-proof storage. Restoring a database older than the last exported checkpoint must not lower consumed budgets: the service refuses to run until reconciled. Retain actor/authorization/plan/state/budget/disclosure references without input values. Separate restricted operational metadata from safe public receipts.
 
 Retention and deletion schedules cover corpora, observations, results, scratch, backups, and failed runs. Define recovery for crash, partial artifact write, exhausted storage, duplicate dispatch, expired authorization, and unavailable signing/store services. Fail closed on uncertainty about plan identity, authorization, or public release state.
 
 ## Acceptance
 
-Public synthetic lifecycle controls must test concurrency, duplicate requests, budget exhaustion, crash after exposure, cancellation, malicious output, filesystem/network denial, cross-run reuse, invalid bindings, suppressed strata, signing refusal and recovery. Protected runs occur only after those controls and operational review pass. Product support decisions remain downstream.
+Public synthetic lifecycle controls must test concurrency, duplicate requests, budget exhaustion, crash after exposure, cancellation, malicious output, filesystem/network denial, cross-run reuse, invalid bindings, suppressed strata, signing refusal and recovery. Protected runs occur only after those controls and operational review pass, and after the deployment prerequisites in ADR 0001 are demonstrated. Existing benchmark protected lifecycles stay authoritative until a reviewed handoff that erases no receipt and resets no exhausted budget ([ADR 0003](docs/adr/0003-legacy-protected-lifecycle-handoff.md)). Product support decisions remain downstream.

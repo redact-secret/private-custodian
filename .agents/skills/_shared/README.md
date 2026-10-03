@@ -13,7 +13,8 @@ Not a skill. Each file is a short reference that skills link to so the rules liv
 
 - Read `README.md`, `ARCHITECTURE.md`, `SECURITY.md` and `CONVENTIONS.md` first. They are canonical; a skill
   summarizes them and never overrides them.
-- The repository is a **design baseline**. Inventory what exists (manifests, source, tests, CI, ADRs) before
+- The repository is a **design baseline** with a synthetic in-memory Rust scaffold (`crates/`) and ADRs in
+  `docs/adr/`; the stack is chosen (ADR 0002) but nothing is deployed. Inventory what exists (manifests, source, tests, CI, ADRs) before
   naming a command or tool. If implementation is absent, report `not assessable` with the missing artifact;
   do not invent commands, files, or results.
 - The model is not the security authority. A skill may propose, inspect, and report. It never approves a

@@ -6,7 +6,15 @@ This project coordinates frozen candidates, protected synthetic corpora, executi
 
 ## Status
 
-**Design baseline — implementation not yet shipped.** The repository starts privately. Selected source code and these design documents may be published after security and operational readiness review. A public repository does not make protected data, operational state, or evaluation access public.
+**Design baseline with a scaffold — nothing is deployed.** The repository starts privately. Selected source code and these design documents may be published after security and operational readiness review. A public repository does not make protected data, operational state, or evaluation access public.
+
+| Aspect | Planned | Implemented | Deployed |
+| --- | --- | --- | --- |
+| Stack and trust boundaries ([ADRs](docs/adr/README.md)) | yes | decisions recorded | no |
+| Rust workspace with policy/state core, control-service scaffold and synthetic smoke test | yes | yes (in-memory, synthetic) | no |
+| Request-facing App, SQLite runtime store, protected storage, isolated workers, signer, ledger export | yes | no | no |
+
+First deployment (planned): a Rust policy/state core and control service, a SQLite runtime store, protected populations in a restricted directory behind an adapter, and a separate restricted private-ledger repository for signed audit exports. The database and protected storage are infrastructure, not extra repositories. Eventual publication is code only: the private ledger, runtime database, protected corpora, raw results, secrets and operational history remain private. Rationale and limits: [ADR 0002](docs/adr/0002-implementation-stack-and-runtime-identities.md).
 
 “Private” describes custody and access boundaries, not a requirement that all implementation code remain secret. Security must not depend on source obscurity.
 
@@ -47,11 +55,11 @@ Failure, cancellation, interruption, and retries have recorded outcomes; they do
 | Corpus author/reviewer | Expectations, provenance, and review claims |
 | Product qualification consumer | Thresholds, support status, release decisions |
 
-Benchmarks consumes approved evidence bound to the exact candidate and plan. It receives no protected case detail merely to fill a page or diagnose a failed gate.
+Benchmarks consumes approved evidence bound to the exact candidate and plan. It receives no protected case detail merely to fill a page or diagnose a failed gate. It cannot read the private ledger; it receives signed approved projections and revocation updates. The public review ledger stays benchmark-owned and is distinct from private audit records. See the [responsibility map](docs/responsibility-map.md), including how existing benchmark holdout and blind lifecycles hand off without erasing receipts or resetting exhausted budgets.
 
 ## Reading and contribution
 
-Read [ARCHITECTURE.md](ARCHITECTURE.md), [SECURITY.md](SECURITY.md), [CONVENTIONS.md](CONVENTIONS.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). All development and ordinary CI use public synthetic conformance controls. Those controls prove lifecycle behavior, not independent holdout quality.
+Read [ARCHITECTURE.md](ARCHITECTURE.md), [SECURITY.md](SECURITY.md), [CONVENTIONS.md](CONVENTIONS.md), [docs/adr/](docs/adr/README.md), the [responsibility map](docs/responsibility-map.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). This repository is maintained by the Redact Secret project; its evidence and controls are project-maintained, not independent validation. Checks: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`. All development and ordinary CI use public synthetic conformance controls. Those controls prove lifecycle behavior, not independent holdout quality.
 
 Protected corpora, seeds, keys, ledgers, raw reports, and operational identifiers belong in separately controlled storage, never this repository or its CI artifacts. Real personal data, production logs, and real credentials are out of scope.
 

@@ -2,9 +2,11 @@
 
 ## Implementation choices
 
-Runtime, storage, sandbox, key provider and deployment are not selected by this baseline. Record those choices in ADRs with security properties, performance evidence, recovery behavior and adapter contracts. Deterministic control services may be implemented independently of the agent runtime.
+ADR 0002 selects a Rust workspace (`crates/custodian-core`, `custodian-contracts`, `custodian-service`), a SQLite-first runtime store, filesystem-first protected storage behind an adapter, and a restricted private-ledger repository. Sandbox, key provider and remaining deployment choices are still open. Record each in an ADR under `docs/adr/` (use `docs/adr/template.md`) with security properties, performance evidence, recovery behavior and adapter contracts, and separate planned from implemented from deployed. Deterministic control services are implemented independently of the agent runtime.
 
-Use small typed interfaces for authorization, corpus access, atomic budget/state operations, execution and disclosure. Avoid vendor-specific SDKs in core contracts. Engine invocation uses a pinned binary/package and versioned artifact schema rather than source imports.
+Rust rules: `custodian-core` stays std-only with no I/O, no network and no vendor types; SQLite, HTTP, signing and GitHub code enter only in adapters. `unsafe_code` is forbidden workspace-wide. Errors and logs carry fixed reason codes, not free-form text. Add dependencies deliberately, commit `Cargo.lock`, and run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` before finishing.
+
+Use small typed interfaces for authorization, corpus access, atomic budget/state operations, execution and disclosure (`custodian_core::ports`). Avoid vendor-specific SDKs in core contracts. Measurement engines never depend on GitHub; GitHub is confined to the request-facing App adapter and the ledger-writer. Engine invocation uses a pinned binary/package and versioned artifact schema rather than source imports.
 
 ## Repository versus operational data
 
@@ -16,7 +18,7 @@ Do not create a tracked protected-data folder even if the repository is private.
 
 Distinguish corpus custody identity, case identity, candidate digest, plan digest, authorization ID, reservation ID, run ID and disclosure receipt. No case identity is exposed publicly for a protected run.
 
-Version schemas, policies, store migrations and engine protocols separately. Persist transitions with actor, reason code, prior state and authorization reference; reject unexpected transitions. Canonical serialization/digest rules are part of the contract.
+Version schemas, policies, store migrations and engine protocols separately. Persist transitions with actor, reason code, prior state and authorization reference; reject unexpected transitions. Canonical serialization/digest rules are part of the contract and are defined by C2; the scaffold's identity types are opaque strings until then.
 
 Every mutating operation requires documented idempotency and concurrency semantics. Use transactions or atomic conditional writes for reservations and state changes. Tests must exercise concurrent requests, lease loss, partial failure and restart, not just sequential success.
 
@@ -44,6 +46,6 @@ Measure coordinator transaction latency, dispatch/worker startup, artifact valid
 
 ## Review and publication
 
-PRs state the boundary affected, tested failure modes, backward compatibility, migration/recovery and any policy change. Retain immutable prior evidence rather than editing away incidents or failed runs.
+PRs state the boundary affected, tested failure modes, backward compatibility, migration/recovery and any policy change. Retain immutable prior evidence rather than editing away incidents or failed runs. Never erase prior receipts or reset exhausted budgets when migrating a legacy lifecycle (ADR 0003).
 
 Before public code release, complete license/reporting setup and review the full repository history and assets. Replace deployment-specific material with safe examples; do not describe source publication as permission to query the protected system.

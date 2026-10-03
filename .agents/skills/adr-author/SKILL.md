@@ -7,10 +7,11 @@ description: Draft an Architecture Decision Record for a runtime, durable store,
 
 Shared rules: [_shared/README.md](../_shared/README.md). Boundary: [_shared/boundaries.md](../_shared/boundaries.md).
 
-`CONVENTIONS.md` leaves runtime, storage, sandbox, key provider, and deployment unselected and requires those
-choices to be recorded in ADRs "with security properties, performance evidence, recovery behavior and adapter
-contracts". Find the repository's ADR location and numbering first (e.g. `docs/adr/`); if none exists,
-propose one and ask before creating a directory convention. Do not invent prior ADR numbers.
+`CONVENTIONS.md` requires runtime, storage, sandbox, key provider, and deployment choices (some now made in ADRs
+0001 to 0003, others still open) to be recorded in ADRs "with security properties, performance evidence, recovery behavior and adapter
+contracts". ADRs live in `docs/adr/` (index `README.md`, template `template.md`, numbered `NNNN-title.md`; 0001 to 0003
+exist). Read the index for the next number; never reuse or renumber. Open decisions and their owners are listed in
+the index. Do not invent prior ADR numbers.
 
 ## Template
 

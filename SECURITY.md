@@ -2,7 +2,7 @@
 
 ## Status and reporting
 
-This repository is an initial design baseline. No production deployment or supported release is claimed.
+This repository is a design baseline with a synthetic, in-memory scaffold. No production deployment or supported release is claimed. The threat model, trust zones and deployment prerequisites are in [ADR 0001](docs/adr/0001-trust-boundaries-and-threat-model.md); every control there is planned until its failure test exists.
 
 Report vulnerabilities privately to a repository maintainer through an established private channel. Use GitHub private vulnerability reporting once configured. Do not put private corpus details, operational IDs, keys, raw logs, or exploit payloads involving protected data in public issues. Before publication, maintainers must document a verified reporting route and incident owner. Response timelines are not yet guaranteed.
 
@@ -13,6 +13,10 @@ Use a minimal synthetic reproduction with affected revision, boundary crossed, a
 Protected synthetic corpora and seeds, authorization records, frozen candidates, budgets, private observations, audit state, signing keys, and disclosure policy are security assets. Threats include untrusted agents, malicious scanners, compromised dependencies, unauthorized operators, repeated adaptive evaluation, accidental publication, and crash/retry races.
 
 Private repository access is not the security boundary for operational data. A future public release of code must not disclose that data or permit protected execution.
+
+Planned first deployment: a SQLite runtime database and protected storage in owner-only restricted directories, and a separate restricted private-ledger repository holding signed audit exports. These are infrastructure and private records, not public artifacts; eventual publication is code only. The private ledger is a tamper-evident outside copy, not tamper-proof storage and not the budget authority. Benchmarks cannot read it.
+
+Administrative limits: the first operator is also the maintainer, so anyone with host root can read protected storage or edit the database. The design offers no budget-reset or refund tool outside the refund rule, makes rollback and edits detectable through exported checkpoints, and states role separation as procedural. Custody and signatures do not prove independent ground truth.
 
 ## Mandatory boundaries
 
