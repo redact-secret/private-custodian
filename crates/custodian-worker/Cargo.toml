@@ -1,0 +1,39 @@
+[package]
+name = "custodian-worker"
+description = "Isolated, bounded execution of pinned credential and PII engines: dispatcher, sandbox trait with Linux and fail-closed backends, isolation self-check, bounded result validation (C6)."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+# No new third-party crate (ADR 0040). serde, serde_json and sha2 are the exact
+# pins already used by custodian-contracts (ADR 0004). The sandbox is the
+# host's `bwrap` and `prlimit` executables, invoked with structured argv, not a
+# linked library.
+[dependencies]
+custodian-core = { path = "../custodian-core" }
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-corpus = { path = "../custodian-corpus" }
+custodian-store = { path = "../custodian-store" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+
+[features]
+# The unsandboxed fake. Never enabled in a product build; only the crate's own
+# tests enable it (see the self dev-dependency below).
+test-fakes = []
+
+[dev-dependencies]
+custodian-worker = { path = ".", features = ["test-fakes"] }
+
+[[bin]]
+name = "custodian-worker-probe"
+path = "src/bin/probe.rs"
+
+[[bin]]
+name = "custodian-worker-fixture"
+path = "src/bin/fixture.rs"

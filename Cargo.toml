@@ -8,6 +8,7 @@ members = [
     "crates/custodian-store",
     "crates/custodian-intake",
     "crates/custodian-ledger",
+    "crates/custodian-worker",
 ]
 
 [workspace.package]

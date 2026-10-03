@@ -170,6 +170,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "custodian-worker"
+version = "0.0.0"
+dependencies = [
+ "custodian-contracts",
+ "custodian-core",
+ "custodian-corpus",
+ "custodian-store",
+ "custodian-worker",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
