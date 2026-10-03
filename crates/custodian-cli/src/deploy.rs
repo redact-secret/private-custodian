@@ -179,12 +179,27 @@ pub struct Deployment {
     pub fault: NoFault,
 }
 
-fn read_bounded(path: &Path, max: usize) -> Result<Vec<u8>, CliReason> {
-    let meta = std::fs::metadata(path).map_err(|_| CliReason::NotConfigured)?;
-    if !meta.is_file() || meta.len() > max as u64 {
+/// Read a security-relevant file only if it is a regular file (never a
+/// symbolic link), no larger than `max`, and carries none of the mode bits in
+/// `forbidden_mode`. A refusal does not say which check failed or name the
+/// path. The operator policy and pinned roots forbid group and other write
+/// (`0o022`): anyone who can write them can add an operator or a trust anchor.
+/// A credential file forbids all group and other access (`0o077`), as the
+/// runbook requires.
+pub fn read_checked(path: &Path, max: usize, forbidden_mode: u32) -> Result<Vec<u8>, CliReason> {
+    use std::os::unix::fs::PermissionsExt;
+    let meta = std::fs::symlink_metadata(path).map_err(|_| CliReason::NotConfigured)?;
+    if !meta.file_type().is_file()
+        || meta.len() > max as u64
+        || meta.permissions().mode() & forbidden_mode != 0
+    {
         return Err(CliReason::NotConfigured);
     }
     std::fs::read(path).map_err(|_| CliReason::NotConfigured)
+}
+
+fn read_bounded(path: &Path, max: usize) -> Result<Vec<u8>, CliReason> {
+    read_checked(path, max, 0o022)
 }
 
 impl Deployment {
