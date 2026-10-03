@@ -16,6 +16,7 @@ pub mod clock;
 mod disclosure;
 pub mod error;
 pub mod fault;
+mod imports;
 mod intake;
 mod integrity;
 mod lifecycle;
@@ -25,6 +26,7 @@ mod ops;
 mod outbox;
 mod port;
 mod reconcile;
+mod retention;
 pub mod secure_fs;
 mod store;
 
@@ -32,6 +34,10 @@ pub use clock::{Clock, ManualClock, SystemClock};
 pub use disclosure::{ChargeOutcome, DisclosureHistoryEntry, ReleaseCharge, ReleaseScope};
 pub use error::StoreError;
 pub use fault::{CrashOnce, FaultInjector, FaultOp, FaultPhase, FaultPoint, NoFault};
+pub use imports::{
+    ImportOutcome, ImportRefusal, ImportReport, LegacyImportCommand, LegacyImportItem,
+    MAX_IMPORT_ITEMS,
+};
 pub use intake::{
     ApproveCommand, ApproveOutcome, LeasedRequest, SubmissionChannel, SubmissionRecord,
     SubmissionStatus, SubmitCommand, Submitted, CLAIM_WINDOW_SECS, MAX_PENDING_QUEUE,
@@ -47,4 +53,6 @@ pub use model::{
     ReserveCommand, ReserveOutcome, RetryCommand, Settlement, StartCommand, TransitionRecord,
 };
 pub use ops::budget_scope_key;
-pub use store::{SqliteStore, StoreConfig};
+pub use outbox::BUDGET_AFFECTING_KINDS;
+pub use retention::{RetentionPolicy, RetentionReport};
+pub use store::{ExportGate, SqliteStore, StoreConfig};

@@ -41,10 +41,13 @@ pub enum FaultOp {
     ApproveSubmission,
     CancelSubmission,
     RecordActivation,
+    ApplyLegacyImport,
+    RetentionExpire,
+    RetentionPurge,
 }
 
 impl FaultOp {
-    pub const ALL: [FaultOp; 29] = [
+    pub const ALL: [FaultOp; 32] = [
         Self::ProvisionBudget,
         Self::Reserve,
         Self::Retry,
@@ -74,6 +77,9 @@ impl FaultOp {
         Self::ApproveSubmission,
         Self::CancelSubmission,
         Self::RecordActivation,
+        Self::ApplyLegacyImport,
+        Self::RetentionExpire,
+        Self::RetentionPurge,
     ];
 }
 

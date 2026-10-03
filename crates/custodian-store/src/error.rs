@@ -69,6 +69,10 @@ pub enum StoreError {
     AlreadyDecided,
     /// The approver is the requester. Nobody approves their own request.
     SelfApproval,
+    /// Dispatch refused: budget-affecting audit events are not yet
+    /// acknowledged by the ledger export (R-2, ADR 0116). Nothing was
+    /// changed; export, then retry. Never cleared by editing a budget.
+    ExportPending,
     /// Fault injection fired (tests only; never produced without an injector).
     InjectedCrash(FaultPoint),
     /// Any other SQLite failure.
@@ -122,6 +126,7 @@ impl fmt::Display for StoreError {
             Self::EpochBlocked => "store_epoch_blocked",
             Self::AlreadyDecided => "store_already_decided",
             Self::SelfApproval => "store_self_approval",
+            Self::ExportPending => "store_export_pending",
             Self::InjectedCrash(_) => "store_injected_crash",
             Self::Database => "store_database",
         };

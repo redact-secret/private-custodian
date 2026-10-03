@@ -107,6 +107,15 @@ pub const PAYLOAD_KEY_ALLOWLIST: &[&str] = &[
     "channel",
     "activation_id",
     "activation_sequence",
+    // HG-3 and HG-4 (ADR 0115, ADR 0117): legacy consumption import and
+    // retention. Identities, digests and counters only.
+    "import_id",
+    "scope_kind",
+    "handoff_digest",
+    "report_digest",
+    "purged_queue",
+    "purged_claims",
+    "purged_submissions",
 ];
 
 fn safe_token(s: &str) -> bool {

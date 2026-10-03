@@ -16,8 +16,8 @@ use sha2::{Digest, Sha256};
 use crate::error::StoreError;
 use crate::fault::FaultOp;
 use crate::migrations::hex;
-use crate::model::{AckOutcome, Checkpoint, OutboxEvent};
-use crate::store::{from_sql, reconcile_flag, sql_time, SqliteStore};
+use crate::model::{AckOutcome, Checkpoint, Lease, OutboxEvent};
+use crate::store::{from_sql, reconcile_flag, sql_time, ExportGate, SqliteStore};
 
 pub(crate) const GENESIS_CHAIN: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -77,6 +77,56 @@ pub(crate) fn outbox_append(
     Ok(seq)
 }
 
+/// Audit event kinds that record budget-affecting state: a charge, a hold, a
+/// start, an exposure, a settlement, a disclosure charge or imported legacy
+/// consumption. These are what a restored older backup would forget, so these
+/// are what the R-2 dispatch gate waits on (ADR 0116). The list is an
+/// allowlist: a new kind that affects budgets must be added here and its test
+/// (`gate_covers_every_budget_affecting_kind`) updated.
+pub const BUDGET_AFFECTING_KINDS: &[&str] = &[
+    "reservation.created",
+    "approval.granted",
+    "attempt.started",
+    "exposure.recorded",
+    "attempt.terminal",
+    "disclosure.charged",
+    "budget.imported",
+];
+
+fn kinds_sql() -> String {
+    BUDGET_AFFECTING_KINDS
+        .iter()
+        .map(|k| format!("'{k}'"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Count of budget-affecting events not yet acknowledged by the export.
+pub(crate) fn unexported_budget_events_tx(tx: &Connection) -> Result<i64, StoreError> {
+    Ok(tx.query_row(
+        &format!(
+            "SELECT COUNT(*) FROM outbox WHERE exported_at IS NULL AND kind IN ({})",
+            kinds_sql()
+        ),
+        [],
+        |r| r.get(0),
+    )?)
+}
+
+/// The R-2 gate, evaluated inside the transaction that releases dispatch.
+pub(crate) fn gate_export(tx: &Connection, gate: ExportGate) -> Result<(), StoreError> {
+    match gate {
+        ExportGate::Off => Ok(()),
+        ExportGate::Enforced { max_unexported } => {
+            if unexported_budget_events_tx(tx)? > i64::from(max_unexported) {
+                Err(StoreError::ExportPending)
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
 const OUTBOX_COLS: &str = "seq, event_id, kind, request_id, attempt_id, payload, payload_digest, \
      chain, created_at, exported_at, export_ref";
 
@@ -115,6 +165,32 @@ impl SqliteStore {
             ))?;
             let rows = stmt.query_map([limit], map_event)?;
             Ok(rows.collect::<Result<_, _>>()?)
+        })
+    }
+
+    /// How many budget-affecting audit events the ledger export has not
+    /// acknowledged. The R-2 gate refuses dispatch while this exceeds the
+    /// configured bound (zero in production). Read-only.
+    pub fn unexported_budget_events(&self) -> Result<u64, StoreError> {
+        self.read(|tx| Ok(from_sql(unexported_budget_events_tx(tx)?)))
+    }
+
+    /// Whether the exposure record of the attempt holding `lease` has been
+    /// acknowledged by the ledger export. A deployment that gates dispatch
+    /// (ADR 0116) calls this after `record_exposure` and opens protected bytes
+    /// only on `true`. With the gate off it is always `true`. A missing
+    /// exposure record is `false`.
+    pub fn exposure_export_acknowledged(&self, lease: &Lease) -> Result<bool, StoreError> {
+        if self.cfg.export_gate == ExportGate::Off {
+            return Ok(true);
+        }
+        self.read(|tx| {
+            let n: i64 = tx.query_row(
+                "SELECT COUNT(*) FROM outbox WHERE event_id = ?1 AND exported_at IS NOT NULL",
+                [format!("exposure:{}", lease.attempt.as_str())],
+                |r| r.get(0),
+            )?;
+            Ok(n == 1)
         })
     }
 
