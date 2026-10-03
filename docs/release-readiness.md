@@ -63,7 +63,14 @@ Findings from tools were triaged, never printed with their matched text.
 
 ### 2.1 Test results
 
-Recorded at the end of this document's last edit (section 8).
+`cargo test --workspace --locked --no-fail-fast` on macOS arm64: 629 tests passed, 0 failed, 0 ignored (unit,
+integration, example and doc tests). Of these, 37 are new in C12 (36 in `crates/custodian-cli/tests/c12_*.rs`
+plus the measurement example's consistency test). Nothing in the suite sleeps to wait for a race: concurrency
+tests count outcomes, crash tests use deterministic fault injection. The longest new test is the crash sweep
+(about 15 to 30 s in a debug build); the C12 tests use temporary directories under the system temp directory and
+remove them. The C12 concurrency and intake-crash tests were repeated six times with no failure. On this macOS
+host the Linux isolation tests log `ISOLATION-TEST-SKIPPED` and verify nothing; that evidence is the CI job
+(P3).
 
 ## 3. Synthetic validation delivered (acceptance criterion 1)
 
@@ -105,7 +112,7 @@ isolation (ADR 0100).
 | Suppressed strata and composition | tested | `custodian-disclosure/tests/composition.rs`, `suppress.rs` unit tests |
 | Signing refusal | tested | `custodian-ledger/tests/signing.rs`, `custodian-disclosure/tests/release.rs`, `c12_keys_and_ledger.rs` |
 | Restart and recovery: state, budget, audit consistent; no double publication | tested | `c12_crash_windows.rs`, `c12_restore_drill.rs`, `custodian-lifecycle/tests/feed.rs` |
-| Redaction: canaries never appear in logs, errors or public output | tested | `c12_leakage.rs`, `custodian-disclosure/tests/leakage.rs`, `custodian-corpus/tests/canary_leakage.rs` |
+| Redaction: canaries never appear in logs, errors or public output | tested | `c12_leakage.rs` (operator credentials, protected bytes, hostile worker text, signing seed; every CLI role and command, `Debug` text, ledger, feed, projection, outbox and raw database files), `custodian-intake/tests/app.rs::installation_token_is_scoped_cached_and_never_printed`, `webhook.rs::webhook_secret_must_be_long_and_is_never_printed`, `custodian-disclosure/tests/leakage.rs`, `custodian-corpus/tests/canary_leakage.rs` |
 | Real isolation on the production host | **not assessable** | deployment step 5 |
 
 ## 4. Public-release gate (`publication-readiness`, SECURITY.md)
@@ -230,6 +237,17 @@ Disposition vocabulary: **fixed here**, **accepted** (with the rationale and the
 
 ## 8. Results of the final checks
 
-Recorded when the change was finalized; see the pull request for the CI run on the merged commit.
+Run on the final change, locally (macOS arm64, rustc 1.98.1). The CI result for the merged commit, including
+`worker-isolation` and the first `dependency-audit` run, is on the pull request and is the only evidence for
+those two.
 
-(filled in below)
+| Check | Result |
+| --- | --- |
+| `cargo fmt --all --check` | pass |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | pass |
+| `cargo test --workspace --locked --no-fail-fast` | 629 passed, 0 failed |
+| `python3 crates/custodian-contracts/testdata/verify_golden.py` | 10 of 10 vectors reproduced |
+| `cargo deny --locked check` | advisories ok, bans ok, licenses ok, sources ok |
+| gitleaks on the working tree (excluding `target/`) and on `origin/main..HEAD` | no leaks |
+| gitleaks on full history (54 commits) | 1 finding, the synthetic constant described in section 4 |
+| Diff pattern sweep for private-key headers and token prefixes | none |
