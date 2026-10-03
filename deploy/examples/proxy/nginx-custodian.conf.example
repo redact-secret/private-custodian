@@ -1,0 +1,41 @@
+# EXAMPLE ONLY. Placeholders, not a deployment. No certificate, key or host exists.
+#
+# A reverse proxy terminating TLS in front of the loopback webhook listener of custodiand. The daemon speaks
+# plain HTTP on loopback only (ADR 0123) and the repository builds no HTTPS server. The webhook stays INACTIVE
+# at GitHub until every item of docs/server-prerequisites-checklist.md is done; this file does not change that.
+#
+# The paths below are the conventional locations for a certificate and key that the operator obtains and
+# renews; they are not created by anything here.
+
+server {
+    listen 443 ssl;
+    server_name custodian.example.invalid;
+
+    ssl_certificate     /etc/ssl/custodian/fullchain.pem;
+    ssl_certificate_key /etc/ssl/custodian/private/key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    # Only the webhook path reaches the daemon. Everything else is refused here.
+    location = /PLACEHOLDER-webhook-path {
+        limit_except POST { deny all; }
+        client_max_body_size 256k;
+        client_body_timeout 10s;
+        proxy_read_timeout 15s;
+        proxy_pass http://127.0.0.1:8787;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        # Never log request bodies, signatures or tokens.
+        access_log off;
+    }
+
+    location / {
+        return 404;
+    }
+}
+
+server {
+    listen 80;
+    server_name custodian.example.invalid;
+    return 301 https://custodian.example.invalid$request_uri;
+}

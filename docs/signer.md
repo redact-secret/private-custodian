@@ -73,7 +73,7 @@ A future KMS/HSM provider must not export the seed; it needs a signing-oriented 
 
 ## Configuration
 
-Signer: `docs/signer-config.example.json` (placeholders only; schema `private-custodian.signer-config/1`).
+Signer: `deploy/examples/signer-config.example.json` (placeholders only; schema `private-custodian.signer-config/1`).
 Control service (CLI config, additive): `signer_socket_path` (absolute), `signer_uid` (optional, the uid the
 signer must run as), `signer_timeout_secs` (1 to 60). Without `signer_socket_path` the CLI keeps its safe
 default: every signature is refused with `signer_unavailable`.

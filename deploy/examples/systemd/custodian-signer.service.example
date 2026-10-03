@@ -1,0 +1,68 @@
+# EXAMPLE ONLY. Placeholders, not a deployment. Nothing in the repository installs or starts this unit.
+# See deploy/examples/README.md and docs/server-prerequisites-checklist.md.
+#
+# The isolated signer. It holds the signing key and nothing else: no database, no protected root, no ledger key,
+# no network. Its socket is reachable only by the control service's user (allowed_peer_uid in the signer
+# configuration is the same uid, and the process verifies the peer on every connection). The key file is
+# generated on this host (never on a developer machine or in CI) and is owned by this user with mode 0600; only
+# the PUBLIC key is ever copied off the host (custodian-signer --print-public-key), and it is pinned out of band.
+
+[Unit]
+Description=Private custodian isolated signer (example)
+Documentation=https://custodian.example.invalid/docs
+After=local-fs.target
+
+[Service]
+Type=exec
+User=custodian-signer
+Group=custodian-signer
+ExecStart=/usr/local/bin/custodian-signer --config /etc/custodian-signer/signer-config.json
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+RuntimeDirectory=custodian-signer
+RuntimeDirectoryMode=0750
+StateDirectory=custodian-signer
+StateDirectoryMode=0700
+
+# Filesystem
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadOnlyPaths=/etc/custodian-signer
+ReadWritePaths=/run/custodian-signer
+
+# Privileges
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RemoveIPC=yes
+RestrictNamespaces=yes
+
+# Kernel surfaces
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProcSubset=pid
+
+# No network at all: a Unix socket only.
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# The key must never reach a core dump or swap.
+LimitCORE=0
+PrivateUsers=no
+
+[Install]
+WantedBy=multi-user.target

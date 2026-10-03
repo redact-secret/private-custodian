@@ -75,7 +75,7 @@ run is approved, the run is cancelled and refunded (scope guard).
 ## Configuration
 
 One strict JSON document (`private-custodian.daemon-config/1`; unknown fields refused; the file must not be
-group or world writable). `docs/daemon-config.example.json` contains placeholders only. Sections:
+group or world writable). `deploy/examples/daemon-config.example.json` contains placeholders only. Sections:
 
 | Section | Purpose |
 | --- | --- |
@@ -112,4 +112,4 @@ Secrets are paths to 0600 files, never inline values.
 
 Tests start the whole synthetic stack with `common::stack::with_stack` (listener, signer socket, Git ledger,
 directory feed, fake GitHub with a throwaway RS256 key). A synthetic config is in
-`docs/daemon-config.example.json`; operating steps are in `docs/deployment-runbook.md`.
+`deploy/examples/daemon-config.example.json`; operating steps are in `docs/deployment-runbook.md`.

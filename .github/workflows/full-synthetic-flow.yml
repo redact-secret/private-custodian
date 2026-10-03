@@ -1,0 +1,92 @@
+name: full-synthetic-flow
+
+# The full synthetic flow in one dedicated job (S6, issue 33, ADR 0132):
+#
+#   request -> approval -> budget reservation -> isolated execution (real
+#   bubblewrap on this Linux runner) -> signature (the isolated signer process
+#   over a Unix socket) -> ledger record (a local Git backend) -> disclosure
+#   (the destination-bound v2 projection) -> consumer verification
+#   (custodian-verify and the bridge consumer) -> contamination and revocation
+#   -> the consumer rejects and reports the downstream re-evaluation trigger,
+#
+# plus the restore-drill, loss-acceptance, key-revocation and re-issue variants
+# and the hostile negatives.
+#
+# FUNCTIONAL VERIFICATION ON PUBLIC SYNTHETIC CONFORMANCE DATA; NOT AN
+# INDEPENDENT PROTECTED EVALUATION. The data are synthetic fixtures written by
+# the tests; every key is generated inside the job (the signer key, the App
+# key, the webhook secret and the credentials are throwaway and never leave
+# the runner). This workflow declares no secret, receives no protected corpus,
+# no production signing key and no private-ledger token, calls no server or
+# cloud resource, and makes no real ledger write. The ordinary `worker-isolation`
+# job in ci.yml is unchanged and is not weakened by this one.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-synthetic-flow-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-synthetic-flow:
+    name: "full synthetic flow: functional verification on public synthetic conformance data; not an independent protected evaluation"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      # actions/checkout v4.2.2, pinned to the commit its release tag points at.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install bubblewrap and allow unprivileged user namespaces
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap openssl git
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          bwrap --version
+          command -v prlimit
+          uname -sr
+      - name: The full flow, engine inside real bubblewrap (must run, must not skip)
+        shell: bash
+        env:
+          CUSTODIAN_REQUIRE_ISOLATION: "1"
+        run: |
+          set -euo pipefail
+          cargo test -p custodian-daemon --locked --test full_flow -- --nocapture --test-threads=1 2>&1 | tee full-flow.log
+          grep -q 'FULL-FLOW-VERIFIED full_flow_real_bubblewrap' full-flow.log
+          grep -q 'FULL-FLOW-VERIFIED full_flow_unsandboxed_control_flow_only' full-flow.log
+          ! grep -q 'ISOLATION-TEST-SKIPPED' full-flow.log
+      - name: Restore drill, including the no-newer-copy loss acceptance (R-1)
+        run: >
+          cargo test --locked -p custodian-cli
+          --test c12_restore_drill --test s6_recovery --test c12_keys_and_ledger
+          && cargo test --locked -p custodian-store --test loss
+      - name: Key revocation and ledger re-issue under a new key (R-4, R-5, R-6)
+        run: >
+          cargo test --locked -p custodian-cli
+          --test s6_key_revocation --test c12_revocation
+          && cargo test --locked -p custodian-ledger --test reissue
+      - name: Hostile negatives (forged, replayed, tampered, leaked, unapproved)
+        run: >
+          cargo test --locked -p custodian-daemon --test e2e --test listener
+          && cargo test --locked -p custodian-cli --test c12_e2e --test c12_leakage
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## Full synthetic flow"
+            echo
+            echo "**Functional verification on public synthetic conformance data; not an independent protected evaluation.**"
+            echo
+            echo "- Data: synthetic fixtures written by the tests. Keys: generated in this job, never stored."
+            echo "- No secret, no protected corpus, no production signing key, no private-ledger token, no server or cloud resource, no real ledger write."
+            echo "- Flow: request, approval, reservation, isolated execution (real bubblewrap), signature over the signer socket, local Git ledger, v2 destination-bound projection, custodian-verify and bridge consumer, contamination, revocation, rejection and re-evaluation trigger."
+            echo "- Variants: restore drill and loss acceptance, key revocation and re-issue, hostile negatives."
+            echo "- Result of this job: ${{ job.status }}. Project-maintained evidence; this repository is maintained by the Redact Secret project."
+          } >> "$GITHUB_STEP_SUMMARY"

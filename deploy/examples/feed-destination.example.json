@@ -1,0 +1,23 @@
+{
+  "schema": "private-custodian.example.feed-destination/0",
+  "note": "The contract a public revocation-feed destination must meet (FeedDestination, docs/lifecycle-and-revocation.md). Shape only: no destination exists.",
+  "public_url": "https://feed.example.invalid/revocations/",
+  "object_layout": "<feed_id>/<sequence>.json, sequence from 1 without gaps",
+  "write_rules": {
+    "create_if_absent": true,
+    "identical_bytes_accepted": true,
+    "different_bytes_refused": true,
+    "in_order_only": true,
+    "never_edit_or_delete": true
+  },
+  "read_rules": {
+    "anonymous_read": true,
+    "no_private_access_needed": true,
+    "cache_ttl_secs": "DECIDE (shorter than the feed ttl)"
+  },
+  "write_identity": "the control service publishing identity only; no consumer, CI, App or agent identity",
+  "consumer_pins": {
+    "feed_id": "fed_placeholder00000000001",
+    "public_keys": "pinned out of band, never taken from the feed"
+  }
+}

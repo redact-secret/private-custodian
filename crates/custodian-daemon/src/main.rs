@@ -7,7 +7,7 @@
 //! ```
 //!
 //! The binary reads one configuration file (`docs/daemon.md`,
-//! `docs/daemon-config.example.json`), opens the deployment the operator CLI
+//! `deploy/examples/daemon-config.example.json`), opens the deployment the operator CLI
 //! opens, and runs until `SIGTERM` or `SIGINT`. It prints fixed
 //! `component=<word> code=<word>` lines to standard error and nothing else:
 //! no body, header, signature, token, path or engine text. It is not run by

@@ -140,3 +140,72 @@ pub fn verify_released(
     let bundle = Bundle::load(&dir.join("bundle")).unwrap();
     custodian_verify::verify(&pins, &expect, &bundle, now)
 }
+
+/// The reference consumer (benchmarks' side) pinned exactly as the public
+/// expectations say, and the request it would send for request `n`.
+pub fn bridge_consumer(
+    env: &Env,
+    public: &Public<'_>,
+    n: u32,
+) -> (BridgeConsumer, custodian_bridge::wire::BridgeRequest) {
+    let (req, _) = env.request(n);
+    let consumer = BridgeConsumer::new(ConsumerPins {
+        domain: req.plan.domain,
+        feed_id: public.feed_id.clone(),
+        destination: DestinationId::parse(DEST).unwrap(),
+        verifier: Verifier::new(public.roots.clone()),
+        accepted_populations: vec![lc::opaque(1)],
+        accepted_policies: vec![disclosure_policy_ref()],
+    });
+    let request = consumer
+        .request(
+            req.plan.candidate.clone(),
+            req.plan.config_digest.clone(),
+            vec![lc::opaque(1)],
+        )
+        .unwrap();
+    (consumer, request)
+}
+
+/// A bridge response carrying the one released projection and every feed
+/// envelope delivered so far, as a bridge server would send it.
+pub fn bridge_response(
+    env: &Env,
+    public: &Public<'_>,
+    request: &custodian_bridge::wire::BridgeRequest,
+) -> custodian_bridge::wire::BridgeResponse {
+    let files = env.released_files();
+    assert_eq!(files.len(), 1, "exactly one released projection");
+    let projection = std::fs::read(&files[0]).unwrap();
+    let envelope = AnyProjectionEnvelope::decode(&projection).unwrap();
+    let mut revocations = Vec::new();
+    let mut seqs = Vec::new();
+    for e in env
+        .store()
+        .feed_envelopes(public.feed_id.as_str(), 1)
+        .unwrap()
+    {
+        revocations.push(
+            public
+                .feed
+                .get(public.feed_id, e.sequence)
+                .unwrap()
+                .expect("delivered"),
+        );
+        seqs.push(e.sequence);
+    }
+    let manifest = BridgeManifest {
+        schema: BridgeManifestSchema,
+        request_digest: request.digest().unwrap(),
+        feed_id: public.feed_id.clone(),
+        destination: DestinationId::parse(DEST).unwrap(),
+        projections: BoundedVec::new(vec![envelope.projection_digest().unwrap()]).unwrap(),
+        first_sequence: Seq::new(*seqs.first().unwrap_or(&0)).unwrap(),
+        last_sequence: Seq::new(*seqs.last().unwrap_or(&0)).unwrap(),
+    };
+    custodian_bridge::wire::BridgeResponse {
+        manifest,
+        projections: vec![projection],
+        revocations,
+    }
+}

@@ -1,0 +1,29 @@
+# EXAMPLE ONLY. Placeholders, not a deployment. Nothing in the repository installs or starts this unit.
+# See docs/backup-recovery.md. A backup is as sensitive as the database: it is written 0600 by the store's own
+# backup_to (VACUUM INTO), never by copying a live file, and it goes to an encrypted target that is not the
+# disk holding the live database. The command below is a placeholder for the operator's own backup wrapper; the
+# repository ships no such wrapper, and the schedule and retention are decisions (backup-retention.example.json).
+
+[Unit]
+Description=Private custodian database backup (example)
+
+[Service]
+Type=oneshot
+User=custodian-backup
+Group=custodian-backup
+ExecStart=/usr/local/bin/REPLACE-with-the-operators-backup-wrapper
+UMask=0077
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/srv/custodian/state
+ReadWritePaths=/srv/custodian/backups
