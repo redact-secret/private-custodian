@@ -105,7 +105,9 @@ Secrets are paths to 0600 files, never inline values.
 - Real engines do not emit `worker-result/1` with aggregates (the fixture `custodian-synthetic-engine` does).
 - No HTTPS client (`NotBuiltHttps` skeleton), no real GitHub call, no real App key.
 - No deployment: no host, signer key, ledger remote, policy, feed destination or monitored contact.
-- R-1 (restore with no newer copy) and R-4 (key revocation re-issue) remain open.
+- R-1 (restore with no newer copy) and R-4 (key revocation re-issue) are implemented as operator commands (S6,
+  ADR 0130 and 0131) and verified on public synthetic data; the daemon does not run them, and neither has been
+  rehearsed on a host.
 - Feed publication remains a human operator action.
 
 ## Hand-over for the next work

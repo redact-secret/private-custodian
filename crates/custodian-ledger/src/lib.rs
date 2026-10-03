@@ -14,7 +14,7 @@
 //!
 //! Design: `docs/ledger.md` and ADRs 0050 to 0054. Status: implemented and
 //! tested with synthetic data and test-generated keys; not deployed. The
-//! private-ledger repository does not exist yet, no signing key exists, and
+//! private-ledger remote is not provisioned (see docs/ledger.md), no signing key exists, and
 //! this crate holds no key material and no network code beyond invoking `git`
 //! on a configured local clone.
 

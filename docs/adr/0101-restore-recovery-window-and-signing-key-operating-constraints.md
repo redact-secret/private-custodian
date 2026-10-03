@@ -1,7 +1,9 @@
 # 0101. Restore recovery window and signing-key operating constraints
 
 - Status: accepted (operating rules and deferred designs); the rules are enforced by tests that pin current
-  behavior; the deferred designs are not implemented
+  behavior. Decision 2 (no newer copy) is resolved by [ADR 0130](0130-restore-loss-acceptance-with-no-newer-copy.md)
+  and decision 4 (bulk re-issue) by [ADR 0131](0131-ledger-reissue-after-key-revocation.md); decision 3 (the
+  dispatch gate) by ADR 0116. The text below is kept as written on 2026-10-03.
 - Date: 2026-10-03
 - Deciders (by role): project maintainer
 - Maintenance: this repository is maintained by the Redact Secret project; its decisions are

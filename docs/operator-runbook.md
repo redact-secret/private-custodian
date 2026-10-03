@@ -16,7 +16,8 @@ independent validation, and custody does not establish ground truth.
 1. **Never reset, lower or "correct" a spent budget.** No command does, and no procedure below tells you to.
    Consumption only goes up, a reservation returns only if no protected byte was opened, and an exposed
    attempt is consumed even if it crashed. If a database cannot be recovered to the ledger's position, the
-   answer is to **retire the affected epochs** (section 7), not to adjust a count.
+   answer is to **retire the affected epochs** (section 7), not to adjust a count; for a restore with no newer
+   copy, `repair accept-loss` does that under an explicit, audited loss acceptance (section 6.3).
 2. **Never disclose protected content to diagnose a problem.** Everything the CLI prints is a fixed code, a
    number, a digest or an opaque identifier. Do not open the protected-population directory, the database or
    the ledger by hand to "see what happened"; use `verify` and `reconcile`.
@@ -106,6 +107,11 @@ never appear.
 | `repair ledger-reconcile --confirm-store-id S` | operator (human) | Re-write identical bytes for events the ledger lost and acknowledge ones it holds. A conflicting record is never repaired. | store id |
 | `repair feed-deliver --confirm-feed-id F` | operator (human) | Deliver committed feed envelopes the destination lacks. | feed id |
 | `repair clear-reconcile --confirm-store-id S --confirm-checkpoint-seq N` | operator (human) | Clear the restore block, **only** if the ledger is trustworthy and the store is at or past the ledger's checkpoint. | store id and local checkpoint sequence |
+| `repair loss-plan --confirm-store-id S` | operator (human) | Read-only: what the ledger holds that a restored, behind-the-ledger store lacks, its effect, and the `plan_digest` to confirm (R-1, ADR 0130). | store id |
+| `repair accept-loss --confirm-store-id S --confirm-store-seq M --confirm-ledger-seq N --confirm-ledger-chain C --confirm-plan-digest D --acknowledge accept-unexported-loss` | operator (human, also `lifecycle` authority) | Accept the loss when no copy reaches the ledger checkpoint: adopt the ledger's acknowledged tail, raise budgets to the ledger's figures, retire affected epochs, clear the block, all audited. `N` and `C` come from the **independent** checkpoint copy. | store id, the store's and the ledger's sequences, the ledger chain value, the plan digest, the acknowledgement word |
+| `repair revoke-key --key-id K --confirm-key-id K` | operator (human) | Record, signed by the new pinned key, that signing key `K` is revoked (R-4, ADR 0131). The ledger is untrusted afterwards until re-issued. | the key id |
+| `repair reissue-plan` | operator (human) | Read-only: the records signed by the revoked key that lack a valid re-attestation, and the `plan_digest`. | none |
+| `repair reissue-ledger --confirm-revoked-key-id K --confirm-new-key-id N --confirm-plan-digest D` | operator (human) | Re-attest the revoked key's history under the new key with superseding records; nothing is rewritten. | both key ids, the plan digest |
 | `legacy apply --extract F --handoff F --confirm-handoff-digest D --confirm-report-digest D` | operator (human, `legacy_import` permission) | Write reviewed legacy consumed units into the budget store (additive, idempotent). Does **not** carry contamination marks: record those with `lifecycle report`. Refusals: `handoff_not_ready`, `import_refused` (exit 5). | handoff digest, report digest |
 | `repair retention --confirm-store-id S --queue-done-min-age-secs N --claim-min-age-secs N --decided-submission-min-age-secs N --pending-submission-max-age-secs N [--batch-limit N]` | operator (human) | One retention pass over the queue, claims and submissions; ages are mandatory and below the code floors are refused. | store id |
 | `credential-digest --token-file F` | none | Print the digest to put in the operator policy. | none |
@@ -220,18 +226,28 @@ checkpoint detects.
    refuse (`store_behind_ledger`, exit 5) and no flag changes that. Do this instead:
    1. Look for a newer copy that contains the ledger's checkpoint (a later backup, the original file if it
       survived). Restore that one and go back to step 2.
-   2. If none exists, **do not fabricate consumption, and stop.** This is an incident
-      (docs/incident-response.md, class H). The earlier text of this runbook said to `lifecycle retire` the
-      epochs that may have spent budget after the snapshot; **that is not executable**: while the store is
-      write-blocked every state-changing command, `lifecycle retire` and `lifecycle rotate` included, is refused
-      with `store_needs_reconcile` (exit 8), and `repair clear-reconcile` is refused with `store_behind_ledger`.
-      The C12 drill pins this (`c12_restore_drill.rs`). What may be done today is read-only: `verify`,
-      `reconcile`, and working out from the ledger's audit records (by sequence and request id) which epochs may
-      have spent budget after the snapshot. The way to continue is a new store and a new ledger lineage with new
-      reviewed epochs and their own budgets; that procedure is designed but not implemented
-      (ADR 0101, decision 2; register R-1 in docs/release-readiness.md), so protected execution against the
-      old store does not resume.
-   3. Keep the blocked copy for the incident record; do not delete the ledger.
+   2. If none exists, **do not fabricate consumption.** `lifecycle retire` and `lifecycle rotate` are refused
+      while the store is write-blocked, and `repair clear-reconcile` is refused (`store_behind_ledger`); the C12
+      drill pins that (`c12_restore_drill.rs`). The executable way to continue is the explicit loss acceptance
+      (S6, ADR 0130), and only if all of these hold: the ledger walks clean (`verify ledger`), the store's
+      history is a prefix of the ledger's (otherwise `lineage_diverged`, exit 8: an incident, stop), and you
+      hold the **independent checkpoint copy** (ledger.md) and have decided that losing the unexported window is
+      acceptable (backup-recovery.md section 2 states exactly what that window is):
+      1. `repair loss-plan --confirm-store-id <store-id>` (read-only). Read `events_to_adopt`,
+         `units_to_recover`, `epochs_to_retire`, `lost_attempts`, `lost_feed_events`, `unresolved_scopes` and
+         `unresolved_epochs`. Compare `ledger_seq` and `ledger_chain` with the independent copy. If they differ,
+         stop: the ledger is not what you recorded.
+      2. `repair accept-loss ... --dry-run` with every confirmation (see the command table), then without
+         `--dry-run`. It adopts the ledger's acknowledged tail, raises budgets to the ledger's figures (a budget
+         that would exceed its limit saturates), raises standing to what the ledger states, retires every epoch
+         with activity in the lost window, writes `store.loss_accepted`, and clears the block in the same
+         transaction. A refusal changes nothing.
+      3. `repair export`, then `verify all`, then `feed record-revocation` for each lost feed obligation the plan
+         listed (their targets are not in the ledger) and `feed publish`; then `lifecycle rotate` the retired
+         epochs to successors the normal way (section 6.4 step 5).
+      4. Record the acceptance, the plan digest and the reasons in the private operations log. The acceptance
+         is also an audit record in the ledger after the export.
+   3. Keep the blocked copy (or a backup of it) for the incident record; do not delete the ledger.
 4. **`contained`** but the store is blocked (for example the flag was set before the restore): continue.
 5. Clear the block only when all of these hold: `verify all` shows a clean ledger, `store_checkpoint:
    contained`, `registry_checkpoint: matches` or `absent`. `reconcile store` prints the `store_id` and
@@ -275,9 +291,16 @@ checkpoint detects.
 * **Obligation cannot be published** (`unpublishable`): a public naming (opaque or keyed commitment) is
   missing for a population; fix the naming, then publish. Eligibility keeps refusing meanwhile.
 * **Clock skew** (`internal_error` from publish): the clock is earlier than the feed head; fix the clock.
-* **Key compromise**: revoke the key with a ledger key event (C7, ADR 0050), `feed record-revocation --kind
-  projection|receipt --action revoked --reason key_compromise` for each affected item, `feed publish`, and
-  supersede records under a new key. Pin the new root out of band; never take a key from the ledger or feed.
+* **Key compromise** (S6, ADR 0131; full procedure in backup-recovery.md 7.4): stop the old signer; generate a
+  new key on the signer host and pin it **as a root** out of band (roots file and every consumer) with a start
+  time at or before the oldest ledger record; point the signer at the new key. Then
+  `repair revoke-key --key-id <old> --confirm-key-id <old>` (the control plane now refuses to start: the intended
+  containment), `repair reissue-plan`, `repair reissue-ledger --confirm-revoked-key-id <old>
+  --confirm-new-key-id <new> --confirm-plan-digest <digest>`, `repair clear-reconcile` with the exact
+  confirmations, `repair export`, `verify all`. Then `feed record-revocation --kind projection|receipt --action
+  revoked --reason key_compromise` for each affected item and `feed publish`. A refusal such as
+  `reissue_contradicted_by_store` means a record signed by the old key is not in the store: treat it as an
+  incident, do not force it. Never take a key from the ledger or the feed.
 * **Operator credential exposed or lost**: section 2.2; and review the audit trail for the identity.
 
 ### 6.6 Activation and policy changes
@@ -306,10 +329,11 @@ These are not automated and not delegated to an agent:
 4. Clearing an `unreviewed_change`, and the review that justifies it.
 5. Publishing the feed, recording a revocation, superseding evidence.
 6. Importing or revoking a policy activation; any change to the operator policy file (a reviewed revision).
-7. Clearing the restore block (`repair clear-reconcile`), and choosing between a newer backup and retiring
-   epochs when no copy reaches the ledger's checkpoint.
+7. Clearing the restore block (`repair clear-reconcile`), and, when no copy reaches the ledger's checkpoint,
+   whether to accept the loss (`repair accept-loss`, ADR 0130) at all.
 8. Resolving a conflicting or quarantined ledger record, an untrusted ledger, a feed destination that holds
-   other bytes, or a suspected key compromise (incident handling, SECURITY.md).
+   other bytes, or a suspected key compromise (incident handling, SECURITY.md); revoking a signing key and
+   re-issuing the ledger under a new one (`repair revoke-key`, `repair reissue-ledger`, ADR 0131).
 9. How credentials are stored and issued. One person may hold both `requester` and `approver` as separate
    principals with separate credential stores (solo-maintainer mode, ADR 0103); evidence is then labelled
    `procedural-separation` or `custodian-declared`, never independent.
@@ -320,9 +344,10 @@ These are not automated and not delegated to an agent:
 
 * A service daemon (`custodiand`: listener, queue consumer, scheduler, pipeline) exists in code since S5 but is
   not deployed, no live GitHub App exists and no HTTPS client is built: [daemon.md](daemon.md).
-* The `custodian` binary has no signer of its own: `repair export` and `feed publish` report
-  `signer_unavailable` until a deployment supplies the isolated signer transport (S2, `signer.md`).
-* No private-ledger repository, key provider, feed destination or real operator policy exists.
+* The `custodian` binary has no signer of its own: `repair export`, `feed publish`, `repair revoke-key` and
+  `repair reissue-ledger` report `signer_unavailable` until a deployment supplies the isolated signer transport
+  (S2, `signer.md`).
+* No usable private-ledger remote (the GitHub repository `redact-secret/private-ledger` exists but is not empty, see the checklist section 4), no key provider, feed destination or real operator policy exists.
 * Everything above is exercised only against synthetic data. C12 added the cross-layer suite, the restore drill and the readiness record: [backup-recovery.md](backup-recovery.md), [incident-response.md](incident-response.md), [deployment-runbook.md](deployment-runbook.md), [release-readiness.md](release-readiness.md).
 
 ## 10. Evidence map
@@ -335,3 +360,5 @@ These are not automated and not delegated to an agent:
 | Startup refusal blocks writes; clear is verified | `custodian-cli/tests/startup.rs` |
 | Output hygiene and exit codes | `custodian-cli/tests/operator.rs`, `tests/binary.rs`, unit tests |
 | Repair cannot reset budgets | `tests/operator.rs` (`repair_needs_the_exact_store_id...`, `an_exposed_attempt_that_lapses...`) |
+| Restore with no newer copy: plan, exact confirmations, acceptance, audited, budgets only rise | `tests/s6_recovery.rs`, `custodian-store/tests/loss.rs` (ADR 0130) |
+| Key compromise: revoke, re-issue under a new key, clear, start again | `tests/s6_key_revocation.rs`, `custodian-ledger/tests/reissue.rs` (ADR 0131) |
