@@ -234,6 +234,11 @@ label_type!(
     /// Policy-defined metric label. Allowlisted by the disclosure policy.
     MetricId
 );
+label_type!(
+    /// Publication destination label. Allowlisted by the disclosure policy
+    /// and bound into the signed publication decision (C8).
+    DestinationId
+);
 
 // --- Digests -------------------------------------------------------------
 
