@@ -1,0 +1,14 @@
+{
+  "schema": "private-custodian.microvm-preflight/1",
+  "date": "2026-10-03",
+  "region": "us-east-1",
+  "authenticated": true,
+  "managed_image_api": true,
+  "managed_version_api": true,
+  "inventory_api": true,
+  "cloudformation_template_validation": "passed",
+  "resources_created_by_preflight": 0,
+  "runtime_verified": false,
+  "worker_decision": "NO-GO",
+  "control_plane_decision": "NO-GO"
+}

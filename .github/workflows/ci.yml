@@ -47,6 +47,8 @@ jobs:
       # standard library only (preinstalled on the runner); no package install.
       - name: Second-implementation golden vectors
         run: python3 crates/custodian-contracts/testdata/verify_golden.py
+      - name: MicroVM read-only preflight negative controls (no AWS credentials)
+        run: python3 -m unittest discover -s tests/microvm-conformance
 
   # C12: dependency audit with a pinned tool and the policy in deny.toml
   # (RustSec advisories, yanked crates, licenses of third-party crates, crate
