@@ -74,6 +74,14 @@ pub enum Rejection {
     /// The response was prepared for another destination label than the one
     /// pinned.
     WrongDestination,
+    /// A v2 projection's signed destination is not the destination the
+    /// consumer pinned. Decided from the envelope alone (ADR 0121).
+    DestinationMismatch,
+    /// A v1 projection, which carries no destination, while the consumer
+    /// requires destination binding. Code `destination_unbound`. Without that
+    /// requirement a v1 projection is accepted and labelled
+    /// [`VerificationOutcome::DestinationUnbound`](crate::consumer::VerificationOutcome).
+    DestinationUnbound,
     /// The held feed state is missing, old, behind the projection's minimum
     /// sequence, or the projection is not yet valid. Unknown is not valid.
     Stale,
@@ -103,6 +111,8 @@ impl Rejection {
             Self::WrongFeed => "wrong_feed",
             Self::WrongRequest => "wrong_request",
             Self::WrongDestination => "wrong_destination",
+            Self::DestinationMismatch => "destination_mismatch",
+            Self::DestinationUnbound => "destination_unbound",
             Self::Stale => "stale",
             Self::Expired => "expired",
             Self::Revoked => "revoked",

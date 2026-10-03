@@ -1,6 +1,6 @@
 # 0102. Deferred changes: destination binding in the public projection and legacy consumption import
 
-- Status: accepted as designs; not implemented; each is a recorded blocker in docs/release-readiness.md
+- Status: accepted as designs. Destination binding was implemented later by ADRs 0119 to 0122 (this text is the historical design); legacy consumption import is still not implemented and remains a recorded blocker in docs/release-readiness.md
 - Date: 2026-10-03
 - Deciders (by role): project maintainer
 - Maintenance: this repository is maintained by the Redact Secret project; its decisions are

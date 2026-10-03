@@ -129,8 +129,9 @@ pub struct BridgeManifest {
     /// Digest of the request this answers.
     pub request_digest: DocumentDigest,
     pub feed_id: FeedId,
-    /// The channel this answer was prepared for. A label, not a proof: see
-    /// ADR 0090 on destination binding.
+    /// The channel this answer was prepared for. An unsigned routing label,
+    /// not a proof. A v2 projection proves its own destination inside its
+    /// signed payload (ADR 0119); a v1 projection proves none.
     pub destination: DestinationId,
     /// Digests of the projection payloads included, in order.
     pub projections: BoundedVec<ProjectionDigest, MAX_PROJECTIONS>,
@@ -182,7 +183,8 @@ fn bridge_digest(canonical: &[u8]) -> Result<DocumentDigest, ContractError> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BridgeResponse {
     pub manifest: BridgeManifest,
-    /// Canonical `PublicProjectionEnvelope` bytes, one per manifest entry.
+    /// Canonical projection envelope bytes (major 1 or 2, see
+    /// `AnyProjectionEnvelope`), one per manifest entry.
     pub projections: Vec<Vec<u8>>,
     /// Canonical `SignedRevocationEnvelope` bytes, ascending sequence.
     pub revocations: Vec<Vec<u8>>,

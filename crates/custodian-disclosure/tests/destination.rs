@@ -115,7 +115,13 @@ fn bound_release_carries_the_destination_and_verifies_from_the_envelope() {
 
     // With the ledger decision as well (operators, auditors).
     let decision = decision_record(&w, &delivered[0].1, BOUND);
-    let v = verify_release(&delivered[0].1, &decision, &w.destination(BOUND), &w.verifier).unwrap();
+    let v = verify_release(
+        &delivered[0].1,
+        &decision,
+        &w.destination(BOUND),
+        &w.verifier,
+    )
+    .unwrap();
     assert_eq!(v.binding, DestinationBinding::Bound);
     assert_eq!(v.projection_digest, *p.digest());
 }

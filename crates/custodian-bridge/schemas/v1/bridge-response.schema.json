@@ -4,7 +4,7 @@
   "description": "How the custodian answered, as an index. Unsigned and untrusted.",
   "properties": {
     "destination": {
-      "description": "The channel this answer was prepared for. A label, not a proof: see\nADR 0090 on destination binding.",
+      "description": "The channel this answer was prepared for. An unsigned routing label,\nnot a proof. A v2 projection proves its own destination inside its\nsigned payload (ADR 0119); a v1 projection proves none.",
       "maxLength": 64,
       "minLength": 1,
       "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",

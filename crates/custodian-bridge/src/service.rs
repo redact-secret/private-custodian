@@ -77,9 +77,14 @@ impl BridgeService<'_> {
             .map_err(|_| BridgeReason::CatalogUnavailable)?;
         let mut chosen: Vec<(ProjectionDigest, Vec<u8>)> = Vec::new();
         for r in &released {
-            let p = &r.envelope().payload;
-            // The catalog is a port: re-check what it returned.
+            let p = r.envelope().common_fields();
+            // The catalog is a port: re-check what it returned. A v2 envelope
+            // also names its destination in the signed payload; it must be
+            // the one this service answers for.
             if r.destination() != &self.destination
+                || r.envelope()
+                    .destination()
+                    .is_some_and(|signed| signed != &self.destination)
                 || p.domain != request.domain
                 || p.candidate != request.candidate
                 || !(request.populations.is_empty()
@@ -87,7 +92,8 @@ impl BridgeService<'_> {
             {
                 continue;
             }
-            let digest = p
+            let digest = r
+                .envelope()
                 .projection_digest()
                 .map_err(|_| BridgeReason::DocumentInvalid)?;
             if chosen.iter().any(|(d, _)| *d == digest) {

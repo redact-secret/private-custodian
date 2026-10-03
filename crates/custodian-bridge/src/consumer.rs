@@ -11,9 +11,19 @@
 //!
 //! It has no import of a store, a ledger backend, a ledger record, a signer, a
 //! protected population or a corpus, and `tests/no_private_access.rs` checks
-//! both the imports and the function types. It cannot verify the destination
-//! binding of a release (that lives in the private publication record); it
-//! checks the channel label the response was prepared for and says so.
+//! both the imports and the function types.
+//!
+//! # Destination binding (ADR 0119, 0121)
+//!
+//! A public projection v2 carries its destination inside the signed payload,
+//! so this consumer verifies the binding from the envelope alone: a v2
+//! projection whose signed destination differs from the pinned one is
+//! rejected as `destination_mismatch`. A v1 projection has no destination.
+//! It still verifies (v1 stays decodable and verifiable) but is reported as
+//! [`VerificationOutcome::DestinationUnbound`] and never as bound, and a
+//! consumer that calls [`BridgeConsumer::require_destination_binding`]
+//! rejects it as `destination_unbound`. The manifest destination label stays
+//! an unsigned routing hint; it proves nothing for either major.
 //!
 //! # What it does not decide
 //!
@@ -24,11 +34,9 @@
 
 use std::collections::BTreeSet;
 
-use custodian_contracts::canonical::to_canonical_bytes;
 use custodian_contracts::common::{Attestation, EvaluationDomain, PolicyRef};
-use custodian_contracts::public::{
-    PublicPopulationRef, PublicProjection, PublicProjectionEnvelope,
-};
+use custodian_contracts::public::{PublicPopulationRef, PublicProjection};
+use custodian_contracts::public_v2::{AnyProjectionEnvelope, DestinationBinding};
 use custodian_contracts::revocation::Standing;
 use custodian_contracts::types::{
     BoundedVec, CandidateDigest, ConfigDigest, DestinationId, FeedId, ProjectionDigest, Seq,
@@ -58,6 +66,26 @@ pub struct ConsumerPins {
     pub accepted_policies: Vec<PolicyRef>,
 }
 
+/// What a successful verification established about the destination. A
+/// distinct outcome, so a v1 projection is never mistaken for a bound one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum VerificationOutcome {
+    /// v2: the signed destination equals the pinned destination.
+    DestinationBound,
+    /// v1: authentic and unchanged, but it carries no destination, so the
+    /// destination cannot be verified from it (code `destination_unbound`).
+    DestinationUnbound,
+}
+
+impl VerificationOutcome {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::DestinationBound => "destination_bound",
+            Self::DestinationUnbound => DestinationBinding::UNBOUND_CODE,
+        }
+    }
+}
+
 /// A projection that passed every check at the time given. It cannot be
 /// constructed outside this module.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,11 +93,40 @@ pub struct VerifiedProjection {
     projection: PublicProjection,
     digest: ProjectionDigest,
     verified_at: Timestamp,
+    major: u32,
+    destination: Option<DestinationId>,
 }
 
 impl VerifiedProjection {
+    /// The version-neutral projection fields in the v1 shape (cells,
+    /// population, candidate, policy, attestation, freshness, feed). For a v2
+    /// projection this is a derived view: its schema tag is the v1 tag and
+    /// its digest is not the signed one. Use [`Self::digest`],
+    /// [`Self::major`] and [`Self::destination`] for what was signed.
     pub fn projection(&self) -> &PublicProjection {
         &self.projection
+    }
+    /// The projection major that was verified (1 or 2).
+    pub fn major(&self) -> u32 {
+        self.major
+    }
+    /// The signed destination; `None` for v1, which has none.
+    pub fn destination(&self) -> Option<&DestinationId> {
+        self.destination.as_ref()
+    }
+    pub fn binding(&self) -> DestinationBinding {
+        if self.destination.is_some() {
+            DestinationBinding::Bound
+        } else {
+            DestinationBinding::Unbound
+        }
+    }
+    /// `DestinationBound` only for v2; v1 is `DestinationUnbound`.
+    pub fn outcome(&self) -> VerificationOutcome {
+        match self.binding() {
+            DestinationBinding::Bound => VerificationOutcome::DestinationBound,
+            DestinationBinding::Unbound => VerificationOutcome::DestinationUnbound,
+        }
     }
     pub fn digest(&self) -> &ProjectionDigest {
         &self.digest
@@ -119,12 +176,26 @@ pub struct ResponseOutcome {
 pub struct BridgeConsumer {
     pins: ConsumerPins,
     feed: FeedConsumer,
+    require_binding: bool,
 }
 
 impl BridgeConsumer {
     pub fn new(pins: ConsumerPins) -> Self {
         let feed = FeedConsumer::new(pins.feed_id.clone(), pins.verifier.clone());
-        Self { pins, feed }
+        Self {
+            pins,
+            feed,
+            require_binding: false,
+        }
+    }
+
+    /// Reject v1 projections (no destination in the signed payload) as
+    /// `destination_unbound` instead of accepting them with the
+    /// [`VerificationOutcome::DestinationUnbound`] label. Recommended once
+    /// the custodian issues v2.
+    pub fn require_destination_binding(mut self) -> Self {
+        self.require_binding = true;
+        self
     }
 
     pub fn pins(&self) -> &ConsumerPins {
@@ -160,9 +231,15 @@ impl BridgeConsumer {
     /// Verify one projection envelope (canonical bytes) against `request` and
     /// the pins, at `now`, using the feed state held. Each step fails closed:
     ///
-    /// 1. size bound, strict closed schema, canonical form (an unsigned
+    /// 1. size bound, strict closed schema of exactly major 1 or 2 (chosen by
+    ///    the payload's schema tag, never merged), canonical form (an unsigned
     ///    envelope has no signature field and is malformed);
-    /// 2. signature under a pinned key authorized for the projection domain;
+    /// 2. signature under a pinned key authorized for that major's
+    ///    projection domain (a v1 signature never verifies a v2 body or the
+    ///    reverse), then the destination: v2 must carry the pinned
+    ///    destination (`destination_mismatch`); v1 carries none and is
+    ///    accepted as `DestinationUnbound`, or rejected as
+    ///    `destination_unbound` when binding is required;
     /// 3. evaluation domain equals the pinned and requested domain;
     /// 4. candidate equals the requested candidate;
     /// 5. population is in the request filter (if any) and in the product pins;
@@ -179,13 +256,13 @@ impl BridgeConsumer {
         if bytes.len() > MAX_DOCUMENT_BYTES {
             return Err(Rejection::Malformed);
         }
-        let env = PublicProjectionEnvelope::decode(bytes).map_err(|_| Rejection::Malformed)?;
-        if to_canonical_bytes(&env).map_err(|_| Rejection::Malformed)? != bytes {
+        let env = AnyProjectionEnvelope::decode(bytes).map_err(|_| Rejection::Malformed)?;
+        if env.canonical_bytes().map_err(|_| Rejection::Malformed)? != bytes {
             return Err(Rejection::Malformed);
         }
         self.pins
             .verifier
-            .verify_projection(&env)
+            .verify_any_projection(&env)
             .map_err(|e| match e {
                 VerifyError::BadSignature | VerifyError::MalformedSignature => {
                     Rejection::BadSignature
@@ -197,7 +274,14 @@ impl BridgeConsumer {
                 | VerifyError::KeyNotValidAtTime
                 | VerifyError::WrongDomain => Rejection::KeyNotAcceptable,
             })?;
-        let p = env.payload;
+        match env.destination() {
+            Some(signed) if *signed != self.pins.destination => {
+                return Err(Rejection::DestinationMismatch);
+            }
+            None if self.require_binding => return Err(Rejection::DestinationUnbound),
+            _ => {}
+        }
+        let p = env.common_fields();
         if p.domain != self.pins.domain || p.domain != request.domain {
             return Err(Rejection::WrongDomain);
         }
@@ -223,11 +307,13 @@ impl BridgeConsumer {
             Standing::Superseded => return Err(Rejection::Superseded),
             Standing::Revoked => return Err(Rejection::Revoked),
         }
-        let digest = p.projection_digest().map_err(|_| Rejection::Malformed)?;
+        let digest = env.projection_digest().map_err(|_| Rejection::Malformed)?;
         Ok(VerifiedProjection {
             projection: p,
             digest,
             verified_at: now,
+            major: env.major(),
+            destination: env.destination().cloned(),
         })
     }
 

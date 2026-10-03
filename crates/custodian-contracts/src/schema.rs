@@ -32,7 +32,11 @@ pub struct SchemaEntry {
     pub schema: Value,
 }
 
-fn gen<T: JsonSchema>(dir: &'static str, file: &'static str, visibility: Visibility) -> SchemaEntry {
+fn gen<T: JsonSchema>(
+    dir: &'static str,
+    file: &'static str,
+    visibility: Visibility,
+) -> SchemaEntry {
     let schema = SchemaSettings::draft2020_12()
         .into_generator()
         .into_root_schema_for::<T>();

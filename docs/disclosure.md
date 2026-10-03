@@ -216,10 +216,20 @@ strict canonical parse of the envelope, its signature, the decision's signature,
 publication decision, the projection digest, the projection and receipt identities, the signing key, the
 disclosure policy, and that the decision approved exactly the destination presented.
 
-Limit: `PublicProjection` has no destination field (a new schema major would add one). A consumer without
-access to the private ledger can verify signature and digest, not the destination binding. Operators,
-auditors and the publisher gate in front of a destination can verify all of it. The destination is public
-configuration, not a secret.
+### Destination binding (ADR 0119 to 0122)
+
+`DisclosureService::prepare_bound(input, destination, now)` builds a public projection **v2** whose signed
+payload carries `destination` (a bounded label, checked against the policy allowlist before anything is
+charged). The release approval binds the v2 digest, so it covers the destination; `release` refuses
+`destination_mismatch` for any other destination and signs through `ApprovedPayload::projection_v2` under the
+domain `private-custodian/v2/public-projection`. `verify_release` decodes either major; for v2 it also requires the
+signed destination to equal the decision's and the expected one, and returns `binding: Bound`. A consumer without
+the private ledger verifies the same binding from the envelope alone (docs/benchmarks-integration.md).
+
+`prepare` is the legacy v1 path. A v1 projection has no destination field: it verifies as before, but
+`verify_release` reports `binding: Unbound` (`destination_unbound`) because only the private ledger decision
+names the destination for it. Do not describe a v1 release as destination-bound to a public consumer. The
+destination is public configuration, not a secret.
 
 ## 7. Reason codes
 
@@ -253,8 +263,8 @@ parameter, so a Check cannot carry a finer code, a value or an identity.
   `testing::UncheckedEligibility` exists for tests and says so.
 - **C10 (operations).** The core `Disclosure` port was retired in C10 (ADR 0084): it could not carry a
   digest-bound `Approval`. The typed `DisclosureService` replaces it and `custodian_cli::Service::disclosure_service` wires it over the one shared eligibility.
-- **C11 (benchmarks).** Consume `PublicProjectionEnvelope` plus `RevocationLog`. Destination binding needs the
-  `publication` record or a schema major that adds a destination field.
+- **C11 (benchmarks).** Consume `AnyProjectionEnvelope` (v1 or v2) plus `RevocationLog`. v2 carries the
+  destination in the signed payload; v1 does not and is labelled `destination_unbound`.
 - **Engines.** The private aggregate artifact (`private-custodian.aggregates/1`) is the input contract. The
   current worker protocol (`worker-result/1`) returns only roster counters, so no engine emits strata yet.
 
@@ -267,6 +277,7 @@ parameter, so a Check cannot carry a finer code, a value or an identity.
 | Differencing across overlapping strata and successive releases fails | `crates/custodian-disclosure/tests/composition.rs` |
 | Budgets atomic, final, idempotent, concurrent | `crates/custodian-store/tests/disclosure.rs` |
 | Verifier round trip | `release.rs::full_release_round_trips_through_the_verifier` |
+| Destination binding: prepare/release/verify, mismatch, tamper, downgrade, upgrade, v1 unbound | `crates/custodian-disclosure/tests/destination.rs` |
 | Type split | `released.rs` doctests |
 
 ## 10. Planned, implemented, deployed
@@ -277,4 +288,5 @@ parameter, so a Check cannot carry a finer code, a value or an identity.
 | Policy activation, budget provisioning, destinations, signer, private ledger | yes (C10 to C12) | no | no |
 | Engine emission of the aggregate artifact | yes | no | no |
 | Revocation and contamination recheck | yes (C9) | yes (`custodian-lifecycle`) | no |
-| Destination field in the public contract | open | no | no |
+| Destination field in the public contract (projection v2) | yes | yes (`prepare_bound`, ADR 0119 to 0122) | no |
+| A production caller of `prepare_bound` | yes (C10 to C12) | no | no |

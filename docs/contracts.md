@@ -17,7 +17,8 @@ versioning).
 | Execution | `execution::ExecutionRecord` | `execution.schema.json` | internal |
 | Internal receipt | `execution::InternalReceipt` | `internal-receipt.schema.json` | internal |
 | Policy activation | `policy::PolicyActivation` | `policy-activation.schema.json` | internal |
-| Public projection | `public::PublicProjectionEnvelope` | `public-projection.schema.json` | public |
+| Public projection (v1, no destination binding) | `public::PublicProjectionEnvelope` | `public-projection.schema.json` | public |
+| Public projection v2 (destination in the signed payload) | `public_v2::PublicProjectionEnvelopeV2` | `schemas/v2/public-projection.schema.json` | public |
 | Revocation and supersession | `revocation::SignedRevocationEnvelope` | `revocation-envelope.schema.json` | public |
 
 Internal contracts never leave the control service, signer or private ledger. Public contracts are the
@@ -37,7 +38,9 @@ candidate id  = "sha256:" + lowercase_hex( SHA-256( candidate_bytes ) )      (no
 
 Domain strings (`DomainTag`): `private-custodian/v1/` followed by `request`, `plan`, `approval`,
 `reservation`, `execution`, `internal-receipt`, `public-projection`, `revocation-envelope` or
-`policy-activation`. A signature or digest made under one domain is not valid under another.
+`policy-activation`, plus `private-custodian/v2/public-projection` for public projection major 2
+([ADR 0119](adr/0119-public-projection-schema-major-2-with-a-signed-destination.md)). A signature or digest
+made under one domain is not valid under another, so a v1 and a v2 projection never share either.
 
 Golden vectors are in `crates/custodian-contracts/testdata/golden/` (`*.canonical.json` and `digests.txt`).
 To re-implement elsewhere, canonicalize the `.canonical.json` content (it is already canonical), prepend the
@@ -131,9 +134,21 @@ attempts record consumption and never recompute it (ADR 0003).
   recorded as a new policy version and activation, never an in-place edit.
 - A change to canonical encoding or a digest rule is a new domain tag version (`.../v2/...`) and a new
   schema major, never an edit to the v1 rules.
+- Version table (public projection, the only contract with two majors):
+
+  | Major | Schema tag | Domain tag | Destination | Reader behavior |
+  | --- | --- | --- | --- | --- |
+  | 1 | `private-custodian.public-projection/1` | `private-custodian/v1/public-projection` | none in the document | decodes and verifies; reported as `destination_unbound` (no destination binding) |
+  | 2 | `private-custodian.public-projection/2` | `private-custodian/v2/public-projection` | `destination` (bounded label) inside the signed payload | decodes and verifies; destination checked against the consumer's pin |
+
+  `AnyProjectionEnvelope::decode` chooses the closed decoder from the schema tag; it never merges majors. A v2
+  body relabelled v1 has an unknown field, a v1 body relabelled v2 has a missing field, and a stripped body
+  relabelled v1 fails the signature (made under the v2 domain). Revocation entries target only fields both majors
+  share, so one feed revokes both. Golden vectors for both are kept; the v1 lines of `digests.txt` are frozen.
 - Process: update the types, regenerate schemas (`UPDATE_SCHEMAS=1 cargo test -p custodian-contracts
   --test schemas`), review the schema diff, add golden vectors for the new major, keep the old ones
-  (`UPDATE_GOLDEN=1` only for deliberate additions), and record the change in an ADR.
+  (`UPDATE_GOLDEN=1` only for deliberate additions), and record the change in an ADR. Schemas are written to
+  `schemas/v<major>/` per entry (`SchemaEntry::dir`); the golden test appends, it does not rewrite v1 lines.
 
 ## 9. Planned, implemented, deployed
 
@@ -144,4 +159,5 @@ attempts record consumption and never recompute it (ADR 0003).
 | Signing, key lifecycle, ledger export | yes (C7) | no | no |
 | Disclosure policy, suppression, budgets, release approval workflow | yes (C8) | yes (docs/disclosure.md) | no |
 | Feed publication and epoch contamination records | yes (C9) | yes (docs/lifecycle-and-revocation.md) | no |
+| Public projection major 2 with a signed destination | yes (S4, ADR 0119 to 0122) | yes (`public_v2`, `schemas/v2/`, golden vector, second implementation) | no |
 | Consumer validation and legacy import | yes (C11) | yes (`custodian-bridge`, synthetic; see docs/benchmarks-integration.md) | no |

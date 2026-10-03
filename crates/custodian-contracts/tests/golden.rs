@@ -157,7 +157,9 @@ fn legacy_v1_projection_vector_is_frozen() {
     let digests = std::fs::read_to_string(dir().join("digests.txt")).unwrap();
     assert!(digests.lines().any(|l| l
         == "public-projection private-custodian/v1/public-projection sha256:a5bf82488ffb8a6787aac5fca43f2879fdc58d803bcc7d843992fdeec9f01622"));
-    assert!(digests.lines().any(|l| l.starts_with("public-projection-v2 private-custodian/v2/public-projection ")));
+    assert!(digests
+        .lines()
+        .any(|l| l.starts_with("public-projection-v2 private-custodian/v2/public-projection ")));
 }
 
 /// The same fields hash differently under v1 and v2: new domain tag, new

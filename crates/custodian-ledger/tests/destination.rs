@@ -13,7 +13,9 @@ use custodian_contracts::public_v2::{
     AnyProjectionEnvelope, PublicProjectionEnvelopeV2, PublicProjectionV2,
 };
 use custodian_contracts::types::ExecutionId;
-use custodian_ledger::{ApprovedPayload, Keyring, SignDomain, SignRefusal, Signer, Verifier, VerifyError};
+use custodian_ledger::{
+    ApprovedPayload, Keyring, SignDomain, SignRefusal, Signer, Verifier, VerifyError,
+};
 use serde_json::json;
 
 fn exe() -> ExecutionId {
@@ -68,7 +70,11 @@ fn v2_signs_under_the_v2_domain_and_verifies_with_public_keys_only() {
 #[test]
 fn tampered_destination_fails_the_signature() {
     let s = setup();
-    let sig = s.key.signer.sign(&approved_v2(&projection_v2()).unwrap()).unwrap();
+    let sig = s
+        .key
+        .signer
+        .sign(&approved_v2(&projection_v2()).unwrap())
+        .unwrap();
     let env = PublicProjectionEnvelopeV2 {
         payload: v2_with_destination("synthetic-other"),
         signature: sig,
