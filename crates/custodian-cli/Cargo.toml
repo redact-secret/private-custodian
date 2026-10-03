@@ -35,3 +35,6 @@ sha2 = "=0.10.9"
 
 [dev-dependencies]
 custodian-worker = { path = "../custodian-worker", features = ["test-fakes"] }
+# C12 end-to-end tests only: the benchmarks-side consumer. A path dependency inside
+# this workspace; no third-party crate is added.
+custodian-bridge = { path = "../custodian-bridge" }

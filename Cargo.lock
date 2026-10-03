@@ -119,6 +119,7 @@ dependencies = [
 name = "custodian-cli"
 version = "0.0.0"
 dependencies = [
+ "custodian-bridge",
  "custodian-contracts",
  "custodian-core",
  "custodian-corpus",
