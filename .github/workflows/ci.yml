@@ -2,6 +2,12 @@ name: ci
 
 # Ordinary CI uses public synthetic tests only. It receives no secrets, no
 # protected data, no signing material and no GitHub App credentials.
+#
+# "Synthetic conformance" job set (S1, ADR 0110; docs/ci-and-reusable-workflows.md):
+# the `rust` job (unit, integration and the whole C12 suite) and the
+# `worker-isolation` job below, plus the jobs of synthetic-conformance.yml.
+# These are functional verification on public synthetic data with test-generated
+# keys. They are not an independent protected evaluation.
 on:
   pull_request:
   push:
@@ -16,6 +22,7 @@ concurrency:
 
 jobs:
   rust:
+    name: "synthetic conformance: rust (fmt, clippy, tests, C12 suite)"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -67,6 +74,7 @@ jobs:
   # runner (the only step that uses sudo; no secret, no token, read-only
   # contents), and fails if any isolation test is skipped.
   worker-isolation:
+    name: "synthetic conformance: Linux worker isolation"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
