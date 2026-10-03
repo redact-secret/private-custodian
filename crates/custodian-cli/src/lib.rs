@@ -21,6 +21,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod artifact;
 pub mod authority;
 pub mod command;
 pub mod control;

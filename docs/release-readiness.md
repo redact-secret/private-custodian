@@ -334,3 +334,13 @@ isolation evidence is the CI run (P3); it must be re-read for the exact commit t
 | gitleaks, working tree | local, redacted | 5 findings in 2 tracked files, the same fixtures |
 | OpenSSF Scorecard | not run at S6 | **not assessable** |
 | CI on the pull request: `rust`, `dependency-audit`, `worker-isolation`, `synthetic-conformance` set, `full-synthetic-flow` | CI (Linux) | pull request 48 merges only when all of these pass; the real-sandbox full flow prints `FULL-FLOW-VERIFIED full_flow_real_bubblewrap` and the isolation tests print `ISOLATION-VERIFIED` on the Linux runner (the run on the final commit is the evidence; the first run of the `full-synthetic-flow` job exposed a log-after-reply race in the existing listener test `the_connection_cap_refuses_the_next_connection_and_recovers`, fixed here, test only) |
+
+## #37 engine integration disposition
+
+The [PII adoption handoff](pii-eval-adoption.md) and ADR 0133 finalize the custodian-owned contract
+decisions without waiting for live App creation or webhook activation. A reference-patched pii-eval CLI
+is a separate artifact from the pinned, unmodified upstream CLI, which still refuses worker jobs.
+The offline artifact-binding CLI and reusable same-repository synthetic CI gate do not activate a
+disclosure policy or authorize protected evaluation. Upstream adoption/release, operational PII policy
+(HG-9), production-host sizing/isolation and artifact delivery remain open. Actual execution results and
+limits are recorded in that handoff; no hosted CI run is claimed solely from adding a workflow.

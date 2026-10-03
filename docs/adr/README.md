@@ -73,6 +73,8 @@ ADR.
 | [0131](0131-ledger-reissue-after-key-revocation.md) | Ledger re-issue under a new key after a revocation (R-4, R-5, R-6) | Accepted; implemented, not deployed |
 | [0132](0132-full-synthetic-flow-job-deployment-examples-and-the-server-prerequisite-checklist.md) | The full synthetic flow job, deployment examples and the server-prerequisite checklist | Accepted; implemented, nothing deployed |
 
+| [0133](0133-pii-worker-contract-and-synthetic-adoption.md) | PII worker contract and synthetic adoption | Accepted contract design; reference adoption and synthetic gate implemented, not deployed |
+
 Accepted (design) means the decision is frozen for downstream issues (C2 to C12). It does not mean any of it
 is implemented or deployed. See each ADR's status table.
 
