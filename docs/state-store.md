@@ -201,3 +201,20 @@ event is acknowledged.
 GitHub intake (C3), protected storage (C5), the worker sandbox and the recovery scheduler (C6), signing and
 the ledger write (C7), the disclosure policy and its decisions (C8; the store only holds the release budgets and history), epoch standing, rotation and revocation (C9: migration 0003 and the use gates are in this store, see [lifecycle-and-revocation.md](lifecycle-and-revocation.md)), the operator CLI (C10: `crates/custodian-cli`; the store provides the intake ports, submissions and activation history of migration 0004),
 and operational drills (C12). The store provides the primitives those issues call.
+
+## Migrations 0005 and 0006, the dispatch gate and retention (S3)
+
+- **0005 `budget_imports`**: append-only legacy consumption, keyed by (import id, record digest) and summed into the
+  existing budget invariants. `apply_legacy_imports` is one transaction that only adds, is idempotent, refuses a
+  changed record under a known import id (outbox event `budget.import_refused`), and refuses lowering,
+  un-exhausting, limit changes or exceeding the runtime limit. A record that declares its budget exhausted
+  consumes all remaining headroom. Each applied import emits `budget.imported`. ADR 0115.
+- **Dispatch gate**: `start_attempt` and `record_exposure` return `StoreError::ExportPending` (`store_export_pending`)
+  while more than `max_unexported` budget-affecting outbox events are unacknowledged (`reservation.created`,
+  `approval.granted`, `attempt.started`, `exposure.recorded`, `attempt.terminal`, `disclosure.charged`,
+  `budget.imported`). `StoreConfig::default()` leaves it off; `StoreConfig::enforced()` (max 0) is what deployments
+  use. `exposure_export_acknowledged` and `unexported_budget_events` expose the state. ADR 0116.
+- **0006 retention**: `run_retention(RetentionPolicy)` expires stale pending submissions and purges finished queue
+  rows, claims with no queue row, and decided submissions whose events are acknowledged. Hard floors are enforced
+  in code; ages are always explicit. ADR 0117.
+- Integrity checks cover the imports; the ledger payload allowlist gains the import and retention keys.

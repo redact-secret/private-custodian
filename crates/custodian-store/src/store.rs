@@ -15,9 +15,31 @@ use crate::migrations::{self, Migration};
 use crate::model::{parse_exposure, parse_state, AttemptRecord};
 use crate::secure_fs;
 
-/// Store configuration. Defaults are the production values.
+/// The export-acknowledged dispatch gate (R-2, ADR 0116).
+///
+/// `start_attempt` and `record_exposure` refuse with
+/// [`StoreError::ExportPending`] while more than `max_unexported` budget
+/// affecting audit events (reservations, approvals, starts, exposures,
+/// settlements, disclosure charges, legacy imports) are not yet acknowledged
+/// by the ledger export. With the bound at zero, no protected input can be
+/// released for spend that a restored older backup would forget.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExportGate {
+    /// No gate. The library default, kept so the synthetic suites that drive
+    /// the store directly stay valid; the operator binary never uses it
+    /// (`StoreConfig::enforced`).
+    Off,
+    /// Refuse dispatch while more than this many budget-affecting events are
+    /// unacknowledged. Production value: zero.
+    Enforced { max_unexported: u32 },
+}
+
+/// Store configuration. `Default` is the library default (gate off);
+/// [`StoreConfig::enforced`] is the production configuration.
 #[derive(Clone)]
 pub struct StoreConfig {
+    /// R-2 dispatch gate.
+    pub export_gate: ExportGate,
     /// How long a writer waits for the lock before `StoreError::Busy`.
     pub busy_timeout_ms: u32,
     /// Time source for the core `StateStore` port only.
@@ -33,6 +55,7 @@ pub struct StoreConfig {
 impl Default for StoreConfig {
     fn default() -> Self {
         Self {
+            export_gate: ExportGate::Off,
             busy_timeout_ms: 5_000,
             clock: Arc::new(SystemClock),
             fault: Arc::new(NoFault),
@@ -43,6 +66,15 @@ impl Default for StoreConfig {
 }
 
 impl StoreConfig {
+    /// The production configuration: dispatch is gated on export
+    /// acknowledgement with a bound of zero (ADR 0116).
+    pub fn enforced() -> Self {
+        Self::default().with_export_gate(ExportGate::Enforced { max_unexported: 0 })
+    }
+    pub fn with_export_gate(mut self, gate: ExportGate) -> Self {
+        self.export_gate = gate;
+        self
+    }
     pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
         self.clock = clock;
         self
@@ -167,6 +199,11 @@ impl SqliteStore {
         let mut guard = self.lock();
         let tx = guard.transaction_with_behavior(TransactionBehavior::Deferred)?;
         f(&tx)
+    }
+
+    /// The dispatch gate this store was opened with (ADR 0116).
+    pub fn export_gate(&self) -> ExportGate {
+        self.cfg.export_gate
     }
 
     /// Latest applied schema version.

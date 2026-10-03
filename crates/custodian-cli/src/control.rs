@@ -20,6 +20,10 @@
 
 use std::sync::Arc;
 
+use custodian_bridge::legacy::{
+    dry_run as legacy_dry_run, ContaminationStanding, HandoffRecord, HandoffStatus, ImportId,
+    LegacyImportRecord,
+};
 use custodian_contracts::approval::Approval;
 use custodian_contracts::canonical::Contract;
 use custodian_contracts::common::{ActivationRef, ActorKind, BudgetScope};
@@ -27,7 +31,9 @@ use custodian_contracts::policy::{check_current, PolicyActivation};
 use custodian_contracts::request::EvaluationRequest;
 use custodian_contracts::reservation::ReservationState;
 use custodian_contracts::revocation::{PublicRevocationReason, RevocationAction, RevocationTarget};
-use custodian_contracts::types::{ApprovalId, EpochId, FeedId, RequestId, Timestamp};
+use custodian_contracts::types::{
+    ApprovalId, DocumentDigest, EpochId, FeedId, RequestId, Timestamp,
+};
 use custodian_core::{ActorId, Contamination, EpochStanding, ReasonCode, RunId, RunState};
 use custodian_corpus::{EpochBlobStore, ProtectedPopulations};
 use custodian_ledger::{
@@ -39,8 +45,8 @@ use custodian_lifecycle::{
     RevocationSpec, RotationBudget, RotationRequest,
 };
 use custodian_store::{
-    ApproveCommand, Clock, SqliteStore, SubmissionChannel, SubmissionStatus, SubmitCommand,
-    Submitted,
+    ApproveCommand, Clock, ImportOutcome, LegacyImportCommand, LegacyImportItem, RetentionPolicy,
+    SqliteStore, SubmissionChannel, SubmissionStatus, SubmitCommand, Submitted,
 };
 use serde_json::json;
 
@@ -325,6 +331,18 @@ impl<'a, S: EpochBlobStore> Control<'a, S> {
                 document,
                 confirm_activation_id,
                 *confirm_sequence,
+                dry,
+            ),
+            Command::LegacyApply {
+                extract,
+                handoff,
+                confirm_handoff_digest,
+                confirm_report_digest,
+            } => self.legacy_apply(
+                who,
+                name,
+                (extract, handoff),
+                (confirm_handoff_digest, confirm_report_digest),
                 dry,
             ),
             Command::Repair(r) => self.repair(who, name, r, dry),
@@ -1304,6 +1322,92 @@ impl<'a, S: EpochBlobStore> Control<'a, S> {
         )
     }
 
+    // ---- legacy.apply ----------------------------------------------------------------
+
+    /// HG-3 (ADR 0115, ADR 0118): write reviewed legacy consumption into the
+    /// runtime budget store. Human operator only. The extract is re-imported
+    /// deterministically here (the importer is a pure function of its bytes),
+    /// the operator names the exact handoff and report digests, and every gate
+    /// of the handoff record must already be cited. The store applies all
+    /// records or none, only ever adds, and audits each application and each
+    /// refusal in the outbox.
+    fn legacy_apply(
+        &self,
+        who: &Principal,
+        name: &'static str,
+        (extract, handoff): (&[u8], &[u8]),
+        (confirm_handoff, confirm_report): (&DocumentDigest, &DocumentDigest),
+        dry: bool,
+    ) -> Res<Output> {
+        who.check(Permission::LegacyImport)?;
+        let run = legacy_dry_run(extract).map_err(|_| CliReason::InvalidDocument)?;
+        let record = HandoffRecord::decode(handoff).ok_or(CliReason::InvalidDocument)?;
+        let handoff_digest = record.digest().ok_or(CliReason::InvalidDocument)?;
+        let report_digest = run.report.digest();
+        if &handoff_digest != confirm_handoff || &report_digest != confirm_report {
+            return Err(CliReason::ConfirmationMismatch);
+        }
+        if !matches!(
+            record.assess(&run.report, &run.records),
+            HandoffStatus::ReadyForSignoff
+        ) {
+            return Err(CliReason::HandoffNotReady);
+        }
+        let by_id: std::collections::BTreeMap<&ImportId, &LegacyImportRecord> =
+            run.records.iter().map(|r| (&r.import_id, r)).collect();
+        let mut items = Vec::with_capacity(record.entries.len());
+        let (mut contaminated, mut unknown) = (0u64, 0u64);
+        for e in &record.entries {
+            let r = by_id.get(&e.import_id).ok_or(CliReason::Internal)?;
+            match r.body.contamination {
+                ContaminationStanding::Contaminated { .. } => contaminated += 1,
+                ContaminationStanding::Unknown {} => unknown += 1,
+                ContaminationStanding::NoneRecorded {} => {}
+            }
+            let canonical = r.canonical_bytes().map_err(|_| CliReason::Internal)?;
+            items.push(LegacyImportItem {
+                import_id: e.import_id.as_str().to_owned(),
+                record_digest: sha256_token(&canonical),
+                source_scope_key: r.body.scope_key.as_str().to_owned(),
+                scope: e.custodian_scope.clone(),
+                consumed: u64::from(r.body.budget.consumed),
+                declared_limit: r.body.budget.limit.map(u64::from),
+                exhausted: r.body.budget.exhausted,
+            });
+        }
+        let base = |o: Output| {
+            o.num("records", items.len() as u64)
+                .num("contaminated", contaminated)
+                .num("contamination_unknown", unknown)
+        };
+        if dry {
+            return Ok(base(Output::ok(name, "would_apply")));
+        }
+        self.gate()?;
+        let now = self.now()?;
+        let outcome = self
+            .p
+            .store
+            .apply_legacy_imports(&LegacyImportCommand {
+                items: &items,
+                handoff_digest: handoff_digest.as_str(),
+                report_digest: report_digest.as_str(),
+                actor: &ActorId::new(who.actor().as_str()),
+                now: now.secs(),
+            })
+            .map_err(CliReason::from)?;
+        Ok(match outcome {
+            ImportOutcome::Applied(rep) => base(Output::ok(name, "applied"))
+                .num("created", rep.created as u64)
+                .num("superseded", rep.superseded as u64)
+                .num("already_applied", rep.already_applied as u64)
+                .num("applied_units", rep.applied_units),
+            ImportOutcome::Refused { reason, .. } => base(Output::ok(name, "refused"))
+                .word("refusal", reason.code())
+                .with_failure(name, CliReason::ImportRefused),
+        })
+    }
+
     // ---- repair ----------------------------------------------------------------------
 
     fn repair(
@@ -1390,6 +1494,37 @@ impl<'a, S: EpochBlobStore> Control<'a, S> {
                     .map_err(CliReason::from)?;
                 Ok(Output::ok(name, "delivered").num("delivered", n as u64))
             }
+            RepairCommand::Retention {
+                confirm_store_id,
+                queue_done_min_age_secs,
+                claim_min_age_secs,
+                decided_submission_min_age_secs,
+                pending_submission_max_age_secs,
+                batch_limit,
+            } => {
+                store_id_matches(store, confirm_store_id)?;
+                let policy = RetentionPolicy {
+                    queue_done_min_age_secs: *queue_done_min_age_secs,
+                    claim_min_age_secs: *claim_min_age_secs,
+                    decided_submission_min_age_secs: *decided_submission_min_age_secs,
+                    pending_submission_max_age_secs: *pending_submission_max_age_secs,
+                    batch_limit: *batch_limit,
+                };
+                policy.validate().map_err(CliReason::from)?;
+                if dry {
+                    return Ok(Output::ok(name, "would_purge"));
+                }
+                self.gate()?;
+                let r = store
+                    .run_retention(&policy, &op_actor, now.secs())
+                    .map_err(CliReason::from)?;
+                Ok(Output::ok(name, "purged")
+                    .num("expired_pending", r.expired_pending)
+                    .num("purged_queue", r.purged_queue)
+                    .num("purged_claims", r.purged_claims)
+                    .num("purged_submissions", r.purged_submissions)
+                    .num("kept_unacknowledged", r.kept_unacknowledged))
+            }
             RepairCommand::ClearReconcile {
                 confirm_store_id,
                 confirm_checkpoint_seq,
@@ -1453,6 +1588,16 @@ impl<'a, S: EpochBlobStore> Control<'a, S> {
             .map_err(CliReason::from)?;
         Ok(Output::ok(name, "cleared").flag("was_blocked", was))
     }
+}
+
+/// `sha256:` plus the lowercase hex SHA-256 of `bytes`.
+fn sha256_token(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut out = String::from("sha256:");
+    for b in Sha256::digest(bytes) {
+        out.push_str(&format!("{b:02x}"));
+    }
+    out
 }
 
 trait Word {

@@ -21,7 +21,7 @@ use crate::fault::FaultOp;
 use crate::lifecycle::{epoch_key, gate_epoch, gate_request};
 use crate::migrations::hex;
 use crate::model::*;
-use crate::outbox::outbox_append;
+use crate::outbox::{gate_export, outbox_append};
 use crate::store::*;
 
 pub(crate) fn kind_str(k: BudgetKind) -> &'static str {
@@ -481,6 +481,60 @@ pub(crate) fn reserve_tx(
     create_attempt(tx, i, 1, None, now, window)
 }
 
+/// Create a budget at `limit_i` or raise its limit, in the caller's
+/// transaction. A limit never falls; raising is recorded in the outbox. The
+/// same function serves `provision_budget` and the legacy import, so both are
+/// audited identically.
+pub(crate) fn provision_tx(
+    tx: &Transaction<'_>,
+    kind: &str,
+    key: &str,
+    scope_json: &str,
+    limit_i: i64,
+    actor: &str,
+    now_i: i64,
+) -> Result<(), StoreError> {
+    let cur: Option<i64> = tx
+        .query_row(
+            "SELECT limit_units FROM budgets WHERE scope_key = ?1",
+            [key],
+            |r| r.get(0),
+        )
+        .optional()?;
+    match cur {
+        Some(c) if limit_i < c => return Err(StoreError::InvalidInput),
+        Some(c) if limit_i == c => {}
+        other => {
+            if other.is_none() {
+                tx.execute(
+                    "INSERT INTO budgets (scope_key, kind, scope_json, limit_units) \
+                     VALUES (?1, ?2, ?3, ?4)",
+                    (key, kind, scope_json, limit_i),
+                )?;
+            } else {
+                tx.execute(
+                    "UPDATE budgets SET limit_units = ?1 WHERE scope_key = ?2",
+                    (limit_i, key),
+                )?;
+            }
+            outbox_append(
+                tx,
+                &format!("provision:{key}:{limit_i}"),
+                "budget.provisioned",
+                None,
+                None,
+                &json!({
+                    "event": "budget.provisioned", "scope_key": key, "kind": kind,
+                    "previous_limit": other, "limit": limit_i,
+                    "actor": actor, "at": now_i,
+                }),
+                now_i,
+            )?;
+        }
+    }
+    Ok(())
+}
+
 fn check_window(secs: u64) -> Result<i64, StoreError> {
     if secs == 0 {
         return Err(StoreError::InvalidInput);
@@ -517,44 +571,7 @@ impl SqliteStore {
         let limit_i = sql_time(limit)?;
         let now_i = sql_time(now)?;
         self.write(FaultOp::ProvisionBudget, |tx| {
-            let cur: Option<i64> = tx
-                .query_row(
-                    "SELECT limit_units FROM budgets WHERE scope_key = ?1",
-                    [key],
-                    |r| r.get(0),
-                )
-                .optional()?;
-            match cur {
-                Some(c) if limit_i < c => return Err(StoreError::InvalidInput),
-                Some(c) if limit_i == c => {}
-                other => {
-                    if other.is_none() {
-                        tx.execute(
-                            "INSERT INTO budgets (scope_key, kind, scope_json, limit_units) \
-                             VALUES (?1, ?2, ?3, ?4)",
-                            (key, kind, scope_json, limit_i),
-                        )?;
-                    } else {
-                        tx.execute(
-                            "UPDATE budgets SET limit_units = ?1 WHERE scope_key = ?2",
-                            (limit_i, key),
-                        )?;
-                    }
-                    outbox_append(
-                        tx,
-                        &format!("provision:{key}:{limit_i}"),
-                        "budget.provisioned",
-                        None,
-                        None,
-                        &json!({
-                            "event": "budget.provisioned", "scope_key": key, "kind": kind,
-                            "previous_limit": other, "limit": limit_i,
-                            "actor": actor.as_str(), "at": now_i,
-                        }),
-                        now_i,
-                    )?;
-                }
-            }
+            provision_tx(tx, kind, key, scope_json, limit_i, actor.as_str(), now_i)?;
             budget_status_tx(tx, key)?.ok_or(StoreError::Corrupt)
         })
     }
@@ -653,6 +670,9 @@ impl SqliteStore {
             }
             // C9 gate: re-evaluated in the transaction that takes the lease.
             gate_request(tx, &row.request_id)?;
+            // R-2 gate: everything that charged or settled budget so far,
+            // including this attempt's reservation, is acknowledged first.
+            gate_export(tx, self.cfg.export_gate)?;
             let origin: String = tx.query_row(
                 "SELECT origin FROM requests WHERE request_id = ?1",
                 [&row.request_id],
@@ -765,6 +785,10 @@ impl SqliteStore {
             // attempt already exposed is not blocked here (it cannot be
             // un-exposed); it settles, and release is refused downstream.
             gate_request(tx, &row.request_id)?;
+            // R-2 gate: this attempt's own start must be acknowledged before
+            // protected bytes can be opened, so a restore to a copy that
+            // predates the start cannot run the same request again.
+            gate_export(tx, self.cfg.export_gate)?;
             mark_exposed(tx, &row, actor.as_str(), now_i)?;
             outbox_append(
                 tx,

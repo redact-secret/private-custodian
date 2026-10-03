@@ -110,5 +110,17 @@ following have cited evidence; the code recomputes everything that can be recomp
 | Extract, importer, dry-run report, import store port | yes | yes (synthetic) | no |
 | Handoff record and gate checks | yes | yes (synthetic) | no |
 | A real extract and its maintainer review | yes | no | no |
-| Writing consumed units into the runtime budget store | yes (C10, C12) | no | no |
+| Writing consumed units into the runtime budget store (`legacy apply`, migration 0005, ADR 0115) | yes | yes (synthetic) | no |
 | Cutover, runner disablement, rollback rehearsal, retirement | yes | no | no |
+
+## 7. Applying the import to the runtime store (S3)
+
+`custodian legacy apply --extract F --handoff F --confirm-handoff-digest D --confirm-report-digest D` re-imports
+the reviewed extract deterministically, checks the handoff is ready and that both digests match what the operator
+typed, then writes the consumed units into the store through `apply_legacy_imports` (additive, idempotent;
+ADR 0115). Refusals are `handoff_not_ready` and `import_refused`.
+
+**Legacy contamination marks are not carried by `legacy apply`.** The command writes budget units only and reports
+contamination counts. Each mark that matters must be recorded separately with `lifecycle report`.
+
+No real legacy extract has been applied; no population has been handed off.

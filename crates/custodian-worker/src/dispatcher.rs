@@ -492,6 +492,11 @@ impl Dispatcher {
             other => led(other, Exposure::NotExposed)?,
         }
         let exposed = Exposure::Exposed;
+        // R-2 (ADR 0116): the exposure record must be acknowledged by the
+        // ledger export before protected bytes are opened. If it is not, the
+        // attempt stays exposed (the unit is consumed, never refunded) and
+        // the corpus is never opened.
+        led(ledger.confirm_exposure_exported(), exposed)?;
         let _close = CloseOnDrop(corpus);
 
         // Step 6.

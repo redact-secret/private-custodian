@@ -25,8 +25,32 @@ const CHECKS: &[(&str, &str)] = &[
              WHERE s.scope_key = b.scope_key AND s.result = 'consumed'), 0) \
              + COALESCE((SELECT SUM(units) FROM disclosure_charges c \
              WHERE c.scope_key = b.scope_key), 0) \
+             + COALESCE((SELECT SUM(applied_units) FROM budget_imports i \
+             WHERE i.scope_key = b.scope_key), 0) \
          OR b.refunded_units <> COALESCE((SELECT SUM(units) FROM settlements s \
              WHERE s.scope_key = b.scope_key AND s.result = 'refunded'), 0)",
+    ),
+    (
+        "budget_import_has_audit_event",
+        "SELECT COUNT(*) FROM budget_imports i WHERE NOT EXISTS \
+         (SELECT 1 FROM outbox o WHERE o.event_id = 'import:' || i.import_id)",
+    ),
+    (
+        "budget_import_chain_is_monotone",
+        "SELECT (SELECT COUNT(*) FROM budget_imports n JOIN budget_imports o \
+             ON n.supersedes = o.import_id \
+             WHERE n.legacy_units < o.legacy_units OR n.scope_key <> o.scope_key \
+                OR n.source_scope_key <> o.source_scope_key) \
+         + (SELECT COUNT(*) FROM (SELECT scope_key FROM budget_imports \
+             WHERE import_id NOT IN (SELECT supersedes FROM budget_imports \
+                                     WHERE supersedes IS NOT NULL) \
+             GROUP BY scope_key HAVING COUNT(*) > 1)) \
+         + (SELECT COUNT(*) FROM (SELECT source_scope_key FROM budget_imports \
+             GROUP BY source_scope_key HAVING COUNT(DISTINCT scope_key) > 1)) \
+         + (SELECT COUNT(*) FROM budgets b WHERE EXISTS \
+             (SELECT 1 FROM budget_imports i WHERE i.scope_key = b.scope_key) \
+             AND b.consumed_units < COALESCE((SELECT MAX(i.legacy_units) \
+                 FROM budget_imports i WHERE i.scope_key = b.scope_key), 0))",
     ),
     (
         "budget_never_over_committed",
