@@ -479,9 +479,15 @@ fn swapped_epoch_directories_are_a_wrong_epoch() {
     let b = f.seal(&[("one", B)]);
     let (da, db) = (f.sealed_dir(&a), f.sealed_dir(&b));
     let tmp = f.root().join("sealed").join("swap-tmp");
+    // macOS requires owner write permission on the directory being renamed.
+    // Simulate the owner's swap, then restore sealed permissions before checking.
+    chmod(&da, 0o700);
+    chmod(&db, 0o700);
     fs::rename(&da, &tmp).unwrap();
     fs::rename(&db, &da).unwrap();
     fs::rename(&tmp, &db).unwrap();
+    chmod(&da, 0o500);
+    chmod(&db, 0o500);
     expect_open_err(&f, &a, R::WrongEpoch);
     assert_eq!(f.pop.verify_epoch(&b), Err(R::WrongEpoch));
 }

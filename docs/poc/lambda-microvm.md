@@ -16,6 +16,13 @@ preparation template, remote-adapter ADR and control-plane migration inventory.
 The health probe refuses every evaluation job and reports `verified: false`.
 It is not a trusted production runner or a MicroVM worker implementation.
 
+The final source image was built locally for Linux ARM64 using Docker emulation.
+Its loopback smoke check passed: `/health` returned the fixed synthetic/unverified
+response, `/job` and a query-bearing health path returned empty 403 responses,
+the container user was `65534:65534`, and runtime logs were empty. The disposable
+local container was removed and absence confirmed. This tests packaging and the
+health handler only; it provides no AWS isolation, lifecycle or engine evidence.
+
 Not implemented: authenticated remote dispatcher, durable VM/attempt mapping,
 write-ahead remote input delivery, remote live-lease checking, independent orphan
 janitor, internal sandbox on the AWS image, real engine worker integration,
