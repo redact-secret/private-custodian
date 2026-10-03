@@ -1,0 +1,39 @@
+# Rust build output.
+/target/
+/measurements/redact-secret-alloc/target/
+
+node_modules/
+.venv/
+results-output/
+*.log
+.DS_Store
+dist/
+public/results/*.json
+public/results/.*.json
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# Deterministic scanner inputs are materialized locally, never committed.
+/fixtures/generated/*.json
+
+# Holdout inputs, state, private plans and execution scratch are never tracked.
+/holdout/generated/
+.peer-bin/
+
+# The redact-secret checkout the staging publish packs its candidate from (#152).
+/.redact-secret-product/
+
+# The redesigned site (web/, #547): build output and installs.
+/web/node_modules/
+/web/.next/
+/web/out/
+/web/storybook-static/
+/web/next-env.d.ts
+/web/*.tsbuildinfo
+
+# Local run artifacts are temporary and never committed or published
+# (docs/official-runs.md).
+/results/local/
+.claude/worktrees
+.claude/helpers
