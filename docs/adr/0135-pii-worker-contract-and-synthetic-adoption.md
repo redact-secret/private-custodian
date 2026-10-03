@@ -1,4 +1,4 @@
-# 0133. PII worker contract and synthetic adoption
+# 0135. PII worker contract and synthetic adoption
 
 - Status: accepted (contract design, as requested in #37); synthetic reference adoption implemented; not deployed
 - Date: 2026-10-03

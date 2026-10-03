@@ -1,6 +1,6 @@
 # Exact pii-eval adoption handoff (#37)
 
-Custodian decisions: [ADR 0133](adr/0133-pii-worker-contract-and-synthetic-adoption.md).
+Custodian decisions: [ADR 0135](adr/0135-pii-worker-contract-and-synthetic-adoption.md).
 Read against pii-eval PR #29 merge `6157cbc5918b3888c8e84b1884719ea8f3278b36` and issue #30.
 This handoff is independent of GitHub App creation and webhook activation; both remain deferred.
 Only public synthetic conformance data is authorized for this integration work.
@@ -144,7 +144,9 @@ golden vectors pass. The unfiltered workspace suite encounters an existing platf
 renaming a sealed directory at `protected_storage.rs:482`, before its custody assertions. A focused
 retry reproduces it. The rest of the workspace suite passes with that single test explicitly skipped
 (`cargo test --workspace --locked -- --skip swapped_epoch_directories_are_a_wrong_epoch`).
-No storage permissions or unrelated test were changed to hide this limitation.
+No storage permissions or unrelated test were changed to hide this limitation. Main subsequently
+fixed this test setup in PR #51; that fix is included when integrating this change with main.
+The original validation result remains recorded above.
 
 Local Linux x86_64 (Docker Desktop kernel `6.10.14-linuxkit`, Bubblewrap 0.8.0),
 with custodian Rust 1.90.0 and pii-eval's pinned Rust 1.98.1: the unchanged source CLI and reference

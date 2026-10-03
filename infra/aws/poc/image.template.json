@@ -1,0 +1,52 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Synthetic health-only MicroVM image experiment; never protected execution authority",
+  "Parameters": {
+    "ImageName": {"Type": "String", "AllowedPattern": "custodian-poc-[a-z0-9-]+", "MaxLength": 64},
+    "ArtifactUri": {"Type": "String", "AllowedPattern": "s3://[^ ]+"},
+    "ArtifactObjectArn": {"Type": "String", "AllowedPattern": "arn:aws:s3:::[^ ]+/.+"},
+    "ManagedBaseVersion": {"Type": "String", "MinLength": 1},
+    "VpcEgressConnectorArn": {"Type": "String", "AllowedPattern": "arn:aws:lambda:[^:]+:[0-9]{12}:network-connector:.+"}
+  },
+  "Resources": {
+    "BuildRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": ["sts:AssumeRole", "sts:TagSession"]}]
+        },
+        "Policies": [{
+          "PolicyName": "read-one-synthetic-build-object",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{"Effect": "Allow", "Action": "s3:GetObject", "Resource": {"Ref": "ArtifactObjectArn"}}]
+          }
+        }]
+      }
+    },
+    "Image": {
+      "Type": "AWS::Lambda::MicrovmImage",
+      "Properties": {
+        "Name": {"Ref": "ImageName"},
+        "Description": "Trusted synthetic health probe only; refuses evaluation jobs",
+        "BaseImageArn": {"Fn::Sub": "arn:aws:lambda:${AWS::Region}:aws:microvm-image:al2023-1"},
+        "BaseImageVersion": {"Ref": "ManagedBaseVersion"},
+        "BuildRoleArn": {"Fn::GetAtt": ["BuildRole", "Arn"]},
+        "CodeArtifact": {"Uri": {"Ref": "ArtifactUri"}},
+        "CpuConfigurations": [{"Architecture": "ARM_64"}],
+        "Resources": [{"MinimumMemoryInMiB": 512}],
+        "AdditionalOsCapabilities": [],
+        "EnvironmentVariables": [],
+        "EgressNetworkConnectors": [{"Ref": "VpcEgressConnectorArn"}],
+        "Logging": {"Disabled": {}},
+        "Hooks": {
+          "Port": 8080,
+          "MicrovmImageHooks": {"Ready": "ENABLED", "ReadyTimeoutInSeconds": 60, "Validate": "ENABLED", "ValidateTimeoutInSeconds": 60},
+          "MicrovmHooks": {"Run": "DISABLED", "Resume": "DISABLED", "Suspend": "DISABLED", "Terminate": "DISABLED"}
+        },
+        "Tags": [{"Key": "Purpose", "Value": "public-synthetic-feasibility"}]
+      }
+    }
+  }
+}

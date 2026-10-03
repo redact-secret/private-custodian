@@ -49,6 +49,8 @@ jobs:
         run: python3 crates/custodian-contracts/testdata/verify_golden.py
       - name: PII synthetic artifact delivery controls
         run: python3 -m unittest discover -s tools/engines -p 'test_*.py'
+      - name: MicroVM read-only preflight negative controls (no AWS credentials)
+        run: python3 -m unittest discover -s tests/microvm-conformance
 
   # C12: dependency audit with a pinned tool and the policy in deny.toml
   # (RustSec advisories, yanked crates, licenses of third-party crates, crate

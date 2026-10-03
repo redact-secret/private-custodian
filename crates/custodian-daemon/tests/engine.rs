@@ -9,6 +9,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use custodian_contracts::common::{EvaluationDomain, ProtocolRef};
 use custodian_contracts::execution::{ExecutionOutcome, PrivateArtifactRef};
@@ -24,11 +25,17 @@ const ENGINE: &str = env!("CARGO_BIN_EXE_custodian-synthetic-engine");
 
 struct Dirs(PathBuf);
 
+/// Tests run on parallel threads of one process and several use the same
+/// label, so the process id and label alone are not unique: one test's cleanup
+/// would remove another's directory. A per-call counter makes every `Dirs` its own.
+static NEXT: AtomicUsize = AtomicUsize::new(0);
+
 impl Dirs {
     fn new(label: &str) -> Self {
         let p = std::env::temp_dir().join(format!(
-            "custodian-synthetic-engine-{}-{label}",
-            std::process::id()
+            "custodian-synthetic-engine-{}-{}-{label}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         let _ = std::fs::remove_dir_all(&p);
         for d in ["stage", "job", "input", "scratch"] {

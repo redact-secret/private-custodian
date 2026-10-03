@@ -337,7 +337,7 @@ isolation evidence is the CI run (P3); it must be re-read for the exact commit t
 
 ## #37 engine integration disposition
 
-The [PII adoption handoff](pii-eval-adoption.md) and ADR 0133 finalize the custodian-owned contract
+The [PII adoption handoff](pii-eval-adoption.md) and ADR 0135 finalize the custodian-owned contract
 decisions without waiting for live App creation or webhook activation. A reference-patched pii-eval CLI
 is a separate artifact from the pinned, unmodified upstream CLI, which still refuses worker jobs.
 The offline artifact-binding CLI and reusable same-repository synthetic CI gate do not activate a

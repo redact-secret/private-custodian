@@ -128,7 +128,7 @@ Two cases the C12 drill could not resolve are now operator commands, both human-
 
 ## PII engine adoption (#37)
 
-[ADR 0133](docs/adr/0133-pii-worker-contract-and-synthetic-adoption.md) finalizes the case roster,
+[ADR 0135](docs/adr/0135-pii-worker-contract-and-synthetic-adoption.md) finalizes the case roster,
 embedded aggregate channel, nine-label profile and opaque artifact roles.
 The [exact handoff](docs/pii-eval-adoption.md) supplies a reference patch against the merged pii-eval CLI,
 keeps upstream and adopted artifact identities distinct, and defines synthetic validation through the
