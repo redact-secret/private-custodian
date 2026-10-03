@@ -433,8 +433,9 @@ fn linux_cancellation_cleans_up_the_worker_tree() {
     let lg = log();
     let cancel = CancelToken::new();
     let c2 = cancel.clone();
+    let tok = token.clone();
     let t = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(1500));
+        wait_running(&tok);
         c2.cancel();
     });
     let rep = dispatcher(h)

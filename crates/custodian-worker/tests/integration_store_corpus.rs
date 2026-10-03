@@ -10,7 +10,6 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use common::*;
 use custodian_contracts::common::{
@@ -406,7 +405,7 @@ fn cancel_in_the_store_fences_the_holder_and_stops_the_worker() {
     let disp = w.dispatcher();
     let rep = std::thread::scope(|s| {
         s.spawn(|| {
-            std::thread::sleep(Duration::from_millis(900));
+            wait_running(&token);
             w.store
                 .cancel(&attempt, &actor(), ReasonCode::Cancelled, NOW)
                 .unwrap();

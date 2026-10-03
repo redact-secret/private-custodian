@@ -416,3 +416,16 @@ pub fn wait_gone(token: &str) -> bool {
     }
     false
 }
+
+/// Block until a process with `token` in its command line exists (the worker
+/// is really running), or panic after a generous timeout. Tests use this to
+/// cancel at a deterministic point instead of sleeping.
+pub fn wait_running(token: &str) {
+    for _ in 0..400 {
+        if process_with_token_exists(token) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    panic!("worker with token never started");
+}
