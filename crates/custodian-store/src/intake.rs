@@ -630,7 +630,7 @@ impl SqliteStore {
                 &json!({
                     "event": "request.submitted", "request_id": request_id,
                     "plan_digest": plan_digest, "requester": cmd.request.asserted_actor.as_str(),
-                    "submitted_by": cmd.submitted_by.as_str(),
+                    "actor": cmd.submitted_by.as_str(),
                     "channel": cmd.channel.as_str(), "at": now,
                 }),
                 now,
@@ -766,8 +766,8 @@ impl SqliteStore {
                 &json!({
                     "event": "approval.granted", "request_id": cmd.request_id,
                     "approval_id": approval_id,
-                    "approver": cmd.approval.approver.as_str(),
-                    "approver_kind": kind_str(cmd.approval.approver_kind),
+                    "actor": cmd.approval.approver.as_str(),
+                    "actor_kind": kind_str(cmd.approval.approver_kind),
                     "requester": rec.requester, "plan_digest": rec.plan_digest,
                     "activation_id": cmd.approval.activation.activation_id.as_str(),
                     "activation_sequence": cmd.approval.activation.sequence.get(),
@@ -963,8 +963,8 @@ impl SqliteStore {
                 None,
                 None,
                 &json!({
-                    "event": "activation.recorded", "activation_id": id, "sequence": seq,
-                    "status": status, "document_digest": digest,
+                    "event": "activation.recorded", "activation_id": id,
+                    "activation_sequence": seq, "state": status, "document_digest": digest,
                     "actor": actor.as_str(), "at": now_i,
                 }),
                 now_i,

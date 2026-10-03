@@ -24,6 +24,7 @@ pub mod model;
 mod ops;
 mod outbox;
 mod port;
+mod reconcile;
 pub mod secure_fs;
 mod store;
 

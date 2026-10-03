@@ -102,6 +102,11 @@ pub const PAYLOAD_KEY_ALLOWLIST: &[&str] = &[
     "feed_sequence",
     "document_digest",
     "destination",
+    // C10 (ADR 0083): operator submissions, approvals and activation history.
+    "requester",
+    "channel",
+    "activation_id",
+    "activation_sequence",
 ];
 
 fn safe_token(s: &str) -> bool {
