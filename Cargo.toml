@@ -9,6 +9,7 @@ members = [
     "crates/custodian-intake",
     "crates/custodian-ledger",
     "crates/custodian-worker",
+    "crates/custodian-disclosure",
 ]
 
 [workspace.package]
