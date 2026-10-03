@@ -1,0 +1,23 @@
+[package]
+name = "custodian-ledger"
+description = "Signed receipts, record layout and idempotent private-ledger export with checkpoint startup checks (C7). Backend-neutral; Git and in-memory backends; synthetic data only."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+# Exact pins (ADR 0050). `ed25519-dalek` is the only new third-party crate;
+# serde, serde_json and sha2 are the versions custodian-contracts already pins.
+# No RNG dependency: keys come from a key provider (or from test code).
+[dependencies]
+custodian-core = { path = "../custodian-core" }
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-store = { path = "../custodian-store" }
+custodian-corpus = { path = "../custodian-corpus" }
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "fast", "zeroize"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"

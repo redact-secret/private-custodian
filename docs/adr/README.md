@@ -21,6 +21,11 @@ ADR.
 | [0022](0022-store-migrations-audit-outbox-and-restore-protection.md) | Store migrations, audit outbox and restore protection | Accepted (design); implemented, not deployed |
 | [0030](0030-protected-population-storage-layout-and-adapter-contract.md) | Protected population storage layout and adapter contract | Accepted (design) |
 | [0031](0031-corpus-commitment-seal-and-keyed-public-commitment.md) | Corpus commitment, seal and keyed public commitment | Accepted (design) |
+| [0050](0050-receipt-signature-algorithm-keys-and-signer-isolation.md) | Receipt signature algorithm, key identifiers, key lifecycle and signer isolation | Accepted (design); implemented, not deployed |
+| [0051](0051-ledger-record-layout-identity-and-supersession.md) | Ledger record layout, identity, append-only semantics and supersession | Accepted (design); implemented, not deployed |
+| [0052](0052-ledger-backend-port-and-git-writer.md) | Ledger backend port and conflict-aware Git writer | Accepted (design); implemented, not deployed |
+| [0053](0053-outbox-exporter-acknowledgement-and-reconciliation.md) | Outbox exporter, acknowledgement protocol and reconciliation | Accepted (design); implemented, not deployed |
+| [0054](0054-external-checkpoints-startup-check-and-independent-verification.md) | External checkpoints, startup check and independent verification | Accepted (design); implemented, not deployed |
 
 Accepted (design) means the decision is frozen for downstream issues (C2 to C12). It does not mean any of it
 is implemented or deployed. See each ADR's status table.
@@ -32,3 +37,5 @@ provider (C5); sandbox platform and probes (C6); signing key provider and receip
 disclosure policy parameters (C8).
 
 Decided by C4 (ADR 0020 to 0022): the SQLite driver and pins, connection and file settings, the written budget accounting, lease and recovery policy, migrations, the audit outbox and restore protection. Details: [docs/state-store.md](../state-store.md). Implemented in `crates/custodian-store` with synthetic tests; not deployed.
+
+Decided by C7 (ADR 0050 to 0054): Ed25519 receipts with domain separation and isolated signing, key lifecycle, the ledger record layout and supersession, the conflict-aware ledger writer, the outbox exporter and reconciliation, external checkpoints and the startup rollback check. Details: [docs/ledger.md](../ledger.md). Implemented in `crates/custodian-ledger` with synthetic tests and test-generated keys; the private-ledger repository, signer process and key provider are not provisioned.
