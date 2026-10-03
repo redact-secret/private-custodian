@@ -19,7 +19,8 @@
 //!
 //! Behavior is chosen by the first word of the staged `config` file:
 //! `ok` (default), `partial`, `failed-items`, `no-aggregates`,
-//! `aggregates-wrong-roster`, `crash`, `exit3`, `garbage` and `sleep <secs>`.
+//! `aggregates-wrong-roster`, `leak`, `crash`, `exit3`, `garbage` and
+//! `sleep <secs>`.
 
 use std::fs;
 
@@ -125,6 +126,28 @@ fn main() {
             let secs: u64 = arg.parse().unwrap_or(1);
             std::thread::sleep(std::time::Duration::from_secs(secs));
             result(&d, "complete", n, n, 0, Some(aggregates(&d, n, n, 0)));
+        }
+        // A hostile engine: it reads the protected inputs it was given and
+        // tries to smuggle them out on stderr and inside the result. The
+        // result is rejected (an unknown field) and nothing may reach a log,
+        // a Check, the ledger or a projection.
+        "leak" => {
+            let input = root("CUSTODIAN_INPUT_ROOT", "/input");
+            let mut secret = String::new();
+            if let Ok(rd) = fs::read_dir(&input) {
+                for e in rd.flatten() {
+                    secret.push_str(&fs::read_to_string(e.path()).unwrap_or_default());
+                }
+            }
+            eprintln!("{secret}");
+            println!(
+                "{{\"schema\":\"private-custodian.worker-result/1\",\"domain\":\"{d}\",\
+                 \"protocol\":{{\"name\":\"synthetic-protocol\",\"version\":\"1\"}},\
+                 \"status\":\"complete\",\
+                 \"roster\":{{\"expected\":{n},\"observed\":{n},\"failed\":0}},\
+                 \"note\":\"{}\"}}",
+                secret.replace(['"', '\\', '\n'], "")
+            );
         }
         "crash" => std::process::abort(),
         "exit3" => std::process::exit(3),

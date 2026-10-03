@@ -171,7 +171,17 @@ impl Env {
     }
 
     pub fn with_engine_mode(limit: u64, mode: &str) -> Self {
-        let mut p = Pipe::new(limit, ROSTER);
+        Self::build(limit, mode, |i| format!("synthetic-entry-{i}"))
+    }
+
+    /// Like `new`, with the bytes of each protected entry chosen by the caller
+    /// (the leakage tests plant canaries here).
+    pub fn with_entries(limit: u64, mode: &str, bytes: impl Fn(usize) -> String) -> Self {
+        Self::build(limit, mode, bytes)
+    }
+
+    fn build(limit: u64, mode: &str, entry_bytes: impl Fn(usize) -> String) -> Self {
+        let mut p = Pipe::with_entry_bytes(limit, ROSTER, entry_bytes);
         // The real engine binary and the mode it runs in replace the C12
         // placeholder bytes, BEFORE any request is built (the plan pins their
         // digests).
@@ -294,13 +304,23 @@ impl Env {
         fault: &dyn PipelineFault,
         f: impl FnOnce(&Pipeline<'_, FsEpochStore>, &custodian_cli::Service<'_, FsEpochStore>) -> R,
     ) -> R {
+        self.try_with_pipeline(fault, f)
+            .expect("the startup sequence refused")
+    }
+
+    /// Like `with_pipeline`, but `None` when the startup sequence refuses (a
+    /// real daemon would exit; a crash test restarts).
+    pub fn try_with_pipeline<R>(
+        &self,
+        fault: &dyn PipelineFault,
+        f: impl FnOnce(&Pipeline<'_, FsEpochStore>, &custodian_cli::Service<'_, FsEpochStore>) -> R,
+    ) -> Option<R> {
         // The same clock wrapping the daemon applies (`runtime::run`).
         let pin = ClockPin::new();
         let mut parts = self.p.w.parts();
         parts.clock = Arc::new(PinnableClock::new(self.p.w.clock.clone(), pin.clone()));
         let acts = StoreActivations::new(&self.p.w.rw.store, parts.clock.clone());
-        let svc = custodian_cli::Service::start(parts.clone(), &startup_config(), &acts)
-            .expect("startup sequence");
+        let svc = custodian_cli::Service::start(parts.clone(), &startup_config(), &acts).ok()?;
         let dispatcher = self.dispatcher();
         let reporter = CheckReporter::new(intake_config(), self.edge.clone(), self.checks.clone());
         let scope = ScopeGuard {
@@ -322,7 +342,32 @@ impl Env {
             log: self.log.as_ref(),
             fault,
         };
-        f(&pipeline, &svc)
+        Some(f(&pipeline, &svc))
+    }
+
+    /// Restart with a store connection that injects a fault.
+    pub fn restart_store_with_fault(&mut self, fault: Arc<dyn custodian_store::FaultInjector>) {
+        let path = self.p.w.rw.db.path();
+        self.p.w.rw.store =
+            SqliteStore::open_with_config(&path, StoreConfig::enforced().with_fault(fault))
+                .unwrap();
+    }
+
+    /// Everything the ledger holds that mentions `needle`.
+    pub fn ledger_count(&self, needle: &str) -> usize {
+        self.p
+            .w
+            .ledger
+            .paths()
+            .iter()
+            .filter(|p| {
+                self.p
+                    .w
+                    .ledger
+                    .raw(p)
+                    .is_some_and(|b| String::from_utf8_lossy(&b).contains(needle))
+            })
+            .count()
     }
 
     /// An operator publishes the revocation feed (a human action).
