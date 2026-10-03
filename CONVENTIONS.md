@@ -55,3 +55,5 @@ Measure coordinator transaction latency, dispatch/worker startup, artifact valid
 PRs state the boundary affected, tested failure modes, backward compatibility, migration/recovery and any policy change. Retain immutable prior evidence rather than editing away incidents or failed runs. Never erase prior receipts or reset exhausted budgets when migrating a legacy lifecycle (ADR 0003).
 
 Before public code release, complete license/reporting setup and review the full repository history and assets. Replace deployment-specific material with safe examples; do not describe source publication as permission to query the protected system.
+
+`custodian-bridge` adds no third-party crate (ADR 0090); its consumer module takes public inputs only and a test keeps it that way, and the legacy import (ADR 0091) is a pure function of reviewed extract bytes that reads no file, corpus or ledger and executes no cutover (ADR 0092).

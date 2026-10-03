@@ -144,4 +144,4 @@ attempts record consumption and never recompute it (ADR 0003).
 | Signing, key lifecycle, ledger export | yes (C7) | no | no |
 | Disclosure policy, suppression, budgets, release approval workflow | yes (C8) | yes (docs/disclosure.md) | no |
 | Feed publication and epoch contamination records | yes (C9) | yes (docs/lifecycle-and-revocation.md) | no |
-| Consumer validation and legacy import | yes (C11) | no | no |
+| Consumer validation and legacy import | yes (C11) | yes (`custodian-bridge`, synthetic; see docs/benchmarks-integration.md) | no |

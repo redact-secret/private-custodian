@@ -92,3 +92,4 @@ disclosure.
 | App adapter, storage, workers, signer, ledger-writer | yes | no | no |
 | Contamination, rotation and revocation feed (`custodian-lifecycle`) | yes | yes (synthetic tests) | no |
 | Handoff of any legacy population | yes | no | no |
+| Benchmarks bridge, reference consumer, legacy metadata import and handoff record (`custodian-bridge`, C11) | yes | yes (synthetic tests) | no |
