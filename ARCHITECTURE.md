@@ -88,3 +88,7 @@ Retention and deletion schedules cover corpora, observations, results, scratch, 
 ## Acceptance
 
 Public synthetic lifecycle controls must test concurrency, duplicate requests, budget exhaustion, crash after exposure, cancellation, malicious output, filesystem/network denial, cross-run reuse, invalid bindings, suppressed strata, signing refusal and recovery. Protected runs occur only after those controls and operational review pass, and after the deployment prerequisites in ADR 0001 are demonstrated. Existing benchmark protected lifecycles stay authoritative until a reviewed handoff that erases no receipt and resets no exhausted budget ([ADR 0003](docs/adr/0003-legacy-protected-lifecycle-handoff.md)). Product support decisions remain downstream.
+
+## Request edge (C3)
+
+`crates/custodian-intake` is the request-facing App adapter (Z1): signed webhook intake with event, installation, repository and actor allowlists, delivery replay protection, fork/cross-repository/comment/workflow denial, an execution gate that requires a separate approval record, App JWT and scoped installation-token logic behind traits, and sanitized Check output. It validates and enqueues; it never evaluates. It depends on `custodian-core` and `custodian-contracts`, and holds only the request-facing App credential. Decisions and limits: [ADR 0010](docs/adr/0010-github-app-request-intake.md); operator guide: [docs/github-app.md](docs/github-app.md). Implemented as a library with in-memory doubles; no listener, durable store or live App is deployed.
