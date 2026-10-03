@@ -1,0 +1,26 @@
+[package]
+name = "custodian-lifecycle"
+description = "Contamination, epoch retirement and rotation, public revocation feed publication, release and dispatch eligibility, and a reference feed consumer (C9). Synthetic data only."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+# No new third-party crate (ADR 0070): serde_json and sha2 are the exact
+# versions the workspace already pins.
+[dependencies]
+custodian-core = { path = "../custodian-core" }
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-store = { path = "../custodian-store" }
+custodian-corpus = { path = "../custodian-corpus" }
+custodian-ledger = { path = "../custodian-ledger" }
+custodian-disclosure = { path = "../custodian-disclosure" }
+custodian-worker = { path = "../custodian-worker" }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+
+[dev-dependencies]
+custodian-worker = { path = "../custodian-worker", features = ["test-fakes"] }

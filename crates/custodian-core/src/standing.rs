@@ -189,7 +189,8 @@ pub enum EvidenceEffect {
 /// says nothing about results measured on the sealed population); a repeat
 /// or a clearance has no new consequence.
 pub fn evidence_effect(t: &Transition) -> Option<EvidenceEffect> {
-    let newly_permanent = t.new.contamination.is_permanent() && !t.prior.contamination.is_permanent();
+    let newly_permanent =
+        t.new.contamination.is_permanent() && !t.prior.contamination.is_permanent();
     if newly_permanent {
         return Some(EvidenceEffect::Contaminated);
     }

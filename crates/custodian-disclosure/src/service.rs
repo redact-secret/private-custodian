@@ -252,6 +252,23 @@ impl DisclosureService<'_> {
         )?;
         check_artifact(policy, &aggregates)?;
 
+        // Eligibility (C9) before anything is charged: a contaminated,
+        // retired or revoked population or candidate must not cost budget or
+        // leave a history entry. The projection does not exist yet, so the
+        // subject carries an all-zero digest; `release` checks again with the
+        // real one, twice.
+        self.eligibility
+            .check(
+                &EligibilitySubject {
+                    candidate: &plan.candidate,
+                    population: &plan.population,
+                    execution: &input.execution.execution_id,
+                    projection: &ProjectionDigest::from_raw([0u8; 32]),
+                },
+                now,
+            )
+            .map_err(|_| R::EligibilityDenied)?;
+
         // 3. Charge. From here the attempt is counted.
         let (pop, lineage) = release_scopes(plan);
         let requester = input.request.asserted_actor.as_str();

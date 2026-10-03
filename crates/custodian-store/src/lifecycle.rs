@@ -177,8 +177,8 @@ pub(crate) fn epoch_key(
     if origin == "port" {
         return subject.map(str::to_owned).ok_or(StoreError::Corrupt);
     }
-    let doc: serde_json::Value =
-        serde_json::from_str(document.ok_or(StoreError::Corrupt)?).map_err(|_| StoreError::Corrupt)?;
+    let doc: serde_json::Value = serde_json::from_str(document.ok_or(StoreError::Corrupt)?)
+        .map_err(|_| StoreError::Corrupt)?;
     doc.pointer("/plan/population/epoch_id")
         .and_then(|v| v.as_str())
         .map(str::to_owned)
@@ -327,7 +327,8 @@ pub struct ObligationRecord {
     pub published_seq: Option<u64>,
 }
 
-const OBLIGATION_COLS: &str = "seq, obligation_id, target_kind, target_ref, action, superseded_by, \
+const OBLIGATION_COLS: &str =
+    "seq, obligation_id, target_kind, target_ref, action, superseded_by, \
      reason, effective_at, actor, authorization_ref, created_at, published_seq";
 
 fn map_obligation(r: &rusqlite::Row<'_>) -> rusqlite::Result<ObligationRecord> {
@@ -480,7 +481,10 @@ pub struct RotationCommand<'a> {
 
 impl SqliteStore {
     /// Standing of an epoch; `None` when nothing was ever recorded (usable).
-    pub fn epoch_standing(&self, epoch_id: &str) -> Result<Option<EpochStandingRecord>, StoreError> {
+    pub fn epoch_standing(
+        &self,
+        epoch_id: &str,
+    ) -> Result<Option<EpochStandingRecord>, StoreError> {
         check_ids(&[epoch_id])?;
         self.read(|tx| load_standing(tx, epoch_id))
     }
@@ -699,8 +703,23 @@ impl SqliteStore {
             })?;
             let mut out = Vec::new();
             for row in rows {
-                let (seq, epoch, change, reported, pc, pr, nc, nr, changed, ver, actor, kind, reason, auth, at) =
-                    row?;
+                let (
+                    seq,
+                    epoch,
+                    change,
+                    reported,
+                    pc,
+                    pr,
+                    nc,
+                    nr,
+                    changed,
+                    ver,
+                    actor,
+                    kind,
+                    reason,
+                    auth,
+                    at,
+                ) = row?;
                 out.push(EpochEventRecord {
                     seq: from_sql(seq),
                     epoch_id: epoch,
