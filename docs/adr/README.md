@@ -15,6 +15,9 @@ ADR.
 | [0003](0003-legacy-protected-lifecycle-handoff.md) | Legacy protected lifecycle handoff | Accepted (design) |
 | [0004](0004-canonical-encoding-digests-and-contract-dependencies.md) | Canonical encoding, digests, domain separation, time and contract dependencies | Accepted (design) |
 | [0005](0005-contract-set-freshness-and-versioning.md) | Contract set, internal versus public split, freshness and versioning | Accepted (design) |
+| [0020](0020-sqlite-runtime-store-and-dependency-pins.md) | SQLite runtime store: crate, connection settings and dependency pins | Accepted (design); implemented, not deployed |
+| [0021](0021-budget-accounting-run-state-and-recovery-policy.md) | Budget accounting, run state, leases and recovery policy | Accepted (design); implemented, not deployed |
+| [0022](0022-store-migrations-audit-outbox-and-restore-protection.md) | Store migrations, audit outbox and restore protection | Accepted (design); implemented, not deployed |
 | [0030](0030-protected-population-storage-layout-and-adapter-contract.md) | Protected population storage layout and adapter contract | Accepted (design) |
 | [0031](0031-corpus-commitment-seal-and-keyed-public-commitment.md) | Corpus commitment, seal and keyed public commitment | Accepted (design) |
 
@@ -26,3 +29,5 @@ contract set, public projection and revocation envelopes, freshness and contract
 deferred, with the issue that owns each: request-intake authentication details (C3); SQLite schema and migrations (C4); sealing format and key
 provider (C5); sandbox platform and probes (C6); signing key provider and receipt format (C7);
 disclosure policy parameters (C8).
+
+Decided by C4 (ADR 0020 to 0022): the SQLite driver and pins, connection and file settings, the written budget accounting, lease and recovery policy, migrations, the audit outbox and restore protection. Details: [docs/state-store.md](../state-store.md). Implemented in `crates/custodian-store` with synthetic tests; not deployed.
