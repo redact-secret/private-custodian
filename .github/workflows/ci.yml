@@ -98,3 +98,13 @@ jobs:
           cargo test -p custodian-worker --locked --test linux_isolation -- --nocapture --test-threads=4 2>&1 | tee isolation.log
           grep -q 'ISOLATION-VERIFIED' isolation.log
           ! grep -q 'ISOLATION-TEST-SKIPPED' isolation.log
+      # S5: the daemon pipeline with the engine inside the real sandbox
+      # (ADR 0129). An additional step; the one above is unchanged.
+      - name: Daemon pipeline inside the real sandbox (must run, must not skip)
+        shell: bash
+        env:
+          CUSTODIAN_REQUIRE_ISOLATION: "1"
+        run: |
+          cargo test -p custodian-daemon --locked --test linux_pipeline -- --nocapture --test-threads=1 2>&1 | tee pipeline-isolation.log
+          grep -q 'PIPELINE-ISOLATION-VERIFIED' pipeline-isolation.log
+          ! grep -q 'ISOLATION-TEST-SKIPPED' pipeline-isolation.log
