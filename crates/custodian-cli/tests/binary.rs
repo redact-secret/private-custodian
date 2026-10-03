@@ -204,6 +204,40 @@ fn state_changing_commands_need_the_ledger_and_say_so() {
     assert!(!out.contains("synthetic-credential"));
 }
 
+#[test]
+fn a_signer_socket_setting_is_validated_and_a_missing_signer_is_not_a_config_error() {
+    let d = Deploy::new("signer-cfg");
+    let edit = |extra: serde_json::Value| {
+        let mut v: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&d.config).unwrap()).unwrap();
+        for (k, val) in extra.as_object().unwrap() {
+            v[k] = val.clone();
+        }
+        write_private(&d.config, &serde_json::to_vec(&v).unwrap());
+    };
+    // A relative socket path or an out-of-range timeout is a configuration error.
+    for bad in [
+        serde_json::json!({"signer_socket_path": "relative/signer.sock"}),
+        serde_json::json!({"signer_socket_path": d.dir.join("signer.sock"), "signer_timeout_secs": 0}),
+        serde_json::json!({"signer_socket_path": d.dir.join("signer.sock"), "signer_timeout_secs": 3600}),
+    ] {
+        edit(bad);
+        let (code, out, _) = d.run(Some(Who::Auditor), &["verify", "ledger"]);
+        assert_eq!(code, 7, "{out}");
+        assert_eq!(json(&out)["code"], "not_configured");
+    }
+    // An absolute path with no signer behind it opens fine: the deployment
+    // starts, and only commands that must sign report `signer_unavailable`.
+    edit(serde_json::json!({
+        "signer_socket_path": d.dir.join("signer.sock"),
+        "signer_timeout_secs": 2
+    }));
+    let (code, out, _) = d.run(Some(Who::Auditor), &["verify", "ledger"]);
+    assert_eq!(code, 7, "{out}");
+    assert_eq!(json(&out)["code"], "ledger_unavailable");
+    assert!(!out.contains(d.dir.to_str().unwrap()));
+}
+
 /// Regression for the C12 review (finding S-5): the credential file, the
 /// operator policy and the pinned roots were read without checking that they
 /// are regular, unaliased files with safe modes. The runbook requires 0600.

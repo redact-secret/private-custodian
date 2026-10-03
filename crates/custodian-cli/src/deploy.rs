@@ -6,12 +6,13 @@
 //! contains paths and public identifiers only; it holds no credential, key or
 //! token and is not committed. Paths never appear in output.
 //!
-//! What is deliberately not here: a signing key. The deployment's signer is
-//! [`UnavailableSigner`], which refuses every signature with
-//! `signer_unavailable`, until a deployment supplies an isolated signer
-//! transport (`RemoteSigner`, ADR 0050). Commands that must sign (export,
-//! feed publication) therefore report `signer_unavailable` rather than
-//! silently skipping their audit step.
+//! What is deliberately not here: a signing key. When `signer_socket_path` is
+//! configured the deployment's signer is a `RemoteSigner` over the isolated
+//! signer's Unix socket (`custodian-signer`, ADR 0111); it holds a key id and
+//! a socket path, never a key. When it is absent, or the socket is down, slow
+//! or refuses, signing fails with `signer_unavailable` ([`UnavailableSigner`]
+//! for the absent case), so commands that must sign (export, feed publication)
+//! report `signer_unavailable` rather than silently skipping their audit step.
 
 use std::path::{Path, PathBuf};
 
@@ -21,9 +22,11 @@ use custodian_contracts::types::{DestinationId, EpochId, FeedId, KeyId, Timestam
 use custodian_corpus::{FsEpochStore, ProtectedPopulations};
 use custodian_disclosure::PublicPopulationNames;
 use custodian_ledger::{
-    ApprovedPayload, GitBackend, GitConfig, KeyEntry, Keyring, SignDomain, SignRefusal, Signer,
+    ApprovedPayload, GitBackend, GitConfig, KeyEntry, Keyring, RemoteSigner, SignDomain,
+    SignRefusal, Signer,
 };
 use custodian_lifecycle::{DirFeed, FeedConfig, NoFault, PublicPopulations};
+use custodian_signer::UnixSocketTransport;
 use custodian_store::{SqliteStore, SystemClock};
 use serde::Deserialize;
 
@@ -58,6 +61,19 @@ struct ConfigFile {
     commitment_key_id: KeyId,
     /// Identifier of the signing key the isolated signer holds.
     signer_key_id: KeyId,
+    /// Absolute path of the isolated signer's Unix socket (ADR 0111). Absent
+    /// means no signer is configured and signing fails closed.
+    #[serde(default)]
+    signer_socket_path: Option<PathBuf>,
+    /// If set, only a signer process running as this uid is trusted.
+    #[serde(default)]
+    signer_uid: Option<u32>,
+    #[serde(default = "default_signer_timeout")]
+    signer_timeout_secs: u64,
+}
+
+fn default_signer_timeout() -> u64 {
+    10
 }
 
 fn default_remote() -> String {
@@ -129,6 +145,34 @@ impl Signer for UnavailableSigner {
     }
 }
 
+/// The deployment's signer: remote when a socket is configured, otherwise
+/// the always-refusing [`UnavailableSigner`]. Neither variant holds a key.
+pub enum ConfiguredSigner {
+    Unavailable(UnavailableSigner),
+    Remote(RemoteSigner<UnixSocketTransport>),
+}
+
+impl ConfiguredSigner {
+    pub fn is_remote(&self) -> bool {
+        matches!(self, Self::Remote(_))
+    }
+}
+
+impl Signer for ConfiguredSigner {
+    fn key_id(&self) -> &KeyId {
+        match self {
+            Self::Unavailable(s) => s.key_id(),
+            Self::Remote(s) => s.key_id(),
+        }
+    }
+    fn sign(&self, payload: &ApprovedPayload) -> Result<Signature, SignRefusal> {
+        match self {
+            Self::Unavailable(s) => s.sign(payload),
+            Self::Remote(s) => s.sign(payload),
+        }
+    }
+}
+
 /// The deployment's public naming of populations: the keyed commitment of the
 /// sealed population, the same object disclosure uses.
 pub struct KeyedPopulations<'a> {
@@ -172,7 +216,7 @@ pub struct Deployment {
     pub populations: ProtectedPopulations<FsEpochStore>,
     pub ledger: GitBackend,
     pub roots: Keyring,
-    pub signer: UnavailableSigner,
+    pub signer: ConfiguredSigner,
     pub feed: DirFeed,
     pub feed_config: FeedConfig,
     pub commitment_key_id: KeyId,
@@ -236,13 +280,29 @@ impl Deployment {
         )
         .map_err(|_| CliReason::LedgerUnavailable)?;
         let roots = parse_roots(&read_bounded(&c.pinned_roots_path, 64 * 1024)?)?;
+        let signer = match c.signer_socket_path {
+            None => ConfiguredSigner::Unavailable(UnavailableSigner::new(c.signer_key_id)),
+            Some(path) => {
+                if !path.is_absolute() || c.signer_timeout_secs == 0 || c.signer_timeout_secs > 60 {
+                    return Err(CliReason::NotConfigured);
+                }
+                let mut transport = UnixSocketTransport::new(
+                    path,
+                    std::time::Duration::from_secs(c.signer_timeout_secs),
+                );
+                if let Some(uid) = c.signer_uid {
+                    transport = transport.expecting_signer_uid(uid);
+                }
+                ConfiguredSigner::Remote(RemoteSigner::new(c.signer_key_id, transport))
+            }
+        };
         Ok(Self {
             store,
             authority,
             populations,
             ledger,
             roots,
-            signer: UnavailableSigner::new(c.signer_key_id),
+            signer,
             feed: DirFeed::new(c.feed_dir),
             feed_config: FeedConfig {
                 feed_id: c.feed_id,
