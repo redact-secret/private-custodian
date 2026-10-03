@@ -15,6 +15,8 @@ use sha2::{Digest, Sha256};
 pub enum SignDomain {
     /// `PublicProjection` payloads (contracts).
     PublicProjection,
+    /// `PublicProjectionV2` payloads (destination bound, ADR 0119).
+    PublicProjectionV2,
     /// `RevocationEnvelope` payloads (contracts).
     RevocationEnvelope,
     LedgerAuditEvent,
@@ -27,8 +29,9 @@ pub enum SignDomain {
 }
 
 impl SignDomain {
-    pub const ALL: [SignDomain; 9] = [
+    pub const ALL: [SignDomain; 10] = [
         Self::PublicProjection,
+        Self::PublicProjectionV2,
         Self::RevocationEnvelope,
         Self::LedgerAuditEvent,
         Self::LedgerStoreCheckpoint,
@@ -43,6 +46,7 @@ impl SignDomain {
     pub fn tag(self) -> &'static str {
         match self {
             Self::PublicProjection => DomainTag::PublicProjection.as_str(),
+            Self::PublicProjectionV2 => DomainTag::PublicProjectionV2.as_str(),
             Self::RevocationEnvelope => DomainTag::RevocationEnvelope.as_str(),
             Self::LedgerAuditEvent => "private-custodian/v1/ledger/audit-event",
             Self::LedgerStoreCheckpoint => "private-custodian/v1/ledger/store-checkpoint",
@@ -63,6 +67,7 @@ impl SignDomain {
     pub fn signing_input(self, canonical: &[u8]) -> Vec<u8> {
         match self {
             Self::PublicProjection => signing_input(DomainTag::PublicProjection, canonical),
+            Self::PublicProjectionV2 => signing_input(DomainTag::PublicProjectionV2, canonical),
             Self::RevocationEnvelope => signing_input(DomainTag::RevocationEnvelope, canonical),
             other => {
                 let mut out = Vec::with_capacity(other.tag().len() + 1 + canonical.len());
@@ -119,6 +124,14 @@ mod tests {
         assert_eq!(
             SignDomain::PublicProjection.signing_input(c),
             signing_input(DomainTag::PublicProjection, c)
+        );
+        assert_eq!(
+            SignDomain::PublicProjectionV2.signing_input(c),
+            signing_input(DomainTag::PublicProjectionV2, c)
+        );
+        assert_ne!(
+            SignDomain::PublicProjectionV2.signing_input(c),
+            SignDomain::PublicProjection.signing_input(c)
         );
     }
 }
