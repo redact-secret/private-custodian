@@ -26,12 +26,12 @@ pub mod secure_fs;
 mod store;
 
 pub use clock::{Clock, ManualClock, SystemClock};
+pub use disclosure::{ChargeOutcome, DisclosureHistoryEntry, ReleaseCharge, ReleaseScope};
 pub use error::StoreError;
 pub use fault::{CrashOnce, FaultInjector, FaultOp, FaultPhase, FaultPoint, NoFault};
 pub use model::{
     AckOutcome, AttemptRecord, BudgetStatus, Checkpoint, Lease, OutboxEvent, RecoveryReport,
     ReserveCommand, ReserveOutcome, RetryCommand, Settlement, StartCommand, TransitionRecord,
 };
-pub use disclosure::{ChargeOutcome, DisclosureHistoryEntry, ReleaseCharge, ReleaseScope};
 pub use ops::budget_scope_key;
 pub use store::{SqliteStore, StoreConfig};

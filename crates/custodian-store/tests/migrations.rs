@@ -163,7 +163,10 @@ fn a_failing_migration_rolls_back_completely() {
     );
     // Still at the last real version, nothing half-applied, data intact.
     let store = open(&db);
-    assert_eq!(store.schema_version().unwrap(), migrations::latest_version());
+    assert_eq!(
+        store.schema_version().unwrap(),
+        migrations::latest_version()
+    );
     let raw = rusqlite::Connection::open(db.path()).unwrap();
     let n: i64 = raw
         .query_row(
