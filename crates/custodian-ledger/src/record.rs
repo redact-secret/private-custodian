@@ -8,9 +8,10 @@
 //! record that names the one it supersedes; nothing is ever edited.
 
 use custodian_contracts::canonical::{to_canonical_bytes, MAX_DOCUMENT_BYTES};
-use custodian_contracts::common::{ActivationRef, Signature};
+use custodian_contracts::common::{ActivationRef, ActorKind, PolicyKind, PolicyRef, Signature};
 use custodian_contracts::types::{
-    DocumentDigest, KeyId, ProjectionDigest, ProjectionId, ReceiptId, Timestamp, MAX_SAFE_INT,
+    ActorRef, ApprovalId, DestinationId, DocumentDigest, ExecutionId, KeyId, ProjectionDigest,
+    ProjectionId, ReceiptId, Timestamp, MAX_SAFE_INT,
 };
 use custodian_store::{Checkpoint, OutboxEvent};
 use serde::{Deserialize, Serialize};
@@ -238,6 +239,25 @@ pub struct PublicationBody {
     pub projection_digest: ProjectionDigest,
     /// Key that signed the published projection.
     pub signature_key_id: KeyId,
+    /// The publication decision (C8, ADR 0063): where, under which disclosure
+    /// policy, by whose release approval. Optional so records written before
+    /// C8 keep their bytes and ids; every C8 release writes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision: Option<PublicationDecision>,
+}
+
+/// Who authorized releasing this projection, to which destination, under
+/// which disclosure policy. Written to the ledger before any signed bytes
+/// leave the private boundary.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublicationDecision {
+    pub destination: DestinationId,
+    pub disclosure_policy: PolicyRef,
+    pub execution_id: ExecutionId,
+    pub approval_id: ApprovalId,
+    pub approver: ActorRef,
+    pub approver_kind: ActorKind,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -472,7 +492,14 @@ impl LedgerRecord {
                 self.issued_at.secs().to_string(),
             ],
             RecordBody::Policy(b) => vec![b.document_digest.as_str().to_owned()],
-            RecordBody::Publication(b) => vec![b.projection_digest.as_str().to_owned()],
+            RecordBody::Publication(b) => match &b.decision {
+                None => vec![b.projection_digest.as_str().to_owned()],
+                Some(d) => vec![
+                    b.projection_digest.as_str().to_owned(),
+                    d.destination.as_str().to_owned(),
+                    d.approval_id.as_str().to_owned(),
+                ],
+            },
             RecordBody::Reconciliation(b) => vec![
                 self.issued_at.secs().to_string(),
                 format!(
@@ -543,7 +570,16 @@ impl LedgerRecord {
                     return Err(RecordError::FieldRejected);
                 }
             }
-            RecordBody::Policy(_) | RecordBody::Publication(_) => {}
+            RecordBody::Policy(_) => {}
+            RecordBody::Publication(b) => {
+                if let Some(d) = &b.decision {
+                    if d.disclosure_policy.kind != PolicyKind::Disclosure
+                        || d.approver_kind == ActorKind::Agent
+                    {
+                        return Err(RecordError::Inconsistent);
+                    }
+                }
+            }
             RecordBody::Reconciliation(b) => {
                 let all = [
                     b.store_events,

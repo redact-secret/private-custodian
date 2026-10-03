@@ -11,8 +11,9 @@ use custodian_store::migrations::{self, Migration, APPLICATION_ID, MIGRATIONS};
 use custodian_store::secure_fs::mode_of;
 use custodian_store::{SqliteStore, StoreConfig, StoreError};
 
+/// A synthetic migration after the last real one (the real list has two).
 const V2: Migration = Migration {
-    version: 2,
+    version: 3,
     name: "synthetic-add-note",
     sql: "CREATE TABLE synthetic_note (id INTEGER PRIMARY KEY, body TEXT NOT NULL) STRICT;",
 };
@@ -66,7 +67,7 @@ fn reopening_is_a_no_op_and_keeps_state() {
         .unwrap()
         .query_row("SELECT COUNT(*) FROM schema_migrations", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(n, 1);
+    assert_eq!(usize::try_from(n).unwrap(), MIGRATIONS.len());
 }
 
 #[test]
@@ -79,7 +80,7 @@ fn forward_upgrade_applies_only_pending_migrations_and_keeps_data() {
         reserve(&store, &fx).unwrap();
     }
     let store = SqliteStore::open_with(db.path(), StoreConfig::default(), &v1_and_v2()).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 2);
+    assert_eq!(store.schema_version().unwrap(), 3);
     assert_eq!(status(&store, &fx).held, 1);
     store.integrity_check().unwrap();
 }
@@ -148,7 +149,7 @@ fn a_failing_migration_rolls_back_completely() {
         provision(&store, &fx, 1);
     }
     let bad = Migration {
-        version: 2,
+        version: 3,
         name: "synthetic-bad",
         sql: "CREATE TABLE synthetic_half (id INTEGER); SELECT * FROM table_that_does_not_exist;",
     };
@@ -160,9 +161,12 @@ fn a_failing_migration_rolls_back_completely() {
             .unwrap(),
         StoreError::MigrationFailed
     );
-    // Still at v1, nothing half-applied, data intact.
+    // Still at the last real version, nothing half-applied, data intact.
     let store = open(&db);
-    assert_eq!(store.schema_version().unwrap(), 1);
+    assert_eq!(
+        store.schema_version().unwrap(),
+        migrations::latest_version()
+    );
     let raw = rusqlite::Connection::open(db.path()).unwrap();
     let n: i64 = raw
         .query_row(

@@ -52,6 +52,9 @@ pub enum StoreError {
     /// A retry was refused: attempts exhausted or the prior attempt is not
     /// in a retryable state.
     RetryRefused,
+    /// An append raced a concurrent writer (expected sequence changed).
+    /// Nothing was written; re-read and decide again.
+    Conflict,
     /// A write violated a database constraint (budget, append-only, ...).
     Constraint,
     /// An integrity invariant check failed; names the failed check.
@@ -102,6 +105,7 @@ impl fmt::Display for StoreError {
             Self::LeaseLost => "store_lease_lost",
             Self::InvalidTransition => "store_invalid_transition",
             Self::RetryRefused => "store_retry_refused",
+            Self::Conflict => "store_conflict",
             Self::Constraint => "store_constraint",
             Self::Invariant(_) => "store_invariant",
             Self::InvalidInput => "store_invalid_input",

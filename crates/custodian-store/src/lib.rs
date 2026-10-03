@@ -13,6 +13,7 @@
 #![forbid(unsafe_code)]
 
 pub mod clock;
+mod disclosure;
 pub mod error;
 pub mod fault;
 mod integrity;
@@ -25,6 +26,7 @@ pub mod secure_fs;
 mod store;
 
 pub use clock::{Clock, ManualClock, SystemClock};
+pub use disclosure::{ChargeOutcome, DisclosureHistoryEntry, ReleaseCharge, ReleaseScope};
 pub use error::StoreError;
 pub use fault::{CrashOnce, FaultInjector, FaultOp, FaultPhase, FaultPoint, NoFault};
 pub use model::{

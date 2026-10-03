@@ -32,11 +32,18 @@ impl Migration {
 }
 
 /// The migrations this binary knows, in order.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial",
-    sql: include_str!("../migrations/0001_initial.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial",
+        sql: include_str!("../migrations/0001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "disclosure",
+        sql: include_str!("../migrations/0002_disclosure.sql"),
+    },
+];
 
 /// Highest schema version this binary knows.
 pub fn latest_version() -> u32 {

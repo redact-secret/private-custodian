@@ -124,6 +124,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "custodian-disclosure"
+version = "0.0.0"
+dependencies = [
+ "custodian-contracts",
+ "custodian-core",
+ "custodian-intake",
+ "custodian-ledger",
+ "custodian-store",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "custodian-intake"
 version = "0.0.0"
 dependencies = [

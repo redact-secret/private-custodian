@@ -1,0 +1,23 @@
+[package]
+name = "custodian-disclosure"
+description = "Aggregate disclosure, small-cell and composition suppression, release budgets and publication approvals (C8). Synthetic data only."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+# No new third-party crate (ADR 0060): serde, serde_json and sha2 are the exact
+# versions the workspace already pins. The Check rendering reuses
+# custodian-intake so a Check can only carry a fixed reason code.
+[dependencies]
+custodian-core = { path = "../custodian-core" }
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-store = { path = "../custodian-store" }
+custodian-ledger = { path = "../custodian-ledger" }
+custodian-intake = { path = "../custodian-intake" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"

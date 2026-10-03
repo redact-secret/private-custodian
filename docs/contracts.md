@@ -142,6 +142,6 @@ attempts record consumption and never recompute it (ADR 0003).
 | Types, canonical encoding, digests, schemas, checks, golden vectors, negative tests | yes | yes | no |
 | Intake, authentication, persistence of these documents | yes (C3, C4) | no | no |
 | Signing, key lifecycle, ledger export | yes (C7) | no | no |
-| Disclosure parameters, suppression, release approval workflow | yes (C8) | no | no |
+| Disclosure policy, suppression, budgets, release approval workflow | yes (C8) | yes (docs/disclosure.md) | no |
 | Feed publication and epoch contamination records | yes (C9) | no | no |
 | Consumer validation and legacy import | yes (C11) | no | no |

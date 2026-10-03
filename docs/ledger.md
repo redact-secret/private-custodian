@@ -38,7 +38,7 @@ quarantine/<record_id>/<sha256>.json   bytes that conflicted with an existing re
 | `store_checkpoint` | `seq`, `chain` |
 | `registry_checkpoint` | `head`, `event_count` |
 | `policy` | `activation` (`ActivationRef`), `document_digest` |
-| `publication` | `projection_id`, `receipt_id`, `projection_digest`, `signature_key_id` |
+| `publication` | `projection_id`, `receipt_id`, `projection_digest`, `signature_key_id`, optional `decision` (C8, ADR 0063: `destination`, `disclosure_policy`, `execution_id`, `approval_id`, `approver`, `approver_kind`) |
 | `reconciliation` | `outcome`, `store_events`, `ledger_records`, `missing_in_ledger`, `unacked_in_ledger`, `conflicting` |
 | `key_event` | `key_id`, `action` (`published`, `retired`, `revoked`), `public_key`, `purposes`, `effective_at` |
 

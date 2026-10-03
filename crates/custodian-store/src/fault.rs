@@ -25,10 +25,12 @@ pub enum FaultOp {
     Recover,
     OutboxAck,
     Reconcile,
+    ChargeRelease,
+    AppendDisclosureHistory,
 }
 
 impl FaultOp {
-    pub const ALL: [FaultOp; 13] = [
+    pub const ALL: [FaultOp; 15] = [
         Self::ProvisionBudget,
         Self::Reserve,
         Self::Retry,
@@ -42,6 +44,8 @@ impl FaultOp {
         Self::Recover,
         Self::OutboxAck,
         Self::Reconcile,
+        Self::ChargeRelease,
+        Self::AppendDisclosureHistory,
     ];
 }
 

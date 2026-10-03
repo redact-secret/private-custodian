@@ -29,6 +29,10 @@ ADR.
 | [0052](0052-ledger-backend-port-and-git-writer.md) | Ledger backend port and conflict-aware Git writer | Accepted (design); implemented, not deployed |
 | [0053](0053-outbox-exporter-acknowledgement-and-reconciliation.md) | Outbox exporter, acknowledgement protocol and reconciliation | Accepted (design); implemented, not deployed |
 | [0054](0054-external-checkpoints-startup-check-and-independent-verification.md) | External checkpoints, startup check and independent verification | Accepted (design); implemented, not deployed |
+| [0060](0060-disclosure-service-flow-and-type-level-separation.md) | Disclosure service flow, crate boundary and type-level separation | Accepted (design); implemented, not deployed |
+| [0061](0061-disclosure-policy-and-suppression-algorithm.md) | Disclosure policy document and suppression algorithm | Accepted (design); implemented, not deployed |
+| [0062](0062-release-query-budgets-and-composition-accounting.md) | Release and query budgets and composition accounting | Accepted (design); implemented, not deployed |
+| [0063](0063-publication-decision-approval-and-failure-codes.md) | Publication decision, release approval, destination binding and failure codes | Accepted (design); implemented, not deployed |
 
 Accepted (design) means the decision is frozen for downstream issues (C2 to C12). It does not mean any of it
 is implemented or deployed. See each ADR's status table.
@@ -42,5 +46,7 @@ disclosure policy parameters (C8).
 Decided by C4 (ADR 0020 to 0022): the SQLite driver and pins, connection and file settings, the written budget accounting, lease and recovery policy, migrations, the audit outbox and restore protection. Details: [docs/state-store.md](../state-store.md). Implemented in `crates/custodian-store` with synthetic tests; not deployed.
 
 Decided by C7 (ADR 0050 to 0054): Ed25519 receipts with domain separation and isolated signing, key lifecycle, the ledger record layout and supersession, the conflict-aware ledger writer, the outbox exporter and reconciliation, external checkpoints and the startup rollback check. Details: [docs/ledger.md](../ledger.md). Implemented in `crates/custodian-ledger` with synthetic tests and test-generated keys; the private-ledger repository, signer process and key provider are not provisioned.
+
+Decided by C8 (ADR 0060 to 0063): the disclosure service flow and type-level separation of internal and public records, the versioned disclosure policy and the suppression algorithm with its stated limits (no perturbation), release and query budgets with composition accounting (store migration 0002), and the publication decision, release approval, destination binding and fixed failure codes. Details: [docs/disclosure.md](../disclosure.md). Implemented in `crates/custodian-disclosure` with synthetic tests; no policy is activated, no budget provisioned and nothing deployed.
 
 Decided by C6 (ADR 0040 to 0042): the `Sandbox` interface and Linux backend (bubblewrap and `prlimit`, no new Rust dependency), the fail-closed refusing backend, the startup isolation self-check and verification record, supported deployment isolation and the test skip policy, the dispatch order (identity checks before protected input, write-ahead exposure), immutable staging, and worker protocol v1 with its outcome mapping. Details: [docs/worker-isolation.md](../worker-isolation.md). Implemented in `crates/custodian-worker` with synthetic tests; not deployed.
