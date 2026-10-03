@@ -49,6 +49,7 @@ ADR.
 | [0101](0101-restore-recovery-window-and-signing-key-operating-constraints.md) | Restore recovery window and signing-key operating constraints | Accepted (operating rules, deferred designs); behavior pinned by tests |
 | [0102](0102-deferred-destination-binding-and-legacy-consumption-import.md) | Deferred changes: destination binding in the public projection and legacy consumption import | Accepted as designs; not implemented |
 | [0103](0103-solo-maintainer-operating-decisions-license-reporting-and-publication.md) | Solo-maintainer operating decisions: license, reporting route, requester and approver, clean-snapshot publication | Accepted |
+| [0110](0110-serverless-verification-with-github-actions.md) | Server-less verification with GitHub Actions: verifier CLI, reusable workflow, locked build, synthetic conformance set | Accepted; implemented on synthetic data, not deployed |
 
 Accepted (design) means the decision is frozen for downstream issues (C2 to C12). It does not mean any of it
 is implemented or deployed. See each ADR's status table.
