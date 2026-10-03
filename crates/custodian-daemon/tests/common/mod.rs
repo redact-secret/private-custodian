@@ -19,6 +19,8 @@
 #[path = "../../../custodian-cli/tests/c12/mod.rs"]
 pub mod c12;
 
+pub mod stack;
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

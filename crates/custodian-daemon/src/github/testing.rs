@@ -42,6 +42,7 @@ struct State {
     /// Token expiry returned, as RFC 3339.
     token_expires_at: String,
     token_value: String,
+    permissions: serde_json::Value,
 }
 
 /// A scripted GitHub. Cloning shares the state.
@@ -62,6 +63,7 @@ impl FakeGithub {
                 offline: false,
                 token_expires_at: "2099-01-01T00:00:00Z".to_owned(),
                 token_value: "ghs_SYNTHETICinstallationTOKEN0000000000".to_owned(),
+                permissions: serde_json::json!({"metadata": "read", "pull_requests": "read", "checks": "write"}),
             })),
         }
     }
@@ -84,6 +86,10 @@ impl FakeGithub {
     }
     pub fn set_full_name(&self, name: &str) {
         self.with(|s| s.full_name = name.to_owned());
+    }
+    /// The permissions the fake claims the minted token has.
+    pub fn set_permissions(&self, permissions: serde_json::Value) {
+        self.with(|s| s.permissions = permissions);
     }
     pub fn token_value(&self) -> String {
         self.with(|s| s.token_value.clone())
@@ -118,13 +124,15 @@ impl FakeGithub {
             };
             let p = r.path.as_str();
             Ok(match (r.method, p) {
-                (Method::Post, p) if p.starts_with("/app/installations/") && p.ends_with("/access_tokens") => {
+                (Method::Post, p)
+                    if p.starts_with("/app/installations/") && p.ends_with("/access_tokens") =>
+                {
                     json(
                         201,
                         serde_json::json!({
                             "token": s.token_value,
                             "expires_at": s.token_expires_at,
-                            "permissions": {"metadata": "read", "pull_requests": "read", "checks": "write"},
+                            "permissions": s.permissions,
                         }),
                     )
                 }

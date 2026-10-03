@@ -87,6 +87,9 @@ impl Task {
     }
 }
 
+/// How soon a failed startup check is tried again.
+pub const DEGRADED_RETRY_SECS: u64 = 2;
+
 /// The fixed word a task ended with: `ok` or a refusal code.
 pub type TaskResult = Result<(), &'static str>;
 
@@ -142,18 +145,29 @@ impl<'a, S: EpochBlobStore> Scheduler<'a, S> {
     }
 
     /// Run every task whose interval has elapsed (all of them on the first
-    /// call). Returns what ran.
-    pub fn tick(&mut self, now: u64) -> Vec<(Task, TaskResult)> {
+    /// call). `sched_now` is the schedule's own monotonic seconds (intervals
+    /// are measured on it, so a wall-clock jump neither skips nor repeats a
+    /// pass); `now` is the control plane's time, which the tasks use for
+    /// their records. While the daemon is degraded the startup check is
+    /// retried every [`DEGRADED_RETRY_SECS`] whatever its interval, so a
+    /// transient outage clears without waiting for the next full interval.
+    /// Returns what ran.
+    pub fn tick(&mut self, sched_now: u64, now: u64) -> Vec<(Task, TaskResult)> {
         let mut ran = Vec::new();
         for t in Task::ALL {
+            let interval = if t == Task::StartupCheck && self.degraded.is_set() {
+                t.interval(&self.cfg).min(DEGRADED_RETRY_SECS)
+            } else {
+                t.interval(&self.cfg)
+            };
             let due = self
                 .last
                 .get(&t)
-                .is_none_or(|l| now.saturating_sub(*l) >= t.interval(&self.cfg));
+                .is_none_or(|l| sched_now.saturating_sub(*l) >= interval);
             if !due {
                 continue;
             }
-            self.last.insert(t, now);
+            self.last.insert(t, sched_now);
             let r = self.run(t, now);
             self.log.event(
                 "scheduler",

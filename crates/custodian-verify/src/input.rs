@@ -133,7 +133,9 @@ struct KeyRow {
     key_id: String,
     /// 64 lowercase hex characters: the Ed25519 public key.
     public_key: String,
-    /// Any of `projection` and `revocation`. No ledger purpose is accepted.
+    /// Any of `projection` (major 1), `projection_v2` (major 2, the
+    /// destination-bound projection the daemon releases, ADR 0119) and
+    /// `revocation`. No ledger purpose is accepted.
     purposes: Vec<String>,
     valid_from: u64,
     #[serde(default)]
@@ -164,6 +166,7 @@ fn parse_keys(bytes: &[u8]) -> Result<Keyring, InputError> {
         for p in &row.purposes {
             purposes.push(match p.as_str() {
                 "projection" => SignDomain::PublicProjection,
+                "projection_v2" => SignDomain::PublicProjectionV2,
                 "revocation" => SignDomain::RevocationEnvelope,
                 _ => return Err(InputError::KeysInvalid),
             });

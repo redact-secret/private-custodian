@@ -310,13 +310,14 @@ pub fn run<S: EpochBlobStore>(
     );
 
     let mut report = ExitReport::default();
+    let started = std::time::Instant::now();
     let outcome = std::thread::scope(|scope| {
         for c in &consumers {
             scope.spawn(move || c.run(shutdown));
         }
         let mut result = Ok(());
         while !shutdown.is_requested() {
-            scheduler.tick(parts.clock.now());
+            scheduler.tick(started.elapsed().as_secs(), parts.clock.now());
             if !scheduler.degraded() {
                 match pipeline.pass(shutdown) {
                     Ok(_) => {}
