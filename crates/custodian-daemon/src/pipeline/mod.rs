@@ -94,6 +94,7 @@ use custodian_worker::result::ValidatedResult;
 use custodian_worker::sandbox::CancelToken;
 use custodian_worker::{DispatchJob, Dispatcher, ResultSink};
 
+use crate::clock::ClockPin;
 use crate::config::AttestationConfig;
 use crate::log::EventLog;
 use crate::shutdown::Shutdown;
@@ -216,6 +217,9 @@ pub struct Pipeline<'a, S: EpochBlobStore> {
     pub settings: PipelineSettings,
     pub log: &'a dyn EventLog,
     pub fault: &'a dyn PipelineFault,
+    /// The handle that pins `parts.clock` (a `PinnableClock`) during a
+    /// prepare replay.
+    pub pin: &'a ClockPin,
 }
 
 // ---- the result sink ------------------------------------------------------------
@@ -810,6 +814,9 @@ impl<S: EpochBlobStore> Pipeline<'_, S> {
         };
         let at = Timestamp::new(prepared_at)
             .map_err(|_| PipelineError::Store(StoreError::InvalidInput))?;
+        // Hold the control plane's clock at that instant for the prepare
+        // only (see `clock`): the shared eligibility reads time from it.
+        let pin_guard = self.pin.pin(prepared_at);
         let release_key =
             IdempotencyKey::parse(&derived_id("idk_", "release-key", run.attempt.as_str()))
                 .map_err(|_| PipelineError::Store(StoreError::InvalidInput))?;
@@ -860,6 +867,7 @@ impl<S: EpochBlobStore> Pipeline<'_, S> {
                 }
             }
         };
+        drop(pin_guard);
         self.crash(PipelinePoint::AfterPrepare)?;
         let digest = prepared.digest().as_str().to_owned();
         if let Some(m) = &run.prepared {

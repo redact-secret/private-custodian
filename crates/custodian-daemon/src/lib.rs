@@ -44,6 +44,7 @@
 #[cfg(not(unix))]
 compile_error!("custodian-daemon relies on POSIX file modes, signals and process semantics");
 
+pub mod clock;
 pub mod config;
 pub mod consumer;
 pub mod github;

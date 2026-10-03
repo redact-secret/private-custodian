@@ -54,6 +54,7 @@ use custodian_worker::artifacts::ArtifactAllowlist;
 use custodian_worker::bwrap::BubblewrapSandbox;
 use custodian_worker::{run_self_check, Dispatcher, DispatcherConfig};
 
+use crate::clock::{ClockPin, PinnableClock};
 use crate::config::{DaemonConfig, Sandbox, WorkerConfig};
 use crate::consumer::QueueConsumer;
 use crate::http::{HttpServer, IntakeHandler};
@@ -181,6 +182,12 @@ pub fn run<S: EpochBlobStore>(
     } = inp;
     let binding = policy_binding(&policy, &config)?;
 
+    // The control plane's clock can be held at one instant while a prepared
+    // release is replayed (`clock`); everything else sees the real time.
+    let pin = ClockPin::new();
+    let mut parts = parts;
+    parts.clock = Arc::new(PinnableClock::new(parts.clock.clone(), pin.clone()));
+
     // 1. The startup sequence, exactly as the operator tooling runs it.
     let limits = parts.authority.policy().limits();
     let startup = StartupConfig {
@@ -293,6 +300,7 @@ pub fn run<S: EpochBlobStore>(
         },
         log: log.as_ref(),
         fault: fault.as_ref(),
+        pin: &pin,
     };
     let mut scheduler = Scheduler::new(
         parts.clone(),
