@@ -5,6 +5,7 @@ members = [
     "crates/custodian-contracts",
     "crates/custodian-service",
     "crates/custodian-corpus",
+    "crates/custodian-store",
 ]
 
 [workspace.package]
