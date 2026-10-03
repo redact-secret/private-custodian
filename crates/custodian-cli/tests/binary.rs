@@ -313,3 +313,15 @@ fn credential_digest_prints_only_the_digest() {
     );
     assert!(!text.contains("synthetic-credential"));
 }
+
+#[test]
+fn a_deployment_always_opens_its_store_with_the_dispatch_gate_enforced() {
+    // R-2 (ADR 0116): the shipped open path cannot run without the gate.
+    let d = Deploy::new("gate");
+    let bytes = std::fs::read(&d.config).unwrap();
+    let dep = custodian_cli::deploy::Deployment::open(&bytes).unwrap();
+    assert_eq!(
+        dep.store.export_gate(),
+        custodian_store::ExportGate::Enforced { max_unexported: 0 }
+    );
+}

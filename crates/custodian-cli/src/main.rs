@@ -11,7 +11,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use custodian_cli::command::{build_command, parse_args, MAX_DOCUMENT_BYTES};
+use custodian_cli::command::{build_command, parse_args, MAX_READ_BYTES};
 use custodian_cli::deploy::Deployment;
 use custodian_cli::output::Output;
 use custodian_cli::{credential_digest, CliReason, Control};
@@ -74,7 +74,7 @@ fn main() -> std::process::ExitCode {
         Ok(p) => p,
         Err(e) => return finish(&Output::refused("usage", e)),
     };
-    let read_doc = |p: &str| read_file(p, MAX_DOCUMENT_BYTES);
+    let read_doc = |p: &str| read_file(p, MAX_READ_BYTES);
     let cmd = match build_command(&parsed, &read_doc) {
         Ok(c) => c,
         Err(e) => return finish(&Output::refused("usage", e)),

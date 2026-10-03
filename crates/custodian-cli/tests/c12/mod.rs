@@ -460,6 +460,29 @@ impl Pipe {
         )
     }
 
+    /// Dispatch with the R-2 export barrier installed (ADR 0116): `barrier`
+    /// is the deployment's export pass, run before `start` and before the
+    /// exposure record, and must report whether it drained.
+    pub fn dispatch_gated(
+        &self,
+        req: &EvaluationRequest,
+        attempt: &RunId,
+        barrier: impl Fn() -> bool + Send + Sync,
+    ) -> WResult<DispatchReport> {
+        let ledger = self
+            .run_ledger(&self.w.rw.store, attempt)
+            .with_export_barrier(barrier);
+        self.dispatcher().run_attempt(
+            &DispatchJob {
+                plan: &req.plan,
+                sources: &self.arts.sources,
+            },
+            &ledger,
+            &self.corpus(),
+            &CancelToken::new(),
+        )
+    }
+
     /// Assemble the internal records for a completed attempt (see `Assembled`).
     pub fn assemble(
         &self,

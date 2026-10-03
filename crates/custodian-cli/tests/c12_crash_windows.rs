@@ -121,6 +121,18 @@ const COVERED_ELSEWHERE: &[(FaultOp, &str)] = &[
         FaultOp::CancelSubmission,
         "c12_crash_intake.rs::installation_removal_and_submission_cancel_crashes_converge_on_repeat",
     ),
+    (
+        FaultOp::ApplyLegacyImport,
+        "custodian-store/tests/legacy_import.rs::a_crash_at_either_commit_boundary_leaves_nothing_or_everything",
+    ),
+    (
+        FaultOp::RetentionExpire,
+        "custodian-store/tests/retention.rs::a_crash_during_a_pass_leaves_a_consistent_store_and_the_next_pass_converges",
+    ),
+    (
+        FaultOp::RetentionPurge,
+        "custodian-store/tests/retention.rs::a_crash_during_a_pass_leaves_a_consistent_store_and_the_next_pass_converges",
+    ),
 ];
 
 // ---- the main pipeline script ------------------------------------------------

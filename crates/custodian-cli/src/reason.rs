@@ -101,6 +101,11 @@ pub enum CliReason {
     RotationInvalid,
     StoreBehindLedger,
     SubmissionLimit,
+    /// The legacy import was refused whole (a fixed refusal word accompanies
+    /// it) and recorded in the audit outbox; nothing was applied.
+    ImportRefused,
+    /// The handoff record still has blockers (ADR 0092 gates).
+    HandoffNotReady,
     // -- lookup
     NotFound,
     // -- availability
@@ -124,7 +129,7 @@ pub enum CliReason {
 }
 
 impl CliReason {
-    pub const ALL: [CliReason; 42] = [
+    pub const ALL: [CliReason; 44] = [
         Self::UsageError,
         Self::InvalidDocument,
         Self::DocumentTooLarge,
@@ -151,6 +156,8 @@ impl CliReason {
         Self::RotationInvalid,
         Self::StoreBehindLedger,
         Self::SubmissionLimit,
+        Self::ImportRefused,
+        Self::HandoffNotReady,
         Self::NotFound,
         Self::StoreUnavailable,
         Self::LedgerUnavailable,
@@ -197,6 +204,8 @@ impl CliReason {
             Self::RotationInvalid => "rotation_invalid",
             Self::StoreBehindLedger => "store_behind_ledger",
             Self::SubmissionLimit => "submission_limit",
+            Self::ImportRefused => "import_refused",
+            Self::HandoffNotReady => "handoff_not_ready",
             Self::NotFound => "not_found",
             Self::StoreUnavailable => "store_unavailable",
             Self::LedgerUnavailable => "ledger_unavailable",
@@ -230,7 +239,9 @@ impl CliReason {
             ConfirmationMismatch | AlreadyDecided | IdempotencyConflict | BudgetExhausted
             | StalePolicy | PolicyNotCurrent | ApprovalExpired | ApprovalNotBound
             | EpochBlocked | NotClearable | InvalidChange | RotationInvalid | StoreBehindLedger
-            | SubmissionLimit | PendingObligations => ExitClass::Refused,
+            | SubmissionLimit | PendingObligations | ImportRefused | HandoffNotReady => {
+                ExitClass::Refused
+            }
             NotFound => ExitClass::NotFound,
             StoreUnavailable
             | LedgerUnavailable

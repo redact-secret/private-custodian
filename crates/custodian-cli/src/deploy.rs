@@ -27,7 +27,7 @@ use custodian_ledger::{
 };
 use custodian_lifecycle::{DirFeed, FeedConfig, NoFault, PublicPopulations};
 use custodian_signer::UnixSocketTransport;
-use custodian_store::{SqliteStore, SystemClock};
+use custodian_store::{SqliteStore, StoreConfig, SystemClock};
 use serde::Deserialize;
 
 use crate::authority::PolicyAuthority;
@@ -269,7 +269,9 @@ impl Deployment {
         }
         let populations =
             ProtectedPopulations::open_fs(&c.corpus_root).map_err(|_| CliReason::NotConfigured)?;
-        let store = SqliteStore::open(&c.store_path).map_err(CliReason::from)?;
+        // The R-2 dispatch gate is always enforced for a deployment (ADR 0116).
+        let store = SqliteStore::open_with_config(&c.store_path, StoreConfig::enforced())
+            .map_err(CliReason::from)?;
         let ledger = GitBackend::open(
             &c.ledger_dir,
             GitConfig {

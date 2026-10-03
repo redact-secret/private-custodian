@@ -77,6 +77,8 @@ pub enum Permission {
     Lifecycle(OperatorAction),
     PolicyImport,
     PolicyValidate,
+    /// Write legacy consumption into the budget store (HG-3).
+    LegacyImport,
 }
 
 #[derive(Debug, Deserialize)]
@@ -311,7 +313,7 @@ impl Principal {
         );
         let human_only = matches!(
             permission,
-            RequestApprove | RequestCancelAny | Repair | Lifecycle(_) | PolicyImport
+            RequestApprove | RequestCancelAny | Repair | Lifecycle(_) | PolicyImport | LegacyImport
         );
         match self.kind {
             ActorKind::Agent if !agent_ok => return Err(CliReason::AgentNotPermitted),
@@ -327,7 +329,9 @@ impl Principal {
                 }
                 return Err(CliReason::Forbidden);
             }
-            RequestCancelAny | Repair | Lifecycle(_) | PolicyImport => Role::Operator,
+            RequestCancelAny | Repair | Lifecycle(_) | PolicyImport | LegacyImport => {
+                Role::Operator
+            }
             Verify | Diagnose => {
                 if self.roles.contains(&Role::Auditor) || self.roles.contains(&Role::Operator) {
                     return Ok(());

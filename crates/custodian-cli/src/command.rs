@@ -14,18 +14,25 @@
 //! * `lifecycle` restricted: `report`, `clear`, `retire`, `rotate`
 //! * `feed`      restricted: `record-revocation`, `publish`
 //! * `policy`    `validate` (read-only), `import-activation` (restricted)
+//! * `legacy`    restricted: `apply` (HG-3, ADR 0115 and 0118), exact confirmations
 //! * `repair`    operational repair, separate from evaluation, every command
 //!   needs exact-object confirmation flags: `recover`, `registry-sweep`,
-//!   `export`, `ledger-reconcile`, `feed-deliver`, `clear-reconcile`
+//!   `export`, `ledger-reconcile`, `feed-deliver`, `clear-reconcile`, `retention`
 
 use std::collections::BTreeMap;
 
-use custodian_contracts::types::{CandidateDigest, EpochId, IdempotencyKey, PlanDigest, RequestId};
+use custodian_contracts::types::{
+    CandidateDigest, DocumentDigest, EpochId, IdempotencyKey, PlanDigest, RequestId,
+};
 
 use crate::reason::CliReason;
 
-/// Largest document the CLI reads.
+/// Largest document the CLI reads for ordinary commands.
 pub const MAX_DOCUMENT_BYTES: usize = 64 * 1024;
+/// Largest file the CLI reads at all: the reviewed legacy extract may be up to
+/// the importer's own bound (1 MiB). Every other document is still held to
+/// [`MAX_DOCUMENT_BYTES`] by the grammar.
+pub const MAX_READ_BYTES: usize = 1_048_576;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VerifyTarget {
@@ -86,6 +93,18 @@ pub enum RepairCommand {
         confirm_store_id: String,
         /// The newest outbox sequence the operator reviewed against the ledger.
         confirm_checkpoint_seq: u64,
+    },
+    /// One retention pass over the intake queue, delivery claims and
+    /// submissions (HG-4, ADR 0117). Every age is an explicit operator
+    /// decision: there is no default, and the store refuses ages below its
+    /// hard floors.
+    Retention {
+        confirm_store_id: String,
+        queue_done_min_age_secs: u64,
+        claim_min_age_secs: u64,
+        decided_submission_min_age_secs: u64,
+        pending_submission_max_age_secs: u64,
+        batch_limit: u32,
     },
 }
 
@@ -151,6 +170,16 @@ pub enum Command {
         confirm_activation_id: String,
         confirm_sequence: u64,
     },
+    /// Write reviewed legacy consumption into the runtime budget store
+    /// (HG-3). Human operator only, exact confirmation of both digests.
+    LegacyApply {
+        /// The reviewed `private-custodian.legacy-extract/1` document.
+        extract: Vec<u8>,
+        /// The canonical `private-custodian.legacy-handoff/1` record.
+        handoff: Vec<u8>,
+        confirm_handoff_digest: DocumentDigest,
+        confirm_report_digest: DocumentDigest,
+    },
     Repair(RepairCommand),
 }
 
@@ -173,6 +202,8 @@ impl Command {
             Self::FeedPublish => "feed.publish",
             Self::PolicyValidate { .. } => "policy.validate",
             Self::PolicyImportActivation { .. } => "policy.import-activation",
+            Self::LegacyApply { .. } => "legacy.apply",
+            Self::Repair(RepairCommand::Retention { .. }) => "repair.retention",
             Self::Repair(RepairCommand::Recover { .. }) => "repair.recover",
             Self::Repair(RepairCommand::RegistrySweep { .. }) => "repair.registry-sweep",
             Self::Repair(RepairCommand::Export { .. }) => "repair.export",
@@ -472,6 +503,33 @@ pub fn build_command(
                     .map_err(|_| CliReason::UsageError)?,
             })
         }
+        ("legacy", "apply") => {
+            only(
+                p,
+                &[
+                    "extract",
+                    "handoff",
+                    "confirm-handoff-digest",
+                    "confirm-report-digest",
+                ],
+            )?;
+            let big = |name: &str, max: usize| -> Result<Vec<u8>, CliReason> {
+                let bytes = read(require(p, name)?)?;
+                if bytes.len() > max {
+                    return Err(CliReason::DocumentTooLarge);
+                }
+                Ok(bytes)
+            };
+            let digest = |name: &str| -> Result<DocumentDigest, CliReason> {
+                DocumentDigest::parse(confirm(p, name)?).map_err(|_| CliReason::UsageError)
+            };
+            Ok(Command::LegacyApply {
+                extract: big("extract", MAX_READ_BYTES)?,
+                handoff: big("handoff", MAX_DOCUMENT_BYTES)?,
+                confirm_handoff_digest: digest("confirm-handoff-digest")?,
+                confirm_report_digest: digest("confirm-report-digest")?,
+            })
+        }
         ("repair", c) => {
             let store_id = |p: &Parsed| confirm(p, "confirm-store-id").map(str::to_owned);
             match c {
@@ -503,6 +561,37 @@ pub fn build_command(
                     only(p, &["confirm-feed-id"])?;
                     Ok(Command::Repair(RepairCommand::FeedDeliver {
                         confirm_feed_id: confirm(p, "confirm-feed-id")?.to_owned(),
+                    }))
+                }
+                "retention" => {
+                    only(
+                        p,
+                        &[
+                            "confirm-store-id",
+                            "queue-done-min-age-secs",
+                            "claim-min-age-secs",
+                            "decided-submission-min-age-secs",
+                            "pending-submission-max-age-secs",
+                            "batch-limit",
+                        ],
+                    )?;
+                    let batch_limit = match p.flag("batch-limit") {
+                        None => 500,
+                        Some(v) => v.parse::<u32>().map_err(|_| CliReason::UsageError)?,
+                    };
+                    Ok(Command::Repair(RepairCommand::Retention {
+                        confirm_store_id: store_id(p)?,
+                        queue_done_min_age_secs: number(p, "queue-done-min-age-secs")?,
+                        claim_min_age_secs: number(p, "claim-min-age-secs")?,
+                        decided_submission_min_age_secs: number(
+                            p,
+                            "decided-submission-min-age-secs",
+                        )?,
+                        pending_submission_max_age_secs: number(
+                            p,
+                            "pending-submission-max-age-secs",
+                        )?,
+                        batch_limit,
                     }))
                 }
                 "clear-reconcile" => {

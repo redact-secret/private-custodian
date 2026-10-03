@@ -37,12 +37,12 @@ custodian-signer = { path = "../custodian-signer" }
 custodian-lifecycle = { path = "../custodian-lifecycle" }
 custodian-disclosure = { path = "../custodian-disclosure" }
 custodian-worker = { path = "../custodian-worker" }
+# HG-3 (ADR 0115, ADR 0118): `legacy apply` reads the reviewed extract and handoff
+# through the bridge importer. A path dependency inside this workspace.
+custodian-bridge = { path = "../custodian-bridge" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 sha2 = "=0.10.9"
 
 [dev-dependencies]
 custodian-worker = { path = "../custodian-worker", features = ["test-fakes"] }
-# C12 end-to-end tests only: the benchmarks-side consumer. A path dependency inside
-# this workspace; no third-party crate is added.
-custodian-bridge = { path = "../custodian-bridge" }
