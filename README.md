@@ -13,7 +13,8 @@ This project coordinates frozen candidates, protected synthetic corpora, executi
 | Stack and trust boundaries ([ADRs](docs/adr/README.md)) | yes | decisions recorded | no |
 | Rust workspace with policy/state core, control-service scaffold and synthetic smoke test | yes | yes (in-memory, synthetic) | no |
 | Versioned request, approval, reservation, execution, receipt, public projection and revocation contracts ([docs/contracts.md](docs/contracts.md)) | yes | yes (types, schemas, checks; no service uses them) | no |
-| Request-facing App, SQLite runtime store, protected storage, isolated workers, signer, ledger export | yes | no | no |
+| Protected population storage, sealing and reviewed registry (`custodian-corpus`, [docs/protected-storage.md](docs/protected-storage.md)) | yes | yes (filesystem adapter, synthetic tests) | no |
+| Request-facing App, SQLite runtime store, isolated workers, signer, ledger export | yes | no | no |
 
 First deployment (planned): a Rust policy/state core and control service, a SQLite runtime store, protected populations in a restricted directory behind an adapter, and a separate restricted private-ledger repository for signed audit exports. The database and protected storage are infrastructure, not extra repositories. Eventual publication is code only: the private ledger, runtime database, protected corpora, raw results, secrets and operational history remain private. Rationale and limits: [ADR 0002](docs/adr/0002-implementation-stack-and-runtime-identities.md).
 
