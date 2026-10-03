@@ -1,39 +1,45 @@
-# Rust build output.
-/target/
-/measurements/redact-secret-alloc/target/
+# Convenience only. Gitignore is NOT a disclosure control (CONVENTIONS.md):
+# protected assets must live in separately controlled storage and must never
+# be created inside this working tree. Verify with `git ls-files`, not this file.
 
+# Protected and operational material: corpora, seeds, ledgers, raw results, keys.
+/protected/
+/corpus/
+/seeds/
+/ledgers/
+/audit-data/
+/private-results/
+/scratch/
+*.seed
+*.ledger
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+
+# Local run artifacts are temporary and never committed or published.
+/results/
+/runs/
+
+# Build output and dependency installs.
 node_modules/
 .venv/
-results-output/
-*.log
-.DS_Store
+__pycache__/
+/target/
 dist/
-public/results/*.json
-public/results/.*.json
+build/
+coverage/
+*.log
 
-# graft's local graph cache — regenerable, not committed (run `graft build`).
+# OS and editor.
+.DS_Store
+
+# graft's local graph cache: regenerable, not committed (run `graft build`).
 /graft/
 
-# Deterministic scanner inputs are materialized locally, never committed.
-/fixtures/generated/*.json
-
-# Holdout inputs, state, private plans and execution scratch are never tracked.
-/holdout/generated/
-.peer-bin/
-
-# The redact-secret checkout the staging publish packs its candidate from (#152).
-/.redact-secret-product/
-
-# The redesigned site (web/, #547): build output and installs.
-/web/node_modules/
-/web/.next/
-/web/out/
-/web/storybook-static/
-/web/next-env.d.ts
-/web/*.tsbuildinfo
-
-# Local run artifacts are temporary and never committed or published
-# (docs/official-runs.md).
-/results/local/
+# Local agent state.
 .claude/worktrees
-.claude/helpers
+.claude/settings.local.json
