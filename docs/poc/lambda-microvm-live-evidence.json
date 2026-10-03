@@ -1,0 +1,213 @@
+{
+  "authorizedCeilingUsd": 50,
+  "builds": [
+    {
+      "baselineMemoryMiB": 512,
+      "label": "B1",
+      "state": "FAILED"
+    },
+    {
+      "baselineMemoryMiB": 2048,
+      "label": "B2",
+      "state": "SUCCESSFUL"
+    },
+    {
+      "baselineMemoryMiB": 512,
+      "label": "B3",
+      "state": "SUCCESSFUL"
+    },
+    {
+      "baselineMemoryMiB": 512,
+      "label": "B4",
+      "state": "SUCCESSFUL"
+    }
+  ],
+  "controlPlaneDecision": "NO_GO",
+  "cost": {
+    "actualMicrovmBurstUnits": null,
+    "dailyRealEngineFourOrEightRunEstimate": null,
+    "finalAttributedInvoiceUsd": null,
+    "imageSnapshotBytes": null,
+    "lambdaBilledInvocationSample": {
+      "billedMilliseconds": 447,
+      "memoryMiB": 128,
+      "peakMemoryMiB": 98
+    },
+    "ratePublicationDate": "2026-10-01T18:47:46Z",
+    "rates": {
+      "Lambda-MicroVM-Memory-GB-Second-ARM": {
+        "unit": "GB-Seconds",
+        "usd": "0.0000036667"
+      },
+      "Lambda-MicroVM-Snapshot-Read-GB": {
+        "unit": "GB",
+        "usd": "0.0015467699"
+      },
+      "Lambda-MicroVM-Snapshot-Storage-GB-Hour": {
+        "unit": "GB-Hours",
+        "usd": "0.0001111111"
+      },
+      "Lambda-MicroVM-Snapshot-Write-GB": {
+        "unit": "GB",
+        "usd": "0.0037977138"
+      },
+      "Lambda-MicroVM-vCPU-Second-ARM": {
+        "unit": "vCPU-Seconds",
+        "usd": "0.0000276944"
+      }
+    },
+    "totalVmRunningSeconds": 301.557,
+    "vmComputeBaselineUsd": "0.002640719571150",
+    "vmComputePeakCapacityBoundUsd": "0.0105628782846",
+    "vmRunningSeconds": [
+      76.083,
+      61.736,
+      128.938,
+      19.132,
+      15.668
+    ]
+  },
+  "createdResourceCounts": {
+    "buckets": 1,
+    "buildObjects": 2,
+    "customSecurityGroups": 1,
+    "dynamoTables": 1,
+    "iamRoles": 3,
+    "imageBuildVersions": 4,
+    "lambdaFunctions": 1,
+    "microvmImages": 1,
+    "microvms": 5,
+    "networkConnectors": 1,
+    "persistedLogGroupsObserved": 0,
+    "subnets": 1,
+    "vpcs": 1
+  },
+  "date": "2026-10-03",
+  "healthLifecycle": {
+    "checks": {
+      "creationReplaySameVm": true,
+      "expiredTokenDenied": false,
+      "explicitImageConfiguration": true,
+      "freshVmDistinct": true,
+      "health": true,
+      "invalidTokenDenied": true,
+      "jobRefused": true,
+      "maximumLifetimeTerminates": true,
+      "missingTokenDenied": true,
+      "shellTokenDenied": true,
+      "wrongPortDenied": true,
+      "wrongVmDenied": true
+    },
+    "elapsedSeconds": 87.601,
+    "isolationVerified": false,
+    "schema": "private-custodian.microvm-health-evidence/1",
+    "synthetic": true,
+    "vmCleanupVerified": true,
+    "vmCount": 2
+  },
+  "isolation": {
+    "cleanupTerminal": true,
+    "controls": {
+      "allowed": {
+        "child": {
+          "controlStateReadable": true,
+          "credentialEnvironmentPresent": false,
+          "dnsResolved": true,
+          "ipv4Connected": true,
+          "ipv6Connected": false,
+          "linkLocalTcpConnected": true,
+          "trueToolWorks": true,
+          "unshareToolPresent": false,
+          "userNamespaceWorks": false
+        },
+        "childCompleted": true,
+        "runnerControlWorks": true,
+        "synthetic": true,
+        "verified": false
+      },
+      "denied": {
+        "child": {
+          "controlStateReadable": true,
+          "credentialEnvironmentPresent": false,
+          "dnsResolved": true,
+          "ipv4Connected": false,
+          "ipv6Connected": false,
+          "linkLocalTcpConnected": true,
+          "trueToolWorks": true,
+          "unshareToolPresent": false,
+          "userNamespaceWorks": false
+        },
+        "childCompleted": true,
+        "runnerControlWorks": true,
+        "synthetic": true,
+        "verified": false
+      }
+    },
+    "schema": "private-custodian.synthetic-isolation-probe/1",
+    "verified": false
+  },
+  "lambdaTransaction": {
+    "allWritesAtomic": true,
+    "conflictingBindingRefused": true,
+    "counterExactlyOnce": true,
+    "durableReplay": true,
+    "oneIntentOneOutbox": true,
+    "outcomes": {
+      "CHARGED": 1,
+      "NOT_COMMITTED": 15
+    },
+    "parallelInvocations": 16
+  },
+  "productionDeployment": false,
+  "protectedRuns": 0,
+  "region": "us-east-1",
+  "schema": "private-custodian.microvm-live-evidence/1",
+  "sourcePins": {
+    "credentialEval": "c331809c15d5e82730852df91577d64b07dfaaf6",
+    "diagnosticZipSha256": "c999d0314c5043ebb9bdc5610c8b3163d32f72960897ae94efce4fb3f68a34e9",
+    "healthZipSha256": "5e1f3193e2966c80a5c2cd352678fe6206cec35577d5d7f07f826833d6448470",
+    "lambdaTransactionZipSha256": "b33dafe33fb4fa26e6cb4b563f0c2969f120717152374d5c958801506c51404a",
+    "piiEval": "6157cbc5918b3888c8e84b1884719ea8f3278b36"
+  },
+  "syntheticOnly": true,
+  "teardown": {
+    "allResourceAbsenceChecks": true,
+    "allVmsTerminal": true,
+    "firstTableDeleteFailed": true,
+    "imageVersionsAbsent": true,
+    "ownedEnisAbsent": true,
+    "retainedBillableResources": 0,
+    "tableDeleteRetrySucceeded": true,
+    "verified": true
+  },
+  "tokenExpiry": {
+    "cleanupTerminal": true,
+    "observations": [
+      {
+        "afterResponseSeconds": 2.445,
+        "fixedHealthBody": true,
+        "httpStatus": 200
+      },
+      {
+        "afterResponseSeconds": 65.142,
+        "fixedHealthBody": true,
+        "httpStatus": 200
+      },
+      {
+        "afterResponseSeconds": 90.398,
+        "fixedHealthBody": true,
+        "httpStatus": 200
+      },
+      {
+        "afterResponseSeconds": 125.117,
+        "fixedHealthBody": false,
+        "httpStatus": 403
+      }
+    ],
+    "requestedExpirationMinutes": 1,
+    "tokenResponseFields": [
+      "authToken"
+    ]
+  },
+  "workerDecision": "NO_GO"
+}

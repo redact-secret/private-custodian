@@ -10,7 +10,9 @@ Build locally with the explicit ARM64 compiler and base manifests in Dockerfile:
 docker build --platform linux/arm64 -t custodian-microvm-synthetic:local deploy/aws/microvm
 ```
 
-The context allowlist is Dockerfile + health.rs only. The build has no package
+The context allowlist contains only the two Dockerfiles and their public Rust
+sources. Each AWS zip contains exactly its Dockerfile and corresponding source.
+The build has no package
 manager/network dependency install; the compiler container is separate from the
 final AWS container. Final image adds one static Rust binary and runs as uid/gid
 65534. The base includes AWS-managed components whose inventory and build-role
@@ -36,7 +38,7 @@ Read-only preflight:
 AWS_PROFILE=redact-secret python3 infra/aws/poc/preflight.py
 ```
 
-No provisioning command is automated here. Under Epic #40, record explicit
+Provisioning remains an operator experiment, not a custody dispatcher. Under Epic #40, record explicit
 account/region, cost ceiling and cleanup authorization before any billable call.
 A live synthetic health experiment uses one fresh VM, exact image version,
 no execution role, disabled runtime logging, no shell connector, a token for
@@ -46,3 +48,16 @@ health fails. Keep endpoint/auth token/private inventory outside source control.
 Health success is packaging/lifecycle evidence only; it never authorizes an engine
 or protected input. See the [evidence record](../../../docs/poc/lambda-microvm.md)
 and the exact-image adversarial/cleanup requirements before any further work.
+
+`Dockerfile.probe` builds the separate public synthetic diagnostic binary. Its
+fixed child deliberately has no inner sandbox: it checks whether it can read a
+runner-owned 0600 canary, resolve `example.com`, connect TCP over IPv4/IPv6, and
+reach link-local TCP. It sends no canary over the network and returns only
+booleans, never addresses, file contents, credentials or process stderr. The
+bounded child also checks availability of `true` and `unshare`. A missing tool or
+failed positive control makes the associated denial not assessable.
+
+This diagnostic exposes an expected missing-boundary failure; it must never be
+used as an isolated engine runner. Both binaries refuse evaluation jobs and
+always report `verified: false`. The [authorized live record](../../../docs/poc/lambda-microvm-live.md)
+separates observed controls, failed denials and missing implementation.

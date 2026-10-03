@@ -1,5 +1,11 @@
 # Lambda MicroVM feasibility record (Epic #40)
 
+This is the retained initial preparation record. Its pending authorization,
+zero-resource and unmeasured-runtime statements describe that stage, not the
+subsequent experiment. The user later authorized a total US$50 ceiling with the
+same account/profile, region and cleanup conditions; current live findings and
+teardown are in [the authorized experiment record](lambda-microvm-live.md).
+
 Date: 2026-10-03. Custodian baseline: `00e1bb0` (S6 merged).
 Evidence is project-maintained public synthetic functional verification, not
 independent measurement validation. **Worker: NO-GO for protected execution
