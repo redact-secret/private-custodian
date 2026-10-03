@@ -16,71 +16,13 @@
 
 mod common;
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use common::*;
 use custodian_contracts::execution::ExecutionOutcome;
 use custodian_contracts::Contract as _;
 use custodian_core::{Exposure, RunState};
 use custodian_daemon::Shutdown;
 use custodian_store::PipelineStep;
-use custodian_worker::artifacts::ArtifactAllowlist;
-use custodian_worker::bwrap::BubblewrapSandbox;
-use custodian_worker::{run_self_check, Dispatcher, DispatcherConfig};
-
-const PROBE_BIN: &str = env!("CARGO_BIN_EXE_custodian-daemon-probe");
-
-fn skip(name: &str, why: &str) {
-    eprintln!("ISOLATION-TEST-SKIPPED {name}: {why}");
-    if std::env::var("CUSTODIAN_REQUIRE_ISOLATION").as_deref() == Ok("1") {
-        panic!("isolation required but unavailable for {name}: {why}");
-    }
-}
-
-/// The real worker for `env`, after the real self-check, or `None` (a logged
-/// skip) where isolation cannot be shown.
-fn real_worker(env: &Env, name: &str) -> Option<Dispatcher> {
-    if !cfg!(target_os = "linux") {
-        skip(
-            name,
-            &format!("platform is {}, not linux", std::env::consts::OS),
-        );
-        return None;
-    }
-    let sandbox = match BubblewrapSandbox::detect() {
-        Ok(s) => s,
-        Err(e) => {
-            skip(name, &format!("detect: {e}"));
-            return None;
-        }
-    };
-    let probe: PathBuf = env.art_dir.join("probe");
-    std::fs::copy(PROBE_BIN, &probe).unwrap();
-    set_mode(&probe, 0o755);
-    let allowlist = ArtifactAllowlist::new(std::slice::from_ref(&env.art_dir)).unwrap();
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let verification = match run_self_check(
-        &sandbox,
-        &sandbox.launcher_version(),
-        &probe,
-        &allowlist,
-        &env.p.arts.staging,
-        now,
-    ) {
-        Ok(v) => v,
-        Err(e) => {
-            skip(name, &format!("self-check failed: {e}"));
-            return None;
-        }
-    };
-    let mut cfg = DispatcherConfig::new(env.p.arts.staging.clone(), allowlist);
-    cfg.heartbeat_interval = std::time::Duration::from_millis(100);
-    Some(Dispatcher::new(Arc::new(sandbox), verification, cfg).expect("verified worker"))
-}
+use custodian_worker::Dispatcher;
 
 fn pass(env: &Env, d: &Dispatcher) {
     env.try_with_pipeline_using(d, &CrashAt::default(), |pl, _| {

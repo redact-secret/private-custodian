@@ -20,6 +20,7 @@ mod imports;
 mod intake;
 mod integrity;
 mod lifecycle;
+mod loss;
 pub mod migrations;
 pub mod model;
 mod ops;
@@ -48,6 +49,10 @@ pub use lifecycle::{
     EpochEventCommand, EpochEventOutcome, EpochEventRecord, EpochStandingRecord, FeedAppend,
     FeedEnvelopeRecord, FeedHead, ObligationAction, ObligationCommand, ObligationRecord,
     ObligationTarget, RotationCommand, PUBLIC_REASONS,
+};
+pub use loss::{
+    BudgetOverview, LossAcceptCommand, LossEpoch, LossEvent, LossOutcome, LossRefusal, LossReport,
+    MAX_ADOPTED_EVENTS,
 };
 pub use model::{
     AckOutcome, AttemptRecord, BudgetStatus, Checkpoint, Lease, OutboxEvent, RecoveryReport,

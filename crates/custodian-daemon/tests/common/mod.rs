@@ -55,6 +55,65 @@ use serde_json::{json, Value};
 /// The synthetic engine, built by cargo for this test run.
 pub const ENGINE_BIN: &str = env!("CARGO_BIN_EXE_custodian-synthetic-engine");
 
+/// The self-check probe, run inside the real sandbox before a worker is built.
+pub const PROBE_BIN: &str = env!("CARGO_BIN_EXE_custodian-daemon-probe");
+
+/// A logged skip. A skipped test verified nothing and must not be counted as
+/// isolation evidence; CI sets `CUSTODIAN_REQUIRE_ISOLATION=1`, which turns
+/// every skip into a failure.
+pub fn skip(name: &str, why: &str) {
+    eprintln!("ISOLATION-TEST-SKIPPED {name}: {why}");
+    if std::env::var("CUSTODIAN_REQUIRE_ISOLATION").as_deref() == Ok("1") {
+        panic!("isolation required but unavailable for {name}: {why}");
+    }
+}
+
+/// The real worker for `env`, after the real self-check, or `None` (a logged
+/// skip) where isolation cannot be shown. Linux with bubblewrap only.
+pub fn real_worker(env: &Env, name: &str) -> Option<Dispatcher> {
+    use custodian_worker::bwrap::BubblewrapSandbox;
+    use custodian_worker::run_self_check;
+    if !cfg!(target_os = "linux") {
+        skip(
+            name,
+            &format!("platform is {}, not linux", std::env::consts::OS),
+        );
+        return None;
+    }
+    let sandbox = match BubblewrapSandbox::detect() {
+        Ok(s) => s,
+        Err(e) => {
+            skip(name, &format!("detect: {e}"));
+            return None;
+        }
+    };
+    let probe: PathBuf = env.art_dir.join("probe");
+    fs::copy(PROBE_BIN, &probe).unwrap();
+    set_mode(&probe, 0o755);
+    let allowlist = ArtifactAllowlist::new(std::slice::from_ref(&env.art_dir)).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let verification = match run_self_check(
+        &sandbox,
+        &sandbox.launcher_version(),
+        &probe,
+        &allowlist,
+        &env.p.arts.staging,
+        now,
+    ) {
+        Ok(v) => v,
+        Err(e) => {
+            skip(name, &format!("self-check failed: {e}"));
+            return None;
+        }
+    };
+    let mut cfg = DispatcherConfig::new(env.p.arts.staging.clone(), allowlist);
+    cfg.heartbeat_interval = std::time::Duration::from_millis(100);
+    Some(Dispatcher::new(Arc::new(sandbox), verification, cfg).expect("verified worker"))
+}
+
 pub fn set_mode(path: &Path, mode: u32) {
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
 }

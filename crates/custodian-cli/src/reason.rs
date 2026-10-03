@@ -106,6 +106,15 @@ pub enum CliReason {
     ImportRefused,
     /// The handoff record still has blockers (ADR 0092 gates).
     HandoffNotReady,
+    /// The store is not behind the ledger: nothing to accept (use
+    /// `repair clear-reconcile`).
+    StoreNotBehindLedger,
+    /// The store refused to adopt the ledger tail (a fixed refusal word
+    /// accompanies it); nothing was written (R-1, ADR 0130).
+    LossRefused,
+    /// Re-issue was refused (a fixed refusal word accompanies it); nothing
+    /// was written by the refused step (R-4, ADR 0131).
+    ReissueRefused,
     // -- lookup
     NotFound,
     // -- availability
@@ -124,12 +133,18 @@ pub enum CliReason {
     VerificationFailed,
     DestinationConflict,
     Unpublishable,
+    /// The store's outbox chain is not a prefix of the ledger's: they are two
+    /// histories, not one history and a rollback. An incident, not a repair.
+    LineageDiverged,
+    /// The ledger does not hold every audit record up to its newest
+    /// checkpoint, or a record cannot be adopted byte for byte.
+    LedgerTailIncomplete,
     // -- internal
     Internal,
 }
 
 impl CliReason {
-    pub const ALL: [CliReason; 44] = [
+    pub const ALL: [CliReason; 49] = [
         Self::UsageError,
         Self::InvalidDocument,
         Self::DocumentTooLarge,
@@ -158,6 +173,9 @@ impl CliReason {
         Self::SubmissionLimit,
         Self::ImportRefused,
         Self::HandoffNotReady,
+        Self::StoreNotBehindLedger,
+        Self::LossRefused,
+        Self::ReissueRefused,
         Self::NotFound,
         Self::StoreUnavailable,
         Self::LedgerUnavailable,
@@ -173,6 +191,8 @@ impl CliReason {
         Self::VerificationFailed,
         Self::DestinationConflict,
         Self::Unpublishable,
+        Self::LineageDiverged,
+        Self::LedgerTailIncomplete,
         Self::Internal,
     ];
 
@@ -206,6 +226,9 @@ impl CliReason {
             Self::SubmissionLimit => "submission_limit",
             Self::ImportRefused => "import_refused",
             Self::HandoffNotReady => "handoff_not_ready",
+            Self::StoreNotBehindLedger => "store_not_behind_ledger",
+            Self::LossRefused => "loss_refused",
+            Self::ReissueRefused => "reissue_refused",
             Self::NotFound => "not_found",
             Self::StoreUnavailable => "store_unavailable",
             Self::LedgerUnavailable => "ledger_unavailable",
@@ -221,6 +244,8 @@ impl CliReason {
             Self::VerificationFailed => "verification_failed",
             Self::DestinationConflict => "destination_conflict",
             Self::Unpublishable => "unpublishable",
+            Self::LineageDiverged => "lineage_diverged",
+            Self::LedgerTailIncomplete => "ledger_tail_incomplete",
             Self::Internal => "internal_error",
         }
     }
@@ -239,9 +264,8 @@ impl CliReason {
             ConfirmationMismatch | AlreadyDecided | IdempotencyConflict | BudgetExhausted
             | StalePolicy | PolicyNotCurrent | ApprovalExpired | ApprovalNotBound
             | EpochBlocked | NotClearable | InvalidChange | RotationInvalid | StoreBehindLedger
-            | SubmissionLimit | PendingObligations | ImportRefused | HandoffNotReady => {
-                ExitClass::Refused
-            }
+            | SubmissionLimit | PendingObligations | ImportRefused | HandoffNotReady
+            | StoreNotBehindLedger | LossRefused | ReissueRefused => ExitClass::Refused,
             NotFound => ExitClass::NotFound,
             StoreUnavailable
             | LedgerUnavailable
@@ -250,7 +274,8 @@ impl CliReason {
             | FeedConflict
             | NotConfigured => ExitClass::Unavailable,
             StoreNeedsReconcile | LedgerUntrusted | StoreRolledBack | RegistryRolledBack
-            | VerificationFailed | DestinationConflict | Unpublishable => ExitClass::Integrity,
+            | VerificationFailed | DestinationConflict | Unpublishable | LineageDiverged
+            | LedgerTailIncomplete => ExitClass::Integrity,
             Internal => ExitClass::Internal,
         }
     }

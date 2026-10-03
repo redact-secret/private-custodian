@@ -27,6 +27,8 @@ const CHECKS: &[(&str, &str)] = &[
              WHERE c.scope_key = b.scope_key), 0) \
              + COALESCE((SELECT SUM(applied_units) FROM budget_imports i \
              WHERE i.scope_key = b.scope_key), 0) \
+             + COALESCE((SELECT SUM(units) FROM budget_recoveries r \
+             WHERE r.scope_key = b.scope_key), 0) \
          OR b.refunded_units <> COALESCE((SELECT SUM(units) FROM settlements s \
              WHERE s.scope_key = b.scope_key AND s.result = 'refunded'), 0)",
     ),
@@ -51,6 +53,11 @@ const CHECKS: &[(&str, &str)] = &[
              (SELECT 1 FROM budget_imports i WHERE i.scope_key = b.scope_key) \
              AND b.consumed_units < COALESCE((SELECT MAX(i.legacy_units) \
                  FROM budget_imports i WHERE i.scope_key = b.scope_key), 0))",
+    ),
+    (
+        "loss_acceptance_has_audit_event",
+        "SELECT COUNT(*) FROM loss_acceptances a WHERE NOT EXISTS \
+         (SELECT 1 FROM outbox o WHERE o.event_id = 'loss-accepted:' || a.acceptance_id)",
     ),
     (
         "budget_never_over_committed",

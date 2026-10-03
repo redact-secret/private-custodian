@@ -116,6 +116,13 @@ pub const PAYLOAD_KEY_ALLOWLIST: &[&str] = &[
     "purged_queue",
     "purged_claims",
     "purged_submissions",
+    // R-1 (ADR 0130): restore loss acceptance. Counters, sequence positions
+    // and a digest; nothing else about the lost state is exported.
+    "adopted_from",
+    "adopted_to",
+    "adopted_events",
+    "recovered_scopes",
+    "saturated",
 ];
 
 fn safe_token(s: &str) -> bool {

@@ -506,10 +506,33 @@ pub(crate) fn provision_tx(
         Some(c) if limit_i == c => {}
         other => {
             if other.is_none() {
+                // A scope whose consumption an accepted restore loss
+                // recovered before the budget existed starts with those units
+                // already consumed (ADR 0130). The table exists from schema
+                // version 8; a database still at an older version (only a
+                // test opens one) has nothing to recover.
+                let recovered: i64 = {
+                    let has: i64 = tx.query_row(
+                        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' \
+                         AND name = 'budget_recoveries'",
+                        [],
+                        |r| r.get(0),
+                    )?;
+                    if has == 0 {
+                        0
+                    } else {
+                        tx.query_row(
+                            "SELECT COALESCE(SUM(units), 0) FROM budget_recoveries \
+                             WHERE scope_key = ?1",
+                            [key],
+                            |r| r.get(0),
+                        )?
+                    }
+                };
                 tx.execute(
-                    "INSERT INTO budgets (scope_key, kind, scope_json, limit_units) \
-                     VALUES (?1, ?2, ?3, ?4)",
-                    (key, kind, scope_json, limit_i),
+                    "INSERT INTO budgets (scope_key, kind, scope_json, limit_units, \
+                     consumed_units) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    (key, kind, scope_json, limit_i, recovered),
                 )?;
             } else {
                 tx.execute(
