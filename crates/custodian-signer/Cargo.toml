@@ -1,0 +1,33 @@
+[package]
+name = "custodian-signer"
+description = "Isolated signer process and local-socket signer transport (S2, ADR 0111 to 0114). Holds the receipt signing key behind a Unix domain socket; synthetic test keys only in this repository."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "custodian_signer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "custodian-signer"
+path = "src/main.rs"
+
+# ADR 0113: `nix` gives safe wrappers for the few system calls std lacks (peer
+# credentials, setrlimit, prctl, umask, geteuid) so this crate keeps
+# `forbid(unsafe_code)`. `zeroize` is already in the lock through ed25519-dalek.
+# Everything else is std or an existing workspace pin.
+[dependencies]
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-ledger = { path = "../custodian-ledger" }
+nix = { version = "=0.31.3", default-features = false, features = ["socket", "resource", "process", "fs", "user"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+zeroize = "=1.9.0"
+
+[dev-dependencies]
+custodian-store = { path = "../custodian-store" }

@@ -14,6 +14,7 @@ members = [
     "crates/custodian-bridge",
     "crates/custodian-cli",
     "crates/custodian-verify",
+    "crates/custodian-signer",
 ]
 
 [workspace.package]
