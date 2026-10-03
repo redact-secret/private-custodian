@@ -1,0 +1,37 @@
+name: ci
+
+# Ordinary CI uses public synthetic tests only. It receives no secrets, no
+# protected data, no signing material and no GitHub App credentials.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # actions/checkout v4.2.2, pinned to the commit its release tag points at.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      # Uses the Rust toolchain preinstalled on the runner image; no third-party action.
+      - name: Toolchain versions
+        run: |
+          rustup component add rustfmt clippy
+          cargo --version
+          rustc --version
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --locked
