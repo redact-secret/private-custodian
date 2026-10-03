@@ -120,7 +120,9 @@ rotation changes every public commitment and is a reviewed event.
   unsupported.
 - A hostile process running as the same owner can race the lstat/open check; same-owner code is trusted.
 - Zeroing memory on drop is best effort, not secure erasure.
-- Contamination handling and epoch rotation policy (C9), the disclosure projection (C8) and worker staging
-  (C6) are out of scope.
+- Contamination handling and epoch rotation are in `custodian-lifecycle` (C9,
+  [lifecycle-and-revocation.md](lifecycle-and-revocation.md)): the registry mirrors retirement and a new
+  reviewed population is a new epoch and seal. The disclosure projection (C8) and worker staging (C6) are
+  out of scope here.
 - A real storage directory, host, volume encryption, backup target and retention schedule still need to be
   provisioned and approved by a human.

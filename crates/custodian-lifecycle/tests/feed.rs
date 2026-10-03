@@ -151,6 +151,15 @@ fn replayed_forked_gapped_misordered_and_forged_envelopes_are_rejected() {
         resign(&w, &v)
     };
     assert_eq!(c.observe(&forged_seq2).unwrap_err(), SyncError::Fork);
+    // An unsigned imitation of an accepted sequence is not an alarm, just a
+    // bad signature.
+    let mut unsigned: serde_json::Value = serde_json::from_slice(&e2).unwrap();
+    unsigned["payload"]["issued_at"] = json!(NOW + 202);
+    assert_eq!(
+        c.observe(&serde_json::to_vec(&unsigned).unwrap())
+            .unwrap_err(),
+        SyncError::BadSignature
+    );
 
     // A broken chain: correct sequence, wrong previous digest, valid signature.
     let mut broken = w.consumer();

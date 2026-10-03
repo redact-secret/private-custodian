@@ -40,6 +40,22 @@ fn an_agent_can_only_report_and_every_other_action_is_operator_only() {
         .unwrap();
     assert!(r.changed);
 
+    // But not a permanent contamination: that retires the epoch and is
+    // published, so it needs an accountable human or service.
+    assert_eq!(
+        m.report(
+            &change(&w.epoch, &a, &idk(9), EpochReason::ResultsExposed, NOW + 1),
+            Contamination::Exposed
+        )
+        .unwrap_err(),
+        R::AgentNotPermitted
+    );
+    assert_eq!(
+        m.standing(&w.epoch).unwrap().contamination,
+        Contamination::UnreviewedChange
+    );
+    assert!(w.store.pending_obligations(10).unwrap().is_empty());
+
     // Everything else is refused, whatever the (lenient) authority says.
     let clear = m
         .clear(&change(

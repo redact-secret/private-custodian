@@ -72,7 +72,7 @@ Destination in the policy allowlist (`destination_not_allowed`); policy document
 (`policy_stale`); projection inside its freshness window; `check_disclosure_precondition` again and the
 charge's audit events acknowledged by the ledger (`audit_not_acknowledged`); the release approval checked
 (`approval_wrong_scope`, `approval_not_bound`, `approval_expired`, `approver_not_permitted`, activation
-reasons); the eligibility hook (C9); signing only through `ApprovedPayload::projection`, which re-validates
+reasons); the eligibility hook (C9, also called once at prepare); signing only through `ApprovedPayload::projection`, which re-validates
 the projection and the approval; the `policy` ledger record and then the `publication` decision record, both
 durable (`ledger_unavailable`, `ledger_conflict`); the eligibility hook once more; and last, delivery
 (`delivery_failed`). Nothing is delivered if any step fails. A decision record may exist for a release that
@@ -241,12 +241,15 @@ parameter, so a Check cannot carry a finer code, a value or an identity.
 
 ## 8. Hooks for later issues
 
-- **C9 (revocation, contamination, epoch rotation).** Implement `ReleaseEligibility` over revocation and
-  epoch records and pass it to `DisclosureService`. It is called twice per release (before any ledger write and
-  again immediately before delivery) with the candidate, population binding, execution and projection digest.
-  The revocation feed reference is supplied by the caller in `PrepareInput::feed`. `PublicProjection` carries
-  the feed reference and `fresh_until`; revocation of an already-released projection is a signed revocation
-  envelope (C7 `ApprovedPayload::revocation`), not a disclosure operation. There is no default eligibility:
+- **C9 (revocation, contamination, epoch rotation).** Implemented in `custodian-lifecycle`
+  (`LifecycleEligibility` implements `ReleaseEligibility`; see [lifecycle-and-revocation.md](lifecycle-and-revocation.md)).
+  The hook is called once at `prepare`, before any budget is charged (the projection does not exist yet, so the
+  subject carries an all-zero digest), and twice per release (before any ledger write and again immediately
+  before delivery) with the candidate, population binding, execution and projection digest. The revocation feed
+  reference is supplied by the caller in `PrepareInput::feed`; obtain it from `FeedPublisher::feed_ref`, which
+  refuses while a recorded revocation is not yet in a published envelope. `PublicProjection` carries the feed
+  reference and `fresh_until`; revocation of an already-released projection is a signed revocation envelope
+  (C7 `ApprovedPayload::revocation`), not a disclosure operation. There is no default eligibility:
   `testing::UncheckedEligibility` exists for tests and says so.
 - **C10 (operations).** The core `Disclosure` port (opaque string identities) is not implemented: it cannot
   carry a digest-bound `Approval`. The typed `DisclosureService` replaces it; retire or adapt the port when the
@@ -274,5 +277,5 @@ parameter, so a Check cannot carry a finer code, a value or an identity.
 | Policy, suppression, composition, budgets, projection builder, release flow, verifier | yes | yes | no |
 | Policy activation, budget provisioning, destinations, signer, private ledger | yes (C10 to C12) | no | no |
 | Engine emission of the aggregate artifact | yes | no | no |
-| Revocation and contamination recheck | yes (C9) | hook only | no |
+| Revocation and contamination recheck | yes (C9) | yes (`custodian-lifecycle`) | no |
 | Destination field in the public contract | open | no | no |

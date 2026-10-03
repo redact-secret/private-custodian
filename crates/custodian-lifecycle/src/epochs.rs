@@ -220,9 +220,15 @@ impl<S: EpochBlobStore> EpochManager<'_, S> {
     /// weaker report on a stronger state changes nothing and is still
     /// recorded. A permanent contamination (`Exposed`, `UsedForTuning`)
     /// retires the epoch in the same call; the registry follows. An agent
-    /// may report; everything after depends on the authority.
+    /// may report only `UnreviewedChange`; the authority decides the rest.
     pub fn report(&self, req: &ChangeRequest<'_>, kind: Contamination) -> Result<EpochOutcome> {
         authorize(self.authority, req.who, OperatorAction::ReportContamination)?;
+        // An agent may flag a possible change, which blocks use at once and
+        // is reversible by review. A permanent contamination retires the
+        // epoch and is published; it needs an accountable human or service.
+        if req.who.kind == custodian_contracts::common::ActorKind::Agent && kind.is_permanent() {
+            return Err(R::AgentNotPermitted);
+        }
         if !req.reason.fits_report(kind) {
             return Err(R::InvalidChange);
         }

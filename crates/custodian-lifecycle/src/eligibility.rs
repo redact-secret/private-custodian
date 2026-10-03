@@ -73,6 +73,11 @@ impl<'a> LifecycleEligibility<'a> {
         epoch: &EpochId,
         now: Timestamp,
     ) -> Result<(), EligibilityRefusal> {
+        // 0. A store that may be an older restore cannot vouch for anything:
+        // it could be missing a contamination recorded after its snapshot.
+        if self.store.needs_reconcile().unwrap_or(true) {
+            return Err(EligibilityRefusal::Unknown);
+        }
         // 1. Standing.
         let standing = self
             .store

@@ -42,6 +42,8 @@ quarantine/<record_id>/<sha256>.json   bytes that conflicted with an existing re
 | `reconciliation` | `outcome`, `store_events`, `ledger_records`, `missing_in_ledger`, `unacked_in_ledger`, `conflicting` |
 | `key_event` | `key_id`, `action` (`published`, `retired`, `revoked`), `public_key`, `purposes`, `effective_at` |
 
+C9 adds audit event kinds through the same outbox (`epoch.standing`, `epoch.rotated`, `feed.obligation`, `feed.published`, `feed.delivered`) and seven allowlisted payload keys (`actor_kind`, `retired`, `target_kind`, `successor_epoch`, `feed_sequence`, `document_digest`, `destination`); the layout and domains are unchanged (ADR 0073).
+
 Record ids are deterministic from the natural key, so a retry of the same logical record targets the same
 path with the same bytes. `issued_at` comes from the event or the caller's observation time, never from the
 export attempt. An identical retry is a no-op; different bytes under an existing id go to `quarantine/` and

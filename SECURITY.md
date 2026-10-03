@@ -43,7 +43,7 @@ Temporary file deletion is cleanup, not guaranteed secure erasure on every stora
 
 ## Incident handling
 
-On suspected exposure, stop affected execution/disclosure, preserve restricted audit evidence, revoke affected access/keys, identify released projections and impacted plans, and coordinate private investigation. Do not erase the budget/audit history to hide a failed run. Resume only after the relevant boundary and replay/recovery rules are validated.
+On suspected exposure, record the contamination (the epoch stops accepting use at once; [docs/lifecycle-and-revocation.md](docs/lifecycle-and-revocation.md)), stop affected execution/disclosure, preserve restricted audit evidence, revoke affected access/keys, identify released projections and impacted plans, and coordinate private investigation. Do not erase the budget/audit history to hide a failed run. Resume only after the relevant boundary and replay/recovery rules are validated.
 
 ## Public release gate
 

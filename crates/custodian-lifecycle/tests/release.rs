@@ -601,3 +601,48 @@ fn a_revoked_policy_or_candidate_or_epoch_each_refuse_and_say_why() {
     );
     let _ = json!({});
 }
+
+#[test]
+fn an_older_restore_cannot_vouch_for_eligibility_it_may_be_missing_a_contamination() {
+    let w = World::new(Opts::default());
+    // Snapshot, then a contamination the snapshot does not contain.
+    let snap_dir = sc::TempDb::new("c9-snapshot");
+    std::fs::create_dir(snap_dir.dir()).unwrap();
+    std::fs::set_permissions(
+        snap_dir.dir(),
+        std::os::unix::fs::PermissionsExt::from_mode(0o700),
+    )
+    .unwrap();
+    let snapshot = snap_dir.path();
+    w.store.backup_to(&snapshot).unwrap();
+    contaminate_on(&w.store, "k1");
+    let external = w.store.latest_checkpoint().unwrap().unwrap();
+
+    // Restore the old snapshot as the live database.
+    let restored_dir = sc::TempDb::new("c9-restored");
+    std::fs::create_dir(restored_dir.dir()).unwrap();
+    std::fs::set_permissions(
+        restored_dir.dir(),
+        std::os::unix::fs::PermissionsExt::from_mode(0o700),
+    )
+    .unwrap();
+    std::fs::copy(&snapshot, restored_dir.path()).unwrap();
+    std::fs::set_permissions(
+        restored_dir.path(),
+        std::os::unix::fs::PermissionsExt::from_mode(0o600),
+    )
+    .unwrap();
+    let old = SqliteStore::open(restored_dir.path()).unwrap();
+    let cand = w.request.plan.candidate.clone();
+    let pop = w.request.plan.population.clone();
+    let elig = LifecycleEligibility::new(&old);
+    // The restore looks clean: it does not know about the contamination.
+    assert!(old.epoch_standing(EPOCH).unwrap().is_none());
+    // Until the external checkpoint exposes the rollback, after which the
+    // store, and so the eligibility, refuses everything.
+    old.verify_external_checkpoint(&external).unwrap_err();
+    assert_eq!(
+        elig.evaluate(&cand, &pop.epoch_id, ts(RELEASE_AT)),
+        Err(EligibilityRefusal::Unknown)
+    );
+}

@@ -129,17 +129,23 @@ impl FeedConsumer {
         let seq = env.sequence.get();
         if seq <= self.log.sequence() {
             let idx = usize::try_from(seq - 1).map_err(|_| SyncError::Malformed)?;
-            return match self.accepted.get(idx) {
-                Some(prev) if prev == bytes => Ok(Observed::AlreadyApplied),
-                _ => Err(SyncError::Fork),
-            };
-        }
-        if seq != self.log.sequence() + 1 {
-            return Err(SyncError::Gap);
+            if self.accepted.get(idx).is_some_and(|prev| prev == bytes) {
+                return Ok(Observed::AlreadyApplied);
+            }
+            // Different bytes for an accepted sequence: a fork, but only if
+            // the other document is really signed. An unsigned imitation is
+            // just a bad signature, not an alarm.
+            self.verifier
+                .verify_revocation(&signed)
+                .map_err(|_| SyncError::BadSignature)?;
+            return Err(SyncError::Fork);
         }
         self.verifier
             .verify_revocation(&signed)
             .map_err(|_| SyncError::BadSignature)?;
+        if seq != self.log.sequence() + 1 {
+            return Err(SyncError::Gap);
+        }
         self.log.apply(env).map_err(|_| SyncError::BrokenChain)?;
         self.accepted.push(bytes.to_vec());
         Ok(Observed::Applied)
