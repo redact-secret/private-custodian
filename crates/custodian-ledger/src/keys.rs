@@ -124,6 +124,11 @@ impl Keyring {
         self.keys.len()
     }
 
+    /// Every key the keyring knows, in key id order.
+    pub fn iter(&self) -> impl Iterator<Item = &KeyEntry> {
+        self.keys.values()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty()
     }

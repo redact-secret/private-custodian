@@ -226,3 +226,16 @@ Additive: `queue_outcomes` (a settled queue item keeps a fixed reason word, neve
 closed; the prepared mark is write-once) and `pipeline_artifacts` (write-once result metadata, aggregates,
 execution record and receipt). New fault points, five new integrity checks, and the `receipt.issued` and
 `queue.settled` outbox events. ADRs 0125 and 0126; [daemon.md](daemon.md).
+
+## Migration 0008 (S6, restore loss acceptance)
+
+Additive: `loss_acceptances` (one row per accepted plan digest: store and ledger positions, counts, who, when) and
+`budget_recoveries` (units added to a budget scope by an acceptance; no foreign key, so a scope created in the lost
+window is remembered and a budget provisioned for it later starts with those units consumed). Both are append-only
+by trigger. `accept_ledger_loss` is one transaction (fault op `Reconcile`, the only operation allowed while the
+store is write-blocked besides `clear_reconcile`): it verifies the ledger tail extends the store's own outbox chain,
+inserts it as acknowledged rows, raises budgets (capped at headroom, flagged `saturated`), tightens epoch standing
+through the ordinary change path, writes `budget.recovered` and `store.loss_accepted`, and clears the block. The
+budget invariant now sums settled consumption, disclosure charges, legacy imports and recoveries. New check:
+`loss_acceptance_has_audit_event`. ADR 0130. Ledger payload allowlist: `adopted_from`, `adopted_to`,
+`adopted_events`, `recovered_scopes`, `saturated`.

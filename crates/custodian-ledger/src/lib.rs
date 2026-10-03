@@ -14,7 +14,7 @@
 //!
 //! Design: `docs/ledger.md` and ADRs 0050 to 0054. Status: implemented and
 //! tested with synthetic data and test-generated keys; not deployed. The
-//! private-ledger repository does not exist yet, no signing key exists, and
+//! private-ledger remote is not provisioned (see docs/ledger.md), no signing key exists, and
 //! this crate holds no key material and no network code beyond invoking `git`
 //! on a configured local clone.
 
@@ -28,6 +28,8 @@ pub mod git;
 pub mod keys;
 pub mod reconcile;
 pub mod record;
+pub mod recovery;
+pub mod reissue;
 pub mod signer;
 pub mod source;
 pub mod startup;
@@ -43,10 +45,14 @@ pub use git::{GitBackend, GitConfig, HistoryViolation};
 pub use keys::{KeyEntry, Keyring, KeyringError, Verifier, VerifyError};
 pub use reconcile::ReconcileReport;
 pub use record::{LedgerRecord, RecordBody, RecordError, RecordKind, SignedLedgerRecord};
+pub use reissue::{
+    execute_reissue, plan_reissue, revoke_key, Corroboration, PlannedRecord, ReissuePlan,
+    ReissueRefusal, ReissueReport, ReissueRequest,
+};
 pub use signer::{
     ApprovedPayload, RemoteSigner, SignRefusal, Signer, SignerService, SignerTransport,
     SoftwareSigner,
 };
 pub use source::OutboxSource;
 pub use startup::{startup_check, StartupRefusal, StartupReport};
-pub use walk::{walk_ledger, Finding, FindingCode, WalkReport};
+pub use walk::{walk_ledger, AuditEntry, Finding, FindingCode, RevokedRecord, WalkReport};

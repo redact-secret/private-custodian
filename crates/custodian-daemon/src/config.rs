@@ -11,7 +11,7 @@
 //!   such a file only if it is a regular file (never a symlink), small, and has
 //!   no group or other permission bits at all (`0600`).
 //! * **No inline credential, no deployment identifier in the repository.**
-//!   `docs/daemon-config.example.json` holds placeholders. A path that does
+//!   `deploy/examples/daemon-config.example.json` holds placeholders. A path that does
 //!   not exist makes the placeholder file fail to load, by design.
 //! * **Nothing activates by itself.** GitHub access is `disabled` unless the
 //!   file says otherwise; the listener binds loopback unless the file allows

@@ -1,0 +1,18 @@
+{
+  "roots": [
+    {
+      "key_id": "key_placeholder00000000002",
+      "public_key_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "purposes": [
+        "private-custodian/v1/ledger/audit-event",
+        "private-custodian/v1/ledger/store-checkpoint",
+        "private-custodian/v1/ledger/registry-checkpoint",
+        "private-custodian/v1/ledger/policy",
+        "private-custodian/v1/ledger/publication",
+        "private-custodian/v1/ledger/reconciliation",
+        "private-custodian/v1/ledger/key-event"
+      ],
+      "valid_from": 1800000000
+    }
+  ]
+}

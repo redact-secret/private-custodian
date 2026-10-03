@@ -7,6 +7,7 @@ mod support;
 const WORKFLOW: &str = include_str!("../../../.github/workflows/synthetic-conformance.yml");
 const REUSABLE: &str = include_str!("../../../.github/workflows/verify-signed-results.yml");
 const BUILD: &str = include_str!("../../../.github/workflows/build.yml");
+const FLOW: &str = include_str!("../../../.github/workflows/full-synthetic-flow.yml");
 
 /// The workflow without its comment lines.
 fn code(text: &str) -> String {
@@ -47,6 +48,7 @@ fn no_workflow_declares_or_passes_a_secret() {
         ("synthetic-conformance.yml", WORKFLOW),
         ("verify-signed-results.yml", REUSABLE),
         ("build.yml", BUILD),
+        ("full-synthetic-flow.yml", FLOW),
     ] {
         let code = code(text);
         assert!(!code.contains("secrets"), "{name} must not use secrets");
@@ -66,6 +68,7 @@ fn only_the_attest_job_holds_the_attestation_scopes() {
     for (name, text) in [
         ("synthetic-conformance.yml", WORKFLOW),
         ("verify-signed-results.yml", REUSABLE),
+        ("full-synthetic-flow.yml", FLOW),
     ] {
         let text = code(text);
         assert!(!text.contains("id-token"), "{name}");
@@ -89,6 +92,7 @@ fn every_action_is_pinned_to_a_full_commit_sha() {
         ("synthetic-conformance.yml", WORKFLOW),
         ("verify-signed-results.yml", REUSABLE),
         ("build.yml", BUILD),
+        ("full-synthetic-flow.yml", FLOW),
     ] {
         for line in code(text).lines().filter(|l| l.contains("uses: ")) {
             let target = line.split("uses: ").nth(1).unwrap().trim();
@@ -102,4 +106,22 @@ fn every_action_is_pinned_to_a_full_commit_sha() {
             );
         }
     }
+}
+
+#[test]
+fn the_full_flow_job_states_what_it_is_and_what_it_is_not() {
+    let name = FLOW
+        .lines()
+        .find(|l| l.trim_start().starts_with("name: \"full synthetic flow:"))
+        .expect("job name");
+    assert!(name.contains("functional verification on public synthetic conformance data"));
+    assert!(name.contains("not an independent protected evaluation"));
+    let c = code(FLOW);
+    assert!(c.contains("CUSTODIAN_REQUIRE_ISOLATION: \"1\""));
+    assert!(c.contains("! grep -q 'ISOLATION-TEST-SKIPPED'"));
+    assert!(c.contains("permissions:\n  contents: read"));
+    assert!(
+        c.contains("Functional verification on public synthetic conformance data")
+            || c.contains("functional verification on public synthetic conformance data")
+    );
 }

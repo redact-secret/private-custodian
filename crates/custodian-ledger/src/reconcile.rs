@@ -67,11 +67,20 @@ impl Exporter<'_> {
             match self.backend.get(&path).map_err(ExportError::Backend)? {
                 Some(bytes) => {
                     ledger_records += 1;
-                    let matches = SignedLedgerRecord::decode_canonical(&bytes)
-                        .ok()
-                        .is_some_and(|r| {
-                            r.payload == expected && self.verifier.verify_ledger_record(&r).is_ok()
-                        });
+                    let matches = match SignedLedgerRecord::decode_canonical(&bytes) {
+                        Ok(r) if r.payload == expected => {
+                            match self.verifier.verify_ledger_record(&r) {
+                                Ok(()) => true,
+                                // R-4: a revoked-key record that a valid record
+                                // re-attests exactly is the marked old lineage.
+                                Err(crate::keys::VerifyError::KeyRevoked) => {
+                                    self.is_reattested(&expected)?
+                                }
+                                Err(_) => false,
+                            }
+                        }
+                        _ => false,
+                    };
                     if !matches {
                         report.conflicting.push(seq);
                     } else if ev.exported_at.is_none() {
@@ -122,6 +131,30 @@ impl Exporter<'_> {
             self.write_record(&rec)?;
         }
         Ok(report)
+    }
+
+    /// A valid record under `records/audit/` supersedes `expected` with the
+    /// same body and issue time (ADR 0131).
+    fn is_reattested(&self, expected: &LedgerRecord) -> Result<bool, ExportError> {
+        for path in self
+            .backend
+            .list("records/audit")
+            .map_err(ExportError::Backend)?
+        {
+            let Some(bytes) = self.backend.get(&path).map_err(ExportError::Backend)? else {
+                continue;
+            };
+            if let Ok(r) = SignedLedgerRecord::decode_canonical(&bytes) {
+                if r.payload.supersedes.as_deref() == Some(expected.record_id.as_str())
+                    && r.payload.body == expected.body
+                    && r.payload.issued_at == expected.issued_at
+                    && self.verifier.verify_ledger_record(&r).is_ok()
+                {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     fn ack_for(

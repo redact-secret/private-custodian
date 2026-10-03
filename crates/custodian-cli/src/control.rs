@@ -58,6 +58,8 @@ use crate::command::{
 use crate::output::Output;
 use crate::reason::CliReason;
 
+mod recovery;
+
 type Res<T> = Result<T, CliReason>;
 
 /// Everything the control plane is wired to. All references: the deployment
@@ -150,6 +152,7 @@ fn finding_word(c: FindingCode) -> &'static str {
         FindingCode::SupersessionFork => "supersession_fork",
         FindingCode::SupersessionChangedChain => "supersession_changed_chain",
         FindingCode::QuarantinePresent => "quarantine_present",
+        FindingCode::RevokedSuperseded => "revoked_superseded",
     }
 }
 
@@ -1529,6 +1532,40 @@ impl<'a, S: EpochBlobStore> Control<'a, S> {
                 confirm_store_id,
                 confirm_checkpoint_seq,
             } => self.clear_reconcile(who, name, confirm_store_id, *confirm_checkpoint_seq, dry),
+            RepairCommand::LossPlan { confirm_store_id } => {
+                self.loss_plan_command(who, name, confirm_store_id)
+            }
+            RepairCommand::AcceptLoss {
+                confirm_store_id,
+                confirm_store_seq,
+                confirm_ledger_seq,
+                confirm_ledger_chain,
+                confirm_plan_digest,
+                acknowledge,
+            } => self.accept_loss(
+                who,
+                name,
+                confirm_store_id,
+                (*confirm_store_seq, *confirm_ledger_seq),
+                (confirm_ledger_chain, confirm_plan_digest, acknowledge),
+                dry,
+            ),
+            RepairCommand::RevokeKey { key, confirm_key } => {
+                self.revoke_key_command(who, name, key, confirm_key, dry)
+            }
+            RepairCommand::ReissuePlan => self.reissue_plan_command(who, name),
+            RepairCommand::ReissueLedger {
+                confirm_revoked_key,
+                confirm_new_key,
+                confirm_plan_digest,
+            } => self.reissue_ledger_command(
+                who,
+                name,
+                confirm_revoked_key,
+                confirm_new_key,
+                confirm_plan_digest,
+                dry,
+            ),
         }
     }
 

@@ -1,0 +1,12 @@
+# EXAMPLE ONLY. The interval is the recovery-point decision (docs/backup-recovery.md section 2), not a default.
+
+[Unit]
+Description=Private custodian database backup schedule (example)
+
+[Timer]
+OnCalendar=REPLACE-with-the-decided-schedule
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

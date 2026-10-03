@@ -299,6 +299,18 @@ pub fn with_stack_in<R>(
     consume_queue: bool,
     f: impl FnOnce(&Stack<'_>) -> R,
 ) -> (R, Result<ExitReport, DaemonReason>) {
+    with_stack_using(env, root, consume_queue, Some(env.dispatcher()), f)
+}
+
+/// Like `with_stack_in` with the worker of the caller's choosing: the S6 full
+/// flow passes the real bubblewrap worker on Linux (`real_worker`).
+pub fn with_stack_using<R>(
+    env: &Env,
+    root: &Path,
+    consume_queue: bool,
+    dispatcher: Option<custodian_worker::Dispatcher>,
+    f: impl FnOnce(&Stack<'_>) -> R,
+) -> (R, Result<ExitReport, DaemonReason>) {
     let key_id = KeyId::parse(&cc::id("key_", 1)).unwrap();
     let signer_clock: Arc<dyn custodian_signer::Clock> = Arc::new(TestClock(env.p.w.clock.clone()));
     let mut host = SignerHost::new(&key_id, &root.join("signer"), signer_clock.clone());
@@ -414,7 +426,7 @@ pub fn with_stack_in<R>(
         intake: intake_config(),
         webhook_secret: custodian_intake::config::WebhookSecret::new(secret.clone()).unwrap(),
         policy: dc::policy(),
-        dispatcher: Some(env.dispatcher()),
+        dispatcher,
         names: &env.names,
         pulls: adapters.pulls.clone(),
         checks: Some(adapters.checks.clone()),

@@ -1,8 +1,11 @@
 # Signed receipts and private-ledger export (C7)
 
 Status: **implemented** in `crates/custodian-ledger` and tested with synthetic data and keys generated inside
-the tests; **not deployed**. The `private-ledger` repository does not exist yet, no signing key exists, and
-nothing in this repository creates either.
+the tests; **not deployed**. No signing key exists and nothing in this repository creates one. The GitHub
+repository `redact-secret/private-ledger` exists and is private, but it is **not empty** (a read-only check in S6
+found a different code tree on `main`) and has no deploy key; it is not usable as the ledger remote until a human
+decides what to do with it ([server-prerequisites-checklist.md](server-prerequisites-checklist.md) section 4).
+Nothing in this repository writes to it.
 Decisions: [ADR 0050](adr/0050-receipt-signature-algorithm-keys-and-signer-isolation.md) (algorithm, keys,
 signer isolation), [ADR 0051](adr/0051-ledger-record-layout-identity-and-supersession.md) (records),
 [ADR 0052](adr/0052-ledger-backend-port-and-git-writer.md) (backend and Git writer),
@@ -124,10 +127,30 @@ rollback and tail truncation detectable:
 | Ledger unreachable | Export retries with backoff, then defers; events stay pending; disclosure stays closed; startup refuses. |
 | Crash between ledger write and ack | The next pass finds identical bytes and acks. `reconcile` reports and repairs the same. |
 | Conflicting bytes under an id | Quarantined; event stays pending; pass is `Blocked`; review, then supersede or fix the producer. |
-| Restored older database | `startup_check` refuses and the store persists `needs_reconcile`; reconcile consumed budget to at least the ledger's figures by a reviewed procedure, then `clear_reconcile`. |
+| Restored older database | `startup_check` refuses and the store persists `needs_reconcile`. A newer copy that contains the checkpoint is the answer; if none exists, the reviewed procedure is `repair loss-plan` then `repair accept-loss` (ADR 0130), which raises consumed budget to at least the ledger's figures and clears the block in one audited transaction. |
 | Writer clone lost | Re-clone the ledger; it holds no state absent from the remote. |
-| Key compromise | Revoke, publish a new key, supersede affected records, publish revocations. |
+| Key compromise | `repair revoke-key`, then `repair reissue-plan` and `repair reissue-ledger` (superseding records under the new pinned key, the old lineage kept and marked), `repair clear-reconcile`, then publish revocations (ADR 0131). |
 | Signer unavailable | Export errors with `sign_signer_unavailable`; nothing is written. |
+
+## Re-issue after a key revocation (R-4, ADR 0131)
+
+Revoking a key rejects every signature it made. The tool path keeps the history instead of rewriting it:
+`repair revoke-key` records the revocation, signed by the new (pinned root) key; `repair reissue-plan` lists the
+records signed by the revoked key without a valid re-attestation; `repair reissue-ledger` writes, for each, a
+**superseding** record with the same body and issue time signed by the new key. Old files stay byte for byte
+where they were. The walker reports them as `revoked_superseded` (informational) only if a valid record
+re-attests exactly the same body; a revoked-key record with no such record, or with a superseder whose body
+differs, stays `BadSignature(KeyRevoked)` and blocks. Audit events and checkpoints are re-attested only if the
+store corroborates them. Code: `custodian-ledger/src/reissue.rs`, `walk.rs`, `reconcile.rs`. Tests:
+`custodian-ledger/tests/reissue.rs`, `custodian-cli/tests/s6_key_revocation.rs`. Procedure:
+[backup-recovery.md](backup-recovery.md) 7.4. Synthetic data and test keys only.
+
+## Reading the tail for a restore loss (R-1, ADR 0130)
+
+`walk_ledger` also returns the effective audit records (`WalkReport::audit`). `custodian_ledger::recovery`
+derives, purely, the consumption per budget scope, the records a restored store lacks, the scopes and epochs
+the lost window touched, and the feed events it contained. The store adopts that tail only through its own
+audited operation; see [state-store.md](state-store.md), migration 0008.
 
 ## Manual private-ledger provisioning and access-check checklist
 

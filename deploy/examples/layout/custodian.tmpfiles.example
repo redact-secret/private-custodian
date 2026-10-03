@@ -1,0 +1,23 @@
+# EXAMPLE ONLY (systemd-tmpfiles format). Placeholders, not a deployment.
+# The directory and permission layout of docs/deployment-runbook.md section 2. The real paths are deployment
+# material and are not committed. Users and groups are created by the operator; none is shared with a developer
+# or CI account.
+#
+# Type Path                           Mode  User              Group             Age Argument
+d /srv/custodian                      0755  root              root              -
+d /srv/custodian/state                0700  custodian-svc     custodian-svc     -
+d /srv/custodian/protected            0700  custodian-svc     custodian-svc     -
+d /srv/custodian/staging              0700  custodian-svc     custodian-svc     -
+d /srv/custodian/artifacts            0755  root              root              -
+d /srv/custodian/policy               0755  root              root              -
+d /srv/custodian/feed                 0750  custodian-svc     custodian-svc     -
+d /srv/custodian/ledger-clone         0700  custodian-svc     custodian-svc     -
+d /srv/custodian/requests             0700  custodian-svc     custodian-svc     -
+d /srv/custodian/release-approvals    0700  custodian-svc     custodian-svc     -
+d /srv/custodian/released             0750  custodian-svc     custodian-svc     -
+d /srv/custodian/backups              0700  custodian-backup  custodian-backup  -
+d /etc/private-custodian              0755  root              root              -
+d /etc/private-custodian/secrets      0700  custodian-svc     custodian-svc     -
+d /etc/custodian-signer               0755  root              root              -
+d /var/lib/custodian-signer           0700  custodian-signer  custodian-signer  -
+d /run/custodian-signer               0750  custodian-signer  custodian-svc     -

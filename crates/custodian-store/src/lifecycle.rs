@@ -196,6 +196,163 @@ pub(crate) fn gate_request(tx: &Connection, request_id: &str) -> Result<(), Stor
     gate_epoch(tx, &key)
 }
 
+/// The body of [`SqliteStore::apply_epoch_change`], callable inside a
+/// transaction another operation already holds (the restore loss acceptance,
+/// ADR 0130, retires and re-flags epochs in its own transaction).
+pub(crate) fn apply_epoch_change_tx(
+    tx: &rusqlite::Transaction<'_>,
+    cmd: &EpochEventCommand<'_>,
+) -> Result<EpochEventOutcome, StoreError> {
+    let now = sql_time(cmd.now)?;
+    let digest = event_digest(cmd);
+    let digest = digest.as_str();
+    // Replay.
+    let prior_event: Option<(i64, String)> = tx
+        .query_row(
+            "SELECT seq, request_digest FROM epoch_events WHERE idempotency_key = ?1",
+            [cmd.idempotency_key],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    if let Some((seq, stored)) = prior_event {
+        if stored != digest {
+            return Err(StoreError::IdempotencyConflict);
+        }
+        return replay_event(tx, seq);
+    }
+
+    let cur = load_standing(tx, cmd.epoch_id)?;
+    if let Some(c) = &cur {
+        if c.corpus_id != cmd.corpus_id || c.family_id.as_deref() != cmd.family_id {
+            return Err(StoreError::IdentityConflict);
+        }
+    }
+    let current = cur.as_ref().map_or(EpochStanding::CLEAN, |c| c.standing);
+    let t = apply(current, cmd.change).map_err(|e| match e {
+        StandingRefusal::NothingToReport => StoreError::InvalidInput,
+        StandingRefusal::NotClearable => StoreError::InvalidTransition,
+    })?;
+    let version = match &cur {
+        None => {
+            // The first event creates the row at its post-change value.
+            tx.execute(
+                "INSERT INTO epoch_standing (epoch_id, corpus_id, family_id, \
+                     contamination, retired, version, updated_at) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6)",
+                (
+                    cmd.epoch_id,
+                    cmd.corpus_id,
+                    cmd.family_id,
+                    t.new.contamination.as_str(),
+                    i64::from(t.new.retired),
+                    now,
+                ),
+            )?;
+            1
+        }
+        Some(c) if t.changed() => {
+            let v = sql_time(c.version)? + 1;
+            tx.execute(
+                "UPDATE epoch_standing SET contamination = ?1, retired = ?2, \
+                     version = ?3, updated_at = ?4 WHERE epoch_id = ?5",
+                (
+                    t.new.contamination.as_str(),
+                    i64::from(t.new.retired),
+                    v,
+                    now,
+                    cmd.epoch_id,
+                ),
+            )?;
+            v
+        }
+        Some(c) => sql_time(c.version)?,
+    };
+    let reported = match cmd.change {
+        EpochChange::Report(k) => Some(k.as_str()),
+        _ => None,
+    };
+    tx.execute(
+        "INSERT INTO epoch_events (epoch_id, idempotency_key, request_digest, change, \
+             reported, prior_contamination, prior_retired, new_contamination, new_retired, \
+             changed, version_after, actor, actor_kind, reason, authorization_ref, at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+        (
+            cmd.epoch_id,
+            cmd.idempotency_key,
+            &digest,
+            cmd.change.as_str(),
+            reported,
+            t.prior.contamination.as_str(),
+            i64::from(t.prior.retired),
+            t.new.contamination.as_str(),
+            i64::from(t.new.retired),
+            i64::from(t.changed()),
+            version,
+            cmd.actor,
+            cmd.actor_kind,
+            cmd.reason,
+            cmd.authorization_ref,
+            now,
+        ),
+    )?;
+    let event_seq = tx.last_insert_rowid();
+
+    // The public consequence is part of the same transaction.
+    let mut obligation_id = None;
+    if t.changed() {
+        if let Some(effect) = evidence_effect(&t) {
+            let id = obligation_id_for(cmd.epoch_id, version, effect);
+            let (action, reason) = match effect {
+                EvidenceEffect::Contaminated => (ObligationAction::Contaminated, "contamination"),
+                EvidenceEffect::EpochEnded => (ObligationAction::Revoked, "epoch_rotation"),
+            };
+            insert_obligation(
+                tx,
+                &ObligationCommand {
+                    obligation_id: &id,
+                    target: ObligationTarget::Population,
+                    target_ref: cmd.epoch_id,
+                    action,
+                    superseded_by: None,
+                    reason,
+                    effective_at: cmd.now,
+                    actor: cmd.actor,
+                    authorization_ref: cmd.authorization_ref,
+                    now: cmd.now,
+                },
+            )?;
+            obligation_id = Some(id);
+        }
+    }
+
+    outbox_append(
+        tx,
+        &format!("epoch-event:{event_seq}"),
+        "epoch.standing",
+        None,
+        None,
+        &json!({
+            "event": "epoch.standing", "scope_key": cmd.epoch_id,
+            "kind": cmd.change.as_str(),
+            "prior_state": t.prior.contamination.as_str(),
+            "state": t.new.contamination.as_str(),
+            "retired": i64::from(t.new.retired),
+            "reason": cmd.reason, "actor": cmd.actor, "actor_kind": cmd.actor_kind,
+            "authorization_ref": cmd.authorization_ref, "at": now,
+        }),
+        now,
+    )?;
+    Ok(EpochEventOutcome {
+        event_seq: from_sql(event_seq),
+        prior: t.prior,
+        new: t.new,
+        changed: t.changed(),
+        version: from_sql(version),
+        replay: false,
+        obligation_id,
+    })
+}
+
 fn event_digest(c: &EpochEventCommand<'_>) -> String {
     let reported = match c.change {
         EpochChange::Report(k) => k.as_str(),
@@ -520,157 +677,8 @@ impl SqliteStore {
         if !matches!(cmd.actor_kind, "human" | "service" | "agent") {
             return Err(StoreError::InvalidInput);
         }
-        let now = sql_time(cmd.now)?;
-        let digest = event_digest(cmd);
-        self.write(FaultOp::EpochChange, |tx| {
-            // Replay.
-            let prior_event: Option<(i64, String)> = tx
-                .query_row(
-                    "SELECT seq, request_digest FROM epoch_events WHERE idempotency_key = ?1",
-                    [cmd.idempotency_key],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
-                )
-                .optional()?;
-            if let Some((seq, stored)) = prior_event {
-                if stored != digest {
-                    return Err(StoreError::IdempotencyConflict);
-                }
-                return replay_event(tx, seq);
-            }
-
-            let cur = load_standing(tx, cmd.epoch_id)?;
-            if let Some(c) = &cur {
-                if c.corpus_id != cmd.corpus_id || c.family_id.as_deref() != cmd.family_id {
-                    return Err(StoreError::IdentityConflict);
-                }
-            }
-            let current = cur.as_ref().map_or(EpochStanding::CLEAN, |c| c.standing);
-            let t = apply(current, cmd.change).map_err(|e| match e {
-                StandingRefusal::NothingToReport => StoreError::InvalidInput,
-                StandingRefusal::NotClearable => StoreError::InvalidTransition,
-            })?;
-            let version = match &cur {
-                None => {
-                    // The first event creates the row at its post-change value.
-                    tx.execute(
-                        "INSERT INTO epoch_standing (epoch_id, corpus_id, family_id, \
-                         contamination, retired, version, updated_at) \
-                         VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6)",
-                        (
-                            cmd.epoch_id,
-                            cmd.corpus_id,
-                            cmd.family_id,
-                            t.new.contamination.as_str(),
-                            i64::from(t.new.retired),
-                            now,
-                        ),
-                    )?;
-                    1
-                }
-                Some(c) if t.changed() => {
-                    let v = sql_time(c.version)? + 1;
-                    tx.execute(
-                        "UPDATE epoch_standing SET contamination = ?1, retired = ?2, \
-                         version = ?3, updated_at = ?4 WHERE epoch_id = ?5",
-                        (
-                            t.new.contamination.as_str(),
-                            i64::from(t.new.retired),
-                            v,
-                            now,
-                            cmd.epoch_id,
-                        ),
-                    )?;
-                    v
-                }
-                Some(c) => sql_time(c.version)?,
-            };
-            let reported = match cmd.change {
-                EpochChange::Report(k) => Some(k.as_str()),
-                _ => None,
-            };
-            tx.execute(
-                "INSERT INTO epoch_events (epoch_id, idempotency_key, request_digest, change, \
-                 reported, prior_contamination, prior_retired, new_contamination, new_retired, \
-                 changed, version_after, actor, actor_kind, reason, authorization_ref, at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
-                (
-                    cmd.epoch_id,
-                    cmd.idempotency_key,
-                    &digest,
-                    cmd.change.as_str(),
-                    reported,
-                    t.prior.contamination.as_str(),
-                    i64::from(t.prior.retired),
-                    t.new.contamination.as_str(),
-                    i64::from(t.new.retired),
-                    i64::from(t.changed()),
-                    version,
-                    cmd.actor,
-                    cmd.actor_kind,
-                    cmd.reason,
-                    cmd.authorization_ref,
-                    now,
-                ),
-            )?;
-            let event_seq = tx.last_insert_rowid();
-
-            // The public consequence is part of the same transaction.
-            let mut obligation_id = None;
-            if t.changed() {
-                if let Some(effect) = evidence_effect(&t) {
-                    let id = obligation_id_for(cmd.epoch_id, version, effect);
-                    let (action, reason) = match effect {
-                        EvidenceEffect::Contaminated => {
-                            (ObligationAction::Contaminated, "contamination")
-                        }
-                        EvidenceEffect::EpochEnded => (ObligationAction::Revoked, "epoch_rotation"),
-                    };
-                    insert_obligation(
-                        tx,
-                        &ObligationCommand {
-                            obligation_id: &id,
-                            target: ObligationTarget::Population,
-                            target_ref: cmd.epoch_id,
-                            action,
-                            superseded_by: None,
-                            reason,
-                            effective_at: cmd.now,
-                            actor: cmd.actor,
-                            authorization_ref: cmd.authorization_ref,
-                            now: cmd.now,
-                        },
-                    )?;
-                    obligation_id = Some(id);
-                }
-            }
-
-            outbox_append(
-                tx,
-                &format!("epoch-event:{event_seq}"),
-                "epoch.standing",
-                None,
-                None,
-                &json!({
-                    "event": "epoch.standing", "scope_key": cmd.epoch_id,
-                    "kind": cmd.change.as_str(),
-                    "prior_state": t.prior.contamination.as_str(),
-                    "state": t.new.contamination.as_str(),
-                    "retired": i64::from(t.new.retired),
-                    "reason": cmd.reason, "actor": cmd.actor, "actor_kind": cmd.actor_kind,
-                    "authorization_ref": cmd.authorization_ref, "at": now,
-                }),
-                now,
-            )?;
-            Ok(EpochEventOutcome {
-                event_seq: from_sql(event_seq),
-                prior: t.prior,
-                new: t.new,
-                changed: t.changed(),
-                version: from_sql(version),
-                replay: false,
-                obligation_id,
-            })
-        })
+        sql_time(cmd.now)?;
+        self.write(FaultOp::EpochChange, |tx| apply_epoch_change_tx(tx, cmd))
     }
 
     /// Every event of an epoch, oldest first.

@@ -3,7 +3,7 @@
 use custodian_signer::SignerConfig;
 use serde_json::{json, Value};
 
-const EXAMPLE: &str = include_str!("../../../docs/signer-config.example.json");
+const EXAMPLE: &str = include_str!("../../../deploy/examples/signer-config.example.json");
 
 fn example() -> Value {
     serde_json::from_str(EXAMPLE).unwrap()

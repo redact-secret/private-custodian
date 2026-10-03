@@ -81,8 +81,8 @@ Do these in order. Stop at the first step that needs a decision you cannot make 
 | D. Isolation or egress | a worker reached host files, the network or other runs | the self-check fails or a probe shows a path; unexplained egress | stop dispatch; treat every run since the last passing self-check on that host as exposed; contamination report for affected epochs |
 | E. Artifact integrity | an engine, adapter, scanner, candidate or config changed between approval and use | `identity_mismatch`; staged hash differs | the run was refused before exposure (refunded) or rejected after (consumed); find who could write the allowlist directory |
 | F. Disclosure or holdout leakage | a released projection reveals small cells, enables adaptive tuning, or carried a forbidden field | a consumer report; a composition review | revoke the projection; assess tuning risk (section 6); policy revision before any further release |
-| G. Key or signer | signing key exposure, misuse or loss | an unexpected signature; signer host alert | [backup-recovery.md](backup-recovery.md) section 7; revocation makes the ledger unreadable to the control plane until re-issue (register R-4) |
-| H. Ledger or database integrity | `ledger_untrusted`, `store_rolled_back`, conflicting or quarantined records | exit 8 from any command | do not clear the block to resume; compare the ledger clone with its remote and the independent checkpoint out of band; corrections are new superseding records; a conflicting record is never repaired automatically |
+| G. Key or signer | signing key exposure, misuse or loss | an unexpected signature; signer host alert | [backup-recovery.md](backup-recovery.md) section 7; revocation makes the ledger untrusted to the control plane until it is re-attested under a new key with `repair reissue-ledger` (ADR 0131) |
+| H. Ledger or database integrity | `ledger_untrusted`, `store_rolled_back`, `lineage_diverged`, conflicting or quarantined records | exit 8 from any command | do not clear the block to resume; when no copy reaches the ledger checkpoint, the only continuation is the explicit loss acceptance (`repair loss-plan`, `repair accept-loss`, ADR 0130) after you hold the independent checkpoint copy, and never for `lineage_diverged`; compare the ledger clone with its remote and the independent checkpoint out of band; corrections are new superseding records; a conflicting record is never repaired automatically |
 | I. Repository, CI or log leakage | a secret, token, protected value or operational identifier in git history, CI, a log or an artifact | a scanner hit; a report | rotate the credential first; remove from the working tree; do **not** rewrite shared history without the owner's decision; assume the value is public; see the history sweep in release-readiness |
 | J. Dependency or build compromise | a malicious or vulnerable dependency or action | an advisory; CI anomaly | pin and freeze; the `dependency-audit` CI job; rebuild from a reviewed lockfile; treat anything signed by a build from the affected window as suspect |
 | K. Intake abuse | forged, replayed or out-of-scope webhooks | reason codes on Checks | webhook Inactive; review the allowlist; intake never approves |
@@ -100,8 +100,9 @@ reference or policy.
 See [backup-recovery.md](backup-recovery.md) section 7. In short: stop the signer, pin a new root out of band,
 record `key_compromise` revocations for affected projections and receipts, publish the feed, preserve the ledger.
 After a revocation the ledger walk reports findings and the control plane will not start until the affected
-records are re-issued under the new key; no re-issue tool exists yet, so protected execution does not resume
-after a key compromise until it does. Operator credentials and App secrets rotate as in the runbook and
+records are re-attested under the new key (`repair revoke-key`, `repair reissue-plan`, `repair reissue-ledger`,
+then `repair clear-reconcile`; ADR 0131, backup-recovery.md 7.4). Protected execution does not resume until
+that has run, `verify all` is clean and the incident record says why resuming is safe. Operator credentials and App secrets rotate as in the runbook and
 docs/github-app.md; review the audit trail for the identity.
 
 ## 6. Holdout impact assessment

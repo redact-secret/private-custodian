@@ -1,0 +1,22 @@
+{
+  "events": ["ping", "pull_request", "installation", "installation_repositories"],
+  "installations": [
+    {
+      "installation_id": 1,
+      "repository_ids": [1]
+    }
+  ],
+  "actors": [
+    {
+      "github_user_id": 1,
+      "actor": "act_placeholderrequester001",
+      "roles": ["requester"]
+    },
+    {
+      "github_user_id": 2,
+      "actor": "act_placeholderapprover0001",
+      "roles": ["requester", "approver"]
+    }
+  ],
+  "max_body_bytes": 262144
+}

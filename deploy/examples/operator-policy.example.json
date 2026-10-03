@@ -1,0 +1,37 @@
+{
+  "schema": "private-custodian.operator-policy/1",
+  "policy_version": 1,
+  "issued_at": 1800000000,
+  "expires_at": 1900000000,
+  "identities": [
+    {
+      "actor": "act_placeholderrequester001",
+      "kind": "human",
+      "roles": ["requester"],
+      "credential_sha256": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "actor": "act_placeholderapprover0001",
+      "kind": "human",
+      "roles": ["approver"],
+      "credential_sha256": "0000000000000000000000000000000000000000000000000000000000000002"
+    },
+    {
+      "actor": "act_placeholderoperator0001",
+      "kind": "human",
+      "roles": ["operator", "auditor"],
+      "credential_sha256": "0000000000000000000000000000000000000000000000000000000000000003"
+    },
+    {
+      "actor": "act_placeholderagent000001",
+      "kind": "agent",
+      "roles": ["requester"],
+      "credential_sha256": "0000000000000000000000000000000000000000000000000000000000000004"
+    }
+  ],
+  "limits": {
+    "approval_ttl_secs": 3600,
+    "max_state_age_secs": 300,
+    "reservation_window_secs": 600
+  }
+}

@@ -48,6 +48,34 @@ pub enum FindingCode {
     /// Records exist under `quarantine/`: an export conflict awaits review.
     /// Not an integrity failure of the records themselves.
     QuarantinePresent,
+    /// The record is signed by a revoked key, and a record signed by a
+    /// currently trusted key re-attests exactly the same body (R-4, ADR 0131).
+    /// The old record stays in the ledger as the marked, superseded lineage;
+    /// it is not an integrity failure. A revoked-key record with no such
+    /// re-attestation is `BadSignature(KeyRevoked)` and stays blocking.
+    RevokedSuperseded,
+}
+
+impl FindingCode {
+    /// Findings that do not make the ledger untrustworthy.
+    pub fn is_informational(self) -> bool {
+        matches!(self, Self::QuarantinePresent | Self::RevokedSuperseded)
+    }
+}
+
+/// One effective (valid, not superseded) audit record, in the shape the
+/// recovery tools need (R-1, R-4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AuditEntry {
+    pub seq: u64,
+    pub record_id: String,
+    pub event_id: String,
+    pub kind: String,
+    pub chain: String,
+    pub payload_digest: String,
+    pub payload_exact: bool,
+    pub issued_at: u64,
+    pub payload: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -72,16 +100,43 @@ pub struct WalkReport {
     pub registry_checkpoint: Option<RegistryPoint>,
     /// Roots plus every key event that verified.
     pub keyring: Keyring,
+    /// Effective audit records in sequence order (valid and not superseded).
+    pub audit: Vec<AuditEntry>,
+    /// Records signed by a revoked key, whether or not they were re-attested.
+    pub revoked: Vec<RevokedRecord>,
+    /// Issue times (seconds) of every decoded key event, for the same-second
+    /// rule (R-5).
+    pub key_event_times: BTreeSet<u64>,
+}
+
+/// A record whose signing key is revoked (R-4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RevokedRecord {
+    pub path: String,
+    pub record: SignedLedgerRecord,
+    /// A valid record re-attests exactly this body (the marked old lineage).
+    pub reattested: bool,
 }
 
 impl WalkReport {
     /// No integrity finding. Quarantined records alone do not make the
     /// ledger untrustworthy; they need review.
     pub fn is_trustworthy(&self) -> bool {
-        self.findings
-            .iter()
-            .all(|f| f.code == FindingCode::QuarantinePresent)
+        self.findings.iter().all(|f| f.code.is_informational())
     }
+}
+
+fn republishes_same_key(keyring: &Keyring, body: &RecordBody) -> bool {
+    let RecordBody::KeyEvent(ev) = body else {
+        return false;
+    };
+    let Some(existing) = keyring.get(&ev.key_id) else {
+        return false;
+    };
+    ev.public_key
+        .as_deref()
+        .and_then(crate::b64::unhex32)
+        .is_some_and(|pk| pk == existing.public_key)
 }
 
 fn parse_record_path(path: &str) -> Option<(RecordKind, &str)> {
@@ -138,8 +193,21 @@ pub fn walk_ledger(
         (a.1.payload.issued_at, &a.1.payload.record_id)
             .cmp(&(b.1.payload.issued_at, &b.1.payload.record_id))
     });
+    let key_event_times: BTreeSet<u64> = key_events
+        .iter()
+        .map(|(_, r)| r.payload.issued_at.secs())
+        .collect();
     for (p, rec) in key_events {
         if let Err(e) = keyring.apply_key_event(rec) {
+            // A key pinned as a root and also published in the ledger (the
+            // recovery case, R-4) re-announces the same public key: that
+            // changes nothing and is not a rejection. A different key under
+            // a known id still is.
+            if e == KeyringError::KeyAlreadyKnown
+                && republishes_same_key(&keyring, &rec.payload.body)
+            {
+                continue;
+            }
             find(p, FindingCode::KeyEventRejected(e));
         }
     }
@@ -147,9 +215,13 @@ pub fn walk_ledger(
     // 3. Verify every signature against the final keyring.
     let verifier = Verifier::new(keyring.clone());
     let mut valid: Vec<&(String, SignedLedgerRecord)> = Vec::new();
+    // Records whose only problem is a revoked signing key: judged after
+    // supersession is known (R-4).
+    let mut revoked: Vec<&(String, SignedLedgerRecord)> = Vec::new();
     for item in &decoded {
         match verifier.verify_ledger_record(&item.1) {
             Ok(()) => valid.push(item),
+            Err(VerifyError::KeyRevoked) => revoked.push(item),
             Err(e) => find(&item.0, FindingCode::BadSignature(e)),
         }
     }
@@ -164,22 +236,51 @@ pub fn walk_ledger(
         .map(|(_, r)| (r.payload.record_id.as_str(), r))
         .collect();
     let mut superseded: BTreeSet<&str> = BTreeSet::new();
+    let mut superseder_of: BTreeMap<&str, &SignedLedgerRecord> = BTreeMap::new();
     for (p, rec) in &valid {
         if let Some(target) = rec.payload.supersedes.as_deref() {
             if !all_ids.contains(target) {
                 find(p, FindingCode::SupersedesMissing);
             } else if !superseded.insert(target) {
                 find(p, FindingCode::SupersessionFork);
-            } else if let (RecordBody::AuditEvent(new), Some(old)) =
-                (&rec.payload.body, by_id.get(target))
-            {
-                if let RecordBody::AuditEvent(old) = &old.payload.body {
-                    if old.seq != new.seq || old.chain != new.chain {
-                        find(p, FindingCode::SupersessionChangedChain);
+            } else {
+                superseder_of.insert(target, rec);
+                if let (RecordBody::AuditEvent(new), Some(old)) =
+                    (&rec.payload.body, by_id.get(target))
+                {
+                    if let RecordBody::AuditEvent(old) = &old.payload.body {
+                        if old.seq != new.seq || old.chain != new.chain {
+                            find(p, FindingCode::SupersessionChangedChain);
+                        }
                     }
                 }
             }
         }
+    }
+
+    // 4b. Revoked-key records: re-attested exactly (same issue time, same
+    // body) by a valid superseding record are the marked old lineage;
+    // everything else stays a blocking finding.
+    let mut revoked_out: Vec<RevokedRecord> = Vec::new();
+    for (p, rec) in &revoked {
+        let reattested = superseder_of
+            .get(rec.payload.record_id.as_str())
+            .is_some_and(|s| {
+                s.payload.body == rec.payload.body && s.payload.issued_at == rec.payload.issued_at
+            });
+        revoked_out.push(RevokedRecord {
+            path: p.clone(),
+            record: rec.clone(),
+            reattested,
+        });
+        find(
+            p,
+            if reattested {
+                FindingCode::RevokedSuperseded
+            } else {
+                FindingCode::BadSignature(VerifyError::KeyRevoked)
+            },
+        );
     }
 
     // 5. Audit chain over effective (not superseded) valid audit records.
@@ -293,6 +394,27 @@ pub fn walk_ledger(
         find(&format!("quarantine/{id}"), FindingCode::QuarantinePresent);
     }
 
+    let mut audit_entries: Vec<AuditEntry> = valid
+        .iter()
+        .filter_map(|(_, r)| match &r.payload.body {
+            RecordBody::AuditEvent(b) if !superseded.contains(r.payload.record_id.as_str()) => {
+                Some(AuditEntry {
+                    seq: b.seq,
+                    record_id: r.payload.record_id.clone(),
+                    event_id: b.event_id.clone(),
+                    kind: b.kind.clone(),
+                    chain: b.chain.clone(),
+                    payload_digest: b.payload_digest.clone(),
+                    payload_exact: b.payload_exact,
+                    issued_at: r.payload.issued_at.secs(),
+                    payload: b.payload.clone(),
+                })
+            }
+            _ => None,
+        })
+        .collect();
+    audit_entries.sort_by(|a, b| (a.seq, &a.record_id).cmp(&(b.seq, &b.record_id)));
+
     let records = decoded.len();
     Ok(WalkReport {
         records,
@@ -301,5 +423,8 @@ pub fn walk_ledger(
         store_checkpoint,
         registry_checkpoint,
         keyring,
+        audit: audit_entries,
+        revoked: revoked_out,
+        key_event_times,
     })
 }

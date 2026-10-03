@@ -1,0 +1,33 @@
+{
+  "schema": "private-custodian.example.backup-retention/0",
+  "note": "Shape only. Every value is a decision for the maintainer (docs/backup-recovery.md sections 2 and 5); nothing here is a default and nothing reads this file.",
+  "recovery_point": {
+    "export_after_every_approval": true,
+    "database_backup_interval_secs": "DECIDE",
+    "accepted_loss_window_secs": "DECIDE"
+  },
+  "database_backups": {
+    "target": "DECIDE-separate-disk-or-provider-encrypted-at-rest",
+    "keep_newest": "DECIDE",
+    "weekly_for_weeks": "DECIDE",
+    "mode": "0600"
+  },
+  "commitment_key_backup": {
+    "separate_from_corpus_backups": true,
+    "location": "DECIDE"
+  },
+  "repair_retention": {
+    "command": "custodian repair retention",
+    "queue_done_min_age_secs": "DECIDE (hard floor 86400)",
+    "claim_min_age_secs": "DECIDE (hard floor 604800)",
+    "decided_submission_min_age_secs": "DECIDE (hard floor 604800)",
+    "pending_submission_max_age_secs": "DECIDE (hard floor 86400)",
+    "batch_limit": "DECIDE"
+  },
+  "never_deleted": [
+    "ledger records",
+    "independent checkpoint copy",
+    "public feed envelopes",
+    "runtime database history tables"
+  ]
+}

@@ -1,6 +1,10 @@
 # Backup, restore drill, retention and signing-key recovery (C12)
 
-Status: procedures and an automated drill on synthetic data. **Nothing is deployed.** No backup target, key
+Status: procedures and an automated drill on synthetic data. **Nothing is deployed.** Since S6 the two cases
+the C12 drill could not resolve are executable: a restore with no copy that reaches the ledger checkpoint
+([ADR 0130](adr/0130-restore-loss-acceptance-with-no-newer-copy.md), section 4 case C) and a compromised signing
+key ([ADR 0131](adr/0131-ledger-reissue-after-key-revocation.md), section 7.4). Both are verified on public
+synthetic data only; neither has been rehearsed on a host. No backup target, key
 provider, ledger remote or schedule exists, so none of the numbers below is an operating fact; the values that
 need a human decision are marked **(decide)**. Decisions: [ADR 0101](adr/0101-restore-recovery-window-and-signing-key-operating-constraints.md);
 mechanisms: [state-store.md](state-store.md), [ledger.md](ledger.md), [protected-storage.md](protected-storage.md),
@@ -61,6 +65,9 @@ components (SQLite file, protected root, ledger, feed, bridge) with test keys:
 | Ledger rolled back to an older state | the walk of the remaining prefix is clean; the independent copy shows the rollback; `reconcile ledger` is not `consistent`; `repair ledger-reconcile` re-writes identical bytes | `a_ledger_rolled_back_to_an_older_state_is_found_by_the_independent_copy_and_repaired` |
 | A hole, a forged record or a foreign signature in the ledger | `ledger_untrusted`, exit 8, store write-blocked | `a_hole_a_forged_record_or_a_foreign_signature_in_the_ledger_blocks_the_store` |
 | Ledger or signer outage during export | events stay pending, disclosure closed, budgets untouched, one pass drains afterwards | `export_and_signer_outages_keep_events_pending_and_disclosure_closed_then_drain` |
+| No copy reaches the ledger checkpoint (the previously blocking case) | `repair loss-plan`, then `repair accept-loss` with exact confirmations adopts the ledger's acknowledged tail, raises budgets to the ledger's figures, retires affected epochs and clears the block atomically; the same request does not run again; startup passes after export | `s6_recovery.rs::the_previously_blocking_restore_is_recovered_by_an_explicit_audited_acceptance` |
+| A store that is not a prefix of the ledger, a healthy store, a tampered ledger | `lineage_diverged` (exit 8), `store_not_behind_ledger`, `ledger_untrusted`; nothing written | `s6_recovery.rs` (three tests) |
+| Compromised signing key: revoke, re-issue under a new key, clear, start again | the old lineage is kept and marked (`revoked_superseded`), nothing rewritten, the ledger walks clean, writes resume under the new key | `s6_key_revocation.rs`, `custodian-ledger/tests/reissue.rs` |
 
 ### 3.2 Manual rehearsal on the real deployment (not yet done; human, before any protected run)
 
@@ -80,7 +87,7 @@ ADR 0001 T4 item 6 requires a backup and restore rehearsal. Do it on a copy, nev
 | --- | --- | --- |
 | A. Restored copy contains the ledger's checkpoint | `startup_check` passes (or only a stale block remains) | `verify all`; if blocked, `repair clear-reconcile --dry-run` then the real command (runbook 6.3 step 5) |
 | B. Restored copy is behind the ledger, a newer copy exists | `store_rolled_back` | restore the newer copy and repeat; keep the blocked copy for the record |
-| C. Behind the ledger and no copy reaches the checkpoint | `store_rolled_back`, clear refused, every command refused | **Stop. Treat as an incident.** The blocked store cannot be repaired from inside (even `lifecycle retire` is refused). The design for continuing is a new store and a new ledger lineage with new epochs (ADR 0101, decision 2); it is not implemented. Do not edit the database, do not lower or recreate budgets, do not delete the ledger. |
+| C. Behind the ledger and no copy reaches the checkpoint | `store_rolled_back`, clear refused, every command refused | **Treat as an incident, then decide.** The blocked store cannot be repaired from inside, but since S6 it can be continued under an explicit, audited loss acceptance (ADR 0130; operator-runbook 6.3 step 3.2): `repair loss-plan`, compare with the **independent checkpoint copy**, `repair accept-loss`, `repair export`, `verify all`, re-record the lost feed obligations the plan listed, rotate the retired epochs. It adopts the ledger's acknowledged audit tail, raises every budget to the ledger's figures (never lowers, never resets), retires the epochs with activity in the lost window and records the acceptance. It cannot recover what the ledger was never told (section 2), the requests of the lost window (their cost is carried by the budgets), or feed obligations (their targets are not in the ledger). A store that is not a prefix of the ledger (`lineage_diverged`) is not a rollback: stop. Do not edit the database, do not lower or recreate budgets, do not delete the ledger. |
 | D. Restore passes but spend since the last export is lost | no signal | the documented window; compare the independent copy and the operator log with the restored store; if any approved request is missing, treat the affected epochs as retired (they may have spent budget) once the store is writable, and record the loss as an incident |
 
 ## 5. Retention and deletion schedule **(decide)**
@@ -156,12 +163,41 @@ a retire event for the old key signed by the new root. Resume after `verify all`
 
 ### 7.4 Key compromised
 
-Revocation rejects every signature the key ever made. The ledger walk then reports findings and the control
-plane refuses to start until the records are re-issued under a new key, and no re-issue tool exists
-(`revoking_the_signing_key_makes_its_history_untrusted_until_it_is_reissued`; register R-4, a blocker for
-compromise recovery). Containment first (docs/incident-response.md, section 5): stop the signer, preserve the
-ledger, pin a new root, record `key_compromise` revocation entries for affected projections and publish the
-feed. Do not resume protected execution until the re-issue design is implemented and rehearsed.
+Revocation rejects every signature the key ever made, so the ledger walk reports findings and the control
+plane refuses to start until the history is re-attested under a new key. Since S6 that is a tool, not a
+blocker (ADR 0131). Containment comes first (docs/incident-response.md, section 5). Then, in order:
+
+1. **Stop the signer and the control service.** Preserve the ledger (and a copy of the store); do not delete
+   anything.
+2. **Generate the new key on the signer host** and read its public key (`custodian-signer --print-public-key`).
+   Pin it **as an additional root** out of band: the operator `roots.json`, the independent checkpoint
+   location and every consumer. Set its `valid_from` **at or before the oldest ledger record**
+   (R-6: a key signs only records dated at or after its start; the tool refuses otherwise). Keep the old root
+   pinned so its history stays readable. Authorize the new key for every ledger domain.
+3. **Point the signer at the new key** and start it. Choose a time for step 4 that is not the same second as
+   any existing key event (R-5; the tool refuses otherwise).
+4. `custodian repair revoke-key --key-id <old> --confirm-key-id <old>`. The new key signs a `revoked` key
+   event. The control plane now refuses to start on this ledger: that is the intended containment.
+5. `custodian repair reissue-plan` (read-only). Read `records_to_reissue`, `corroborated` and `uncorroborated`.
+   Every audit event and checkpoint must be corroborated by the store. `uncorroborated` counts policy,
+   publication, reconciliation and key-event records: they hold digests and identities only, but you are
+   confirming that you reviewed them by confirming the digest. A refusal
+   `reissue_contradicted_by_store` means a record signed by the old key is not in the store (a forgery made
+   with the stolen key): stop and treat it as an incident; the tool will not launder it.
+6. `custodian repair reissue-ledger --confirm-revoked-key-id <old> --confirm-new-key-id <new>
+   --confirm-plan-digest <digest>`. Each unattested record gets a **superseding** record with the same body
+   and issue time, signed by the new key, at a new path; the old files are untouched and are reported as
+   `revoked_superseded` (marked, informational). One `reconciliation` record marks the step. The ledger must
+   walk clean afterwards or the command reports `reissue_post_check_failed`.
+7. `repair clear-reconcile` with the exact confirmations (the startup refusal had persisted the write block;
+   the clear is an audited `store.reconciled` event), `repair export`, `verify all`.
+8. Publish `key_compromise` revocations for every affected projection and receipt (`feed record-revocation`,
+   `feed publish`). Projections and revocation envelopes already signed by the old key are not re-signed;
+   consumers reject them by key revocation.
+
+Limits (ADR 0131): a revoked-key record that is itself a correction is not re-issued; one revoked key at a time;
+a forged record cannot be removed, only left blocking. The procedure is verified on public synthetic data with
+test keys; it has not been rehearsed with a real signer host.
 
 ### 7.5 Operator credential and webhook secret
 

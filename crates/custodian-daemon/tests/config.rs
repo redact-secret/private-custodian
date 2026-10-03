@@ -9,7 +9,8 @@ use custodian_daemon::reason::DaemonReason;
 use serde_json::{json, Value};
 
 fn example() -> Value {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/daemon-config.example.json");
+    let p = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../deploy/examples/daemon-config.example.json");
     serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap()
 }
 
@@ -20,7 +21,8 @@ fn parse(v: &Value) -> Result<DaemonConfig, DaemonReason> {
 #[test]
 fn the_example_parses_and_names_nothing_real() {
     let text = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/daemon-config.example.json"),
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../deploy/examples/daemon-config.example.json"),
     )
     .unwrap();
     let c = parse(&example()).expect("the documented example is structurally valid");

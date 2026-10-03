@@ -17,15 +17,21 @@
 //! * `legacy`    restricted: `apply` (HG-3, ADR 0115 and 0118), exact confirmations
 //! * `repair`    operational repair, separate from evaluation, every command
 //!   needs exact-object confirmation flags: `recover`, `registry-sweep`,
-//!   `export`, `ledger-reconcile`, `feed-deliver`, `clear-reconcile`, `retention`
+//!   `export`, `ledger-reconcile`, `feed-deliver`, `clear-reconcile`,
+//!   `retention`, and the recovery set of S6 (ADR 0130, ADR 0131):
+//!   `loss-plan`, `accept-loss`, `revoke-key`, `reissue-plan`, `reissue-ledger`
 
 use std::collections::BTreeMap;
 
 use custodian_contracts::types::{
-    CandidateDigest, DocumentDigest, EpochId, IdempotencyKey, PlanDigest, RequestId,
+    CandidateDigest, DocumentDigest, EpochId, IdempotencyKey, KeyId, PlanDigest, RequestId,
 };
 
 use crate::reason::CliReason;
+
+/// The word an operator must pass to `repair accept-loss`: the loss is
+/// explicit, never implied by the other confirmations (ADR 0130).
+pub const LOSS_ACKNOWLEDGEMENT: &str = "accept-unexported-loss";
 
 /// Largest document the CLI reads for ordinary commands.
 pub const MAX_DOCUMENT_BYTES: usize = 64 * 1024;
@@ -93,6 +99,40 @@ pub enum RepairCommand {
         confirm_store_id: String,
         /// The newest outbox sequence the operator reviewed against the ledger.
         confirm_checkpoint_seq: u64,
+    },
+    /// Read-only: what the ledger holds that this restored store lacks, the
+    /// effect accepting the loss would have, and the digest to confirm
+    /// (R-1, ADR 0130).
+    LossPlan {
+        confirm_store_id: String,
+    },
+    /// Accept the loss of a restore that no copy reaches the ledger
+    /// checkpoint for (R-1, ADR 0130). Human operator only; every
+    /// confirmation names the exact object.
+    AcceptLoss {
+        confirm_store_id: String,
+        /// The store's own newest outbox sequence.
+        confirm_store_seq: u64,
+        /// The ledger's newest checkpoint, read from the independent copy.
+        confirm_ledger_seq: u64,
+        confirm_ledger_chain: String,
+        confirm_plan_digest: String,
+        /// The literal acknowledgement word (`LOSS_ACKNOWLEDGEMENT`).
+        acknowledge: String,
+    },
+    /// Record in the ledger, signed by the new key, that a signing key is
+    /// revoked (R-4, ADR 0131).
+    RevokeKey {
+        key: KeyId,
+        confirm_key: KeyId,
+    },
+    /// Read-only: what re-issuing the revoked key's history would do.
+    ReissuePlan,
+    /// Re-attest the revoked key's history under the new key (R-4).
+    ReissueLedger {
+        confirm_revoked_key: KeyId,
+        confirm_new_key: KeyId,
+        confirm_plan_digest: String,
     },
     /// One retention pass over the intake queue, delivery claims and
     /// submissions (HG-4, ADR 0117). Every age is an explicit operator
@@ -210,6 +250,11 @@ impl Command {
             Self::Repair(RepairCommand::LedgerReconcile { .. }) => "repair.ledger-reconcile",
             Self::Repair(RepairCommand::FeedDeliver { .. }) => "repair.feed-deliver",
             Self::Repair(RepairCommand::ClearReconcile { .. }) => "repair.clear-reconcile",
+            Self::Repair(RepairCommand::LossPlan { .. }) => "repair.loss-plan",
+            Self::Repair(RepairCommand::AcceptLoss { .. }) => "repair.accept-loss",
+            Self::Repair(RepairCommand::RevokeKey { .. }) => "repair.revoke-key",
+            Self::Repair(RepairCommand::ReissuePlan) => "repair.reissue-plan",
+            Self::Repair(RepairCommand::ReissueLedger { .. }) => "repair.reissue-ledger",
         }
     }
 }
@@ -594,6 +639,71 @@ pub fn build_command(
                         batch_limit,
                     }))
                 }
+                "loss-plan" => {
+                    only(p, &["confirm-store-id"])?;
+                    Ok(Command::Repair(RepairCommand::LossPlan {
+                        confirm_store_id: store_id(p)?,
+                    }))
+                }
+                "accept-loss" => {
+                    only(
+                        p,
+                        &[
+                            "confirm-store-id",
+                            "confirm-store-seq",
+                            "confirm-ledger-seq",
+                            "confirm-ledger-chain",
+                            "confirm-plan-digest",
+                            "acknowledge",
+                        ],
+                    )?;
+                    let seq = |name: &str| -> Result<u64, CliReason> {
+                        confirm(p, name)?
+                            .parse::<u64>()
+                            .map_err(|_| CliReason::UsageError)
+                    };
+                    Ok(Command::Repair(RepairCommand::AcceptLoss {
+                        confirm_store_id: store_id(p)?,
+                        confirm_store_seq: seq("confirm-store-seq")?,
+                        confirm_ledger_seq: seq("confirm-ledger-seq")?,
+                        confirm_ledger_chain: confirm(p, "confirm-ledger-chain")?.to_owned(),
+                        confirm_plan_digest: confirm(p, "confirm-plan-digest")?.to_owned(),
+                        acknowledge: confirm(p, "acknowledge")?.to_owned(),
+                    }))
+                }
+                "revoke-key" => {
+                    only(p, &["key-id", "confirm-key-id"])?;
+                    let key =
+                        KeyId::parse(require(p, "key-id")?).map_err(|_| CliReason::UsageError)?;
+                    let confirm_key = KeyId::parse(confirm(p, "confirm-key-id")?)
+                        .map_err(|_| CliReason::UsageError)?;
+                    Ok(Command::Repair(RepairCommand::RevokeKey {
+                        key,
+                        confirm_key,
+                    }))
+                }
+                "reissue-plan" => {
+                    only(p, &[])?;
+                    Ok(Command::Repair(RepairCommand::ReissuePlan))
+                }
+                "reissue-ledger" => {
+                    only(
+                        p,
+                        &[
+                            "confirm-revoked-key-id",
+                            "confirm-new-key-id",
+                            "confirm-plan-digest",
+                        ],
+                    )?;
+                    let key = |name: &str| -> Result<KeyId, CliReason> {
+                        KeyId::parse(confirm(p, name)?).map_err(|_| CliReason::UsageError)
+                    };
+                    Ok(Command::Repair(RepairCommand::ReissueLedger {
+                        confirm_revoked_key: key("confirm-revoked-key-id")?,
+                        confirm_new_key: key("confirm-new-key-id")?,
+                        confirm_plan_digest: confirm(p, "confirm-plan-digest")?.to_owned(),
+                    }))
+                }
                 "clear-reconcile" => {
                     only(p, &["confirm-store-id", "confirm-checkpoint-seq"])?;
                     Ok(Command::Repair(RepairCommand::ClearReconcile {
@@ -659,6 +769,9 @@ mod tests {
             "repair ledger-reconcile",
             "repair feed-deliver",
             "repair clear-reconcile --confirm-store-id abc",
+            "repair loss-plan",
+            "repair accept-loss --confirm-store-id abc",
+            "repair reissue-ledger",
         ] {
             let p = parse_args(&args(c)).unwrap();
             assert_eq!(

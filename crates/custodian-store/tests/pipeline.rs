@@ -696,7 +696,7 @@ fn a_database_at_version_six_upgrades_and_keeps_its_data() {
         store.enqueue(queued(1)).unwrap();
     }
     let store = open(&db);
-    assert_eq!(store.schema_version().unwrap(), 7);
+    assert_eq!(store.schema_version().unwrap(), 8);
     assert_eq!(status(&store, &fx).held, 1);
     assert_eq!(store.queue_depth().unwrap(), 1);
     // The new tables work on the upgraded database.

@@ -258,6 +258,21 @@ fn read_bounded(path: &Path, max: usize) -> Result<Vec<u8>, CliReason> {
     read_checked(path, max, 0o022)
 }
 
+/// Check the document's shape and obvious bounds without opening anything:
+/// the same parse and checks `Deployment::open` starts with. For tests of the
+/// configuration examples (`deploy/examples/`), which name no real path.
+pub fn validate_config_document(config_bytes: &[u8]) -> Result<(), CliReason> {
+    if config_bytes.len() > MAX_CONFIG_BYTES {
+        return Err(CliReason::NotConfigured);
+    }
+    let c: ConfigFile =
+        serde_json::from_slice(config_bytes).map_err(|_| CliReason::NotConfigured)?;
+    if c.schema != CONFIG_SCHEMA || c.feed_ttl_secs == 0 || c.feed_renew_margin_secs == 0 {
+        return Err(CliReason::NotConfigured);
+    }
+    Ok(())
+}
+
 impl Deployment {
     /// Open every component. Any failure is `not_configured` or a store
     /// code; none names a path.

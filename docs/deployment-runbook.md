@@ -1,4 +1,10 @@
-# Initial single-service deployment runbook and manual infrastructure checklist (C12)
+# Initial single-service deployment runbook and manual infrastructure checklist (C12, refreshed by S6)
+
+> **Start with [server-prerequisites-checklist.md](server-prerequisites-checklist.md).** It is the single list,
+> in dependency order, of everything a human does once a server exists, with the evidence to record and the
+> document or command that verifies each item. This runbook is the narrative behind it. The shape of every
+> configuration file is in [`deploy/examples/`](../deploy/examples/README.md) (placeholders only, scanned by a
+> test). The GitHub App webhook is the **last** item and stays Inactive until all others are done.
 
 Status: a plan and a checklist. **Nothing in this repository provisions anything, and C12 provisioned nothing**:
 no host, account, key, repository setting, deploy key, GitHub App setting, policy file, feed destination or
@@ -12,20 +18,23 @@ maintained by the Redact Secret project; the controls are project-maintained, no
 
 ## 1. What can and cannot be deployed today
 
+State after S1 to S6 (functional verification on public synthetic data; none of it is deployed):
+
 | Piece | State in the repository | Consequence for a first deployment |
 | --- | --- | --- |
 | Operator CLI (`custodian`), store, corpus, ledger writer (Git), lifecycle, disclosure, bridge | implemented, synthetic-tested | runs against real files once configured |
-| Long-running service, HTTP listener, queue-consumer loop | **absent** (`Service::start` and the pieces are libraries; `custodian-service` is a scaffold) | no automatic intake or dispatch; webhook must stay Inactive |
-| Isolated signer process and transport | **absent**; the `custodian` binary refuses with `signer_unavailable` | `repair export` and `feed publish` cannot sign; no receipt, no feed, no release |
-| Feed destination (static hosting or object store) | **absent** (`DirFeed` and `MemoryFeed` only) | nothing for a consumer to read |
-| Worker engines (`worker-result/1` and `private-custodian.aggregates/1` in credential-eval and pii-eval) | **absent engine side** | no real run can produce a releasable aggregate |
-| Receipt and execution-record assembly from a dispatch report | **absent** (the C12 end-to-end test assembles them) | nothing turns a validated run into an internal receipt |
+| Service daemon `custodiand`: std-only HTTP listener on loopback, durable queue consumer, scheduler, request-to-projection pipeline (S5, [daemon.md](daemon.md)) | implemented, synthetic-tested including the real sandbox on Linux CI | needs a TLS reverse proxy in front; **no HTTPS client** is built, so GitHub access stays `disabled` or loopback-only until that decision is made (checklist 11.5) |
+| Isolated signer process and local-socket transport (S2, [signer.md](signer.md)) | implemented, synthetic test keys | a dedicated uid, on-host key generation and an out-of-band pin are human steps (checklist section 3) |
+| Feed destination (static hosting or object store) | **absent** (`DirFeed` and `MemoryFeed` only) | nothing for a consumer to read until a destination meets the contract (checklist section 7) |
+| Worker engines (`worker-result/1` and `private-custodian.aggregates/1` in credential-eval and pii-eval) | **absent engine side**; the synthetic fixture emits them | no real run can produce a releasable aggregate |
+| Receipt and execution-record assembly from a dispatch report | implemented (S5, ADR 0127), exercised with the fixture engine | blocked only by the engine side |
 | Isolation | bubblewrap backend, rlimits; **no seccomp, no cgroups**; Linux only, proved by self-check on the host | unsupported until the self-check passes on the production host |
+| Restore with no newer copy; key compromise | executable as operator commands (S6, [ADR 0130](adr/0130-restore-loss-acceptance-with-no-newer-copy.md), [ADR 0131](adr/0131-ledger-reissue-after-key-revocation.md)) | verified on synthetic data only; rehearse on the host (checklist 3.5, 9.2) |
 | Real operator policy, disclosure policy, pinned roots, keys, ledger | **none exist** | all are human provisioning |
 
-So the honest target of this runbook is the state in which the missing code exists. Sections 3 and 4 say what a
-human prepares now and in what order; section 3 steps marked **(blocked on code)** cannot be finished until the
-engineering blockers in [release-readiness.md](release-readiness.md) (HG-4, HG-5, R-3) are closed.
+So the honest target of this runbook is the state in which the remaining engineering blockers in
+[release-readiness.md](release-readiness.md) (the engine side, the HTTPS client decision) are closed. Sections 3
+and 4 say what a human prepares and in what order.
 
 ## 2. Topology (single host, single service)
 
@@ -95,14 +104,15 @@ step assumes the earlier approval exists. Never run any of this in CI.
 4. Rehearse a backup and restore on a copy with synthetic data (backup-recovery.md section 3.2).
    **Approval:** maintainer records the target, schedule, retention and the rehearsal result.
 
-### Step 3. Signer host and keys **(blocked on code: isolated signer process)**
+### Step 3. Signer host and keys
 
 1. On the signer host, never a developer machine or CI, generate the Ed25519 root key. Record only the public
    key.
 2. Pin the public key out of band: the operator `roots.json`, the independent checkpoint location, and every
    consumer (benchmarks). Do not take a key from the ledger or the feed.
 3. Decide key backup (recommended: none; see backup-recovery.md 7.1).
-4. Run the rotation rehearsal (backup-recovery.md 7.2) on a throwaway key pair before relying on it.
+4. Run the rotation rehearsal (backup-recovery.md 7.2) and the compromise rehearsal (7.4) on a throwaway key
+   pair before relying on either.
    **Approval:** maintainer records the public key fingerprint, where it is pinned and who can reach the signer.
 
 ### Step 4. Private ledger and the independent checkpoint copy
@@ -149,7 +159,7 @@ on 2026-10-03 (the C12 brief); verify this yourself before step 1 below. Then, f
    rotate, publish, repair, import an activation or cancel others' requests (structural, not configurable).
 3. Install the policy where it is not group or other writable. **Approval:** maintainer reviews the policy diff.
 
-### Step 7. Feed destination **(blocked on code and a human choice)**
+### Step 7. Feed destination **(a human choice; no destination exists)**
 
 Choose static hosting or an object store that meets the `FeedDestination` contract (create-if-absent, identical
 bytes accepted, different bytes refused, readable without any private access, in-order writes). Restrict
@@ -171,7 +181,7 @@ synthetic end-to-end scenario with a public conformance control, `verify all`, t
 tabletop from incident-response.md section 9. **Approval:** maintainer records the results. This is the ADR
 0001 T4 evidence; until it exists no protected execution is permitted.
 
-### Step 10. GitHub App (only when a server exists)
+### Step 10. GitHub App (only when a server exists, and last)
 
 The App webhook stays **Inactive** until every item in github-app.md section 7 is done, including: the
 listener behind HTTPS exists, the durable stores are shared with the control plane, the queue consumer exists,
@@ -182,7 +192,7 @@ human act (github-app.md section 4); there is no code path that enables it.
 
 ### Step 11. First protected run
 
-Only after steps 0 to 9 (and 10 if intake is by App): the first protected run is a human-approved request with
+Only after steps 0 to 9 (and 10 if intake is by App), and the engine-side work in the checklist (section 12): the first protected run is a human-approved request with
 the exact plan digest typed by the approver, a budget no larger than needed, and the incident owner on call.
 **Approval:** maintainer.
 

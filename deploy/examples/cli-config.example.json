@@ -1,0 +1,20 @@
+{
+  "schema": "private-custodian.cli-config/1",
+  "store_path": "/srv/custodian/state/store.db",
+  "operator_policy_path": "/srv/custodian/policy/operator-policy.json",
+  "corpus_root": "/srv/custodian/protected",
+  "ledger_dir": "/srv/custodian/ledger-clone",
+  "ledger_remote": "origin",
+  "ledger_branch": "main",
+  "pinned_roots_path": "/srv/custodian/policy/roots.json",
+  "feed_dir": "/srv/custodian/feed",
+  "feed_id": "fed_placeholder00000000001",
+  "feed_destination_label": "placeholder-destination",
+  "feed_ttl_secs": 3600,
+  "feed_renew_margin_secs": 600,
+  "commitment_key_id": "key_placeholder00000000001",
+  "signer_key_id": "key_placeholder00000000002",
+  "signer_socket_path": "/run/custodian-signer/signer.sock",
+  "signer_uid": 1001,
+  "signer_timeout_secs": 10
+}

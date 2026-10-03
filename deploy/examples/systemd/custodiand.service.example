@@ -1,0 +1,72 @@
+# EXAMPLE ONLY. Placeholders, not a deployment. Nothing in the repository installs or starts this unit.
+# See deploy/examples/README.md and docs/server-prerequisites-checklist.md.
+#
+# The control service (custodiand): listener on loopback behind the TLS proxy, queue consumer, pipeline.
+# It holds no signing key (the signer is a separate unit and user), no App private key beyond the path in its
+# configuration, and no database-admin credential. The configuration file is owned by root and is not group or
+# world writable (the daemon refuses otherwise).
+#
+# Isolation note: custodiand starts the worker through bubblewrap, which needs unprivileged user namespaces, so
+# this unit deliberately does NOT set RestrictNamespaces=yes. The worker boundary is proven on the host by
+# run_self_check, not by these directives (docs/worker-isolation.md). These directives are defence in depth for
+# the control service itself.
+
+[Unit]
+Description=Private custodian control service (example)
+Documentation=https://custodian.example.invalid/docs
+After=network-online.target custodian-signer.service
+Wants=network-online.target
+Requires=custodian-signer.service
+
+[Service]
+Type=exec
+User=custodian-svc
+Group=custodian-svc
+ExecStartPre=/usr/local/bin/custodiand check-config --config /etc/private-custodian/daemon-config.json
+ExecStart=/usr/local/bin/custodiand run --config /etc/private-custodian/daemon-config.json
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=60s
+KillSignal=SIGTERM
+UMask=0077
+
+# Filesystem
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadOnlyPaths=/etc/private-custodian /srv/custodian/policy /srv/custodian/artifacts
+ReadWritePaths=/srv/custodian/state /srv/custodian/protected /srv/custodian/staging /srv/custodian/feed /srv/custodian/ledger-clone /srv/custodian/requests /srv/custodian/release-approvals /srv/custodian/released
+InaccessiblePaths=/srv/custodian/backups
+
+# Privileges
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RemoveIPC=yes
+
+# Kernel surfaces
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProcSubset=pid
+
+# Network: loopback listener, outbound git to the ledger remote, the signer's Unix socket.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Resources (placeholders; size them for the host)
+LimitNOFILE=4096
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target
