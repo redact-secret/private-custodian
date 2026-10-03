@@ -4,6 +4,7 @@ members = [
     "crates/custodian-core",
     "crates/custodian-contracts",
     "crates/custodian-service",
+    "crates/custodian-corpus",
 ]
 
 [workspace.package]

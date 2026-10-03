@@ -52,6 +52,17 @@ name = "custodian-core"
 version = "0.0.0"
 
 [[package]]
+name = "custodian-corpus"
+version = "0.0.0"
+dependencies = [
+ "custodian-contracts",
+ "custodian-core",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "custodian-service"
 version = "0.0.0"
 dependencies = [
