@@ -26,6 +26,13 @@ pub trait RunLedger {
     /// Write-ahead exposure record. Must be committed before protected bytes
     /// are opened.
     fn record_exposure(&self) -> Result<()>;
+    /// Called after `record_exposure` and before the corpus is opened: the
+    /// exposure record must be acknowledged by the ledger export (R-2,
+    /// ADR 0116), so a restore to a copy that predates it is detected.
+    /// Implementations that do not gate dispatch accept.
+    fn confirm_exposure_exported(&self) -> Result<()> {
+        Ok(())
+    }
     fn begin_validation(&self) -> Result<()>;
     fn finish(&self, outcome: ExecutionOutcome, reason: ReasonCode) -> Result<()>;
 }
@@ -51,7 +58,11 @@ pub struct StoreRunLedger<'a> {
     clock: Arc<dyn Fn() -> u64 + Send + Sync>,
     observed: Arc<dyn Fn() -> Option<ObservedActivation> + Send + Sync>,
     lease: Mutex<Option<Lease>>,
+    export_barrier: Option<ExportBarrier<'a>>,
 }
+
+/// Drains the audit export. Returns true only when it ran to completion.
+type ExportBarrier<'a> = Box<dyn Fn() -> bool + Send + Sync + 'a>;
 
 impl<'a> StoreRunLedger<'a> {
     /// `observed` supplies a fresh activation observation at start (required
@@ -77,6 +88,26 @@ impl<'a> StoreRunLedger<'a> {
             clock,
             observed,
             lease: Mutex::new(None),
+            export_barrier: None,
+        }
+    }
+
+    /// Install the export barrier (R-2, ADR 0116). A store with the dispatch
+    /// gate enforced refuses `start` and `record_exposure` while earlier
+    /// spend is unacknowledged by the ledger. The barrier is the deployment's
+    /// export pass; it runs before each of those two steps, and a barrier
+    /// that reports failure refuses the step (`LedgerUnavailable`) without
+    /// touching the store. Without a barrier the gate simply refuses until
+    /// something else exports.
+    pub fn with_export_barrier(mut self, barrier: impl Fn() -> bool + Send + Sync + 'a) -> Self {
+        self.export_barrier = Some(Box::new(barrier));
+        self
+    }
+
+    fn drain_exports(&self) -> Result<()> {
+        match &self.export_barrier {
+            Some(b) if !b() => Err(R::LedgerUnavailable),
+            _ => Ok(()),
         }
     }
 
@@ -99,6 +130,7 @@ impl<'a> StoreRunLedger<'a> {
 
 impl RunLedger for StoreRunLedger<'_> {
     fn start(&self) -> Result<()> {
+        self.drain_exports()?;
         let obs = (self.observed)();
         let lease = self
             .store
@@ -134,9 +166,19 @@ impl RunLedger for StoreRunLedger<'_> {
     }
 
     fn record_exposure(&self) -> Result<()> {
+        self.drain_exports()?;
         self.store
             .record_exposure(&self.lease()?, &self.actor, (self.clock)())
             .map_err(Self::map)
+    }
+
+    fn confirm_exposure_exported(&self) -> Result<()> {
+        self.drain_exports()?;
+        match self.store.exposure_export_acknowledged(&self.lease()?) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(R::LedgerUnavailable),
+            Err(e) => Err(Self::map(e)),
+        }
     }
 
     fn begin_validation(&self) -> Result<()> {
