@@ -124,6 +124,8 @@ pub struct RegistryView {
     entries: BTreeMap<EpochId, (RegistryRow, EpochState)>,
     head: DocumentDigest,
     next_seq: u64,
+    /// Head after each applied event, in order (`heads[i]` follows event `i`).
+    heads: Vec<DocumentDigest>,
 }
 
 impl RegistryView {
@@ -132,7 +134,25 @@ impl RegistryView {
             entries: BTreeMap::new(),
             head: genesis(),
             next_seq: 0,
+            heads: Vec::new(),
         }
+    }
+
+    /// Number of events in the log. Checkpoint this with [`Self::head`]: a
+    /// registry with fewer events than an externally recorded checkpoint, or
+    /// whose head at that count differs, was rolled back or diverged (C7).
+    pub fn event_count(&self) -> u64 {
+        self.next_seq
+    }
+
+    /// Head after the first `count` events (`count == 0` is the genesis
+    /// value); `None` when the log is shorter than `count`.
+    pub fn head_after(&self, count: u64) -> Option<DocumentDigest> {
+        if count == 0 {
+            return Some(genesis());
+        }
+        let i = usize::try_from(count - 1).ok()?;
+        self.heads.get(i).cloned()
     }
 
     pub fn get(&self, epoch: &EpochId) -> Option<(&RegistryRow, EpochState)> {
@@ -244,6 +264,7 @@ impl Registry {
             }
             view.apply(&line.body.event)
                 .map_err(|_| R::RegistryInvalid)?;
+            view.heads.push(line.digest.clone());
             view.head = line.digest;
             view.next_seq += 1;
         }
