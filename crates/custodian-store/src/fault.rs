@@ -27,10 +27,15 @@ pub enum FaultOp {
     Reconcile,
     ChargeRelease,
     AppendDisclosureHistory,
+    EpochChange,
+    ObligationEnqueue,
+    FeedAppend,
+    FeedDelivered,
+    RecordRotation,
 }
 
 impl FaultOp {
-    pub const ALL: [FaultOp; 15] = [
+    pub const ALL: [FaultOp; 20] = [
         Self::ProvisionBudget,
         Self::Reserve,
         Self::Retry,
@@ -46,6 +51,11 @@ impl FaultOp {
         Self::Reconcile,
         Self::ChargeRelease,
         Self::AppendDisclosureHistory,
+        Self::EpochChange,
+        Self::ObligationEnqueue,
+        Self::FeedAppend,
+        Self::FeedDelivered,
+        Self::RecordRotation,
     ];
 }
 

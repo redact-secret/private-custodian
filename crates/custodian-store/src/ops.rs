@@ -18,6 +18,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::StoreError;
 use crate::fault::FaultOp;
+use crate::lifecycle::{epoch_key, gate_epoch, gate_request};
 use crate::migrations::hex;
 use crate::model::*;
 use crate::outbox::outbox_append;
@@ -450,6 +451,12 @@ pub(crate) fn reserve_tx(
     if same_id.is_some() {
         return Err(StoreError::IdentityConflict);
     }
+    // C9 gate: a contaminated, possibly changed or retired epoch takes no new
+    // request. Replays above are exempt: they charge nothing.
+    gate_epoch(
+        tx,
+        &epoch_key(i.origin, i.subject.as_deref(), i.document.as_deref())?,
+    )?;
     tx.execute(
         "INSERT INTO requests (request_id, idempotency_key, request_digest, plan_digest, \
          scope_key, kind, units, max_retries, actor, requested_at, origin, subject, document) \
@@ -604,6 +611,14 @@ impl SqliteStore {
             {
                 return Err(StoreError::RetryRefused);
             }
+            gate_epoch(
+                tx,
+                &epoch_key(
+                    intake.origin,
+                    intake.subject.as_deref(),
+                    intake.document.as_deref(),
+                )?,
+            )?;
             insert_approval(tx, &intake)?;
             create_attempt(
                 tx,
@@ -636,6 +651,8 @@ impl SqliteStore {
             if row.lease_expires_at.is_none_or(|e| e <= now) {
                 return Err(StoreError::LeaseLost);
             }
+            // C9 gate: re-evaluated in the transaction that takes the lease.
+            gate_request(tx, &row.request_id)?;
             let origin: String = tx.query_row(
                 "SELECT origin FROM requests WHERE request_id = ?1",
                 [&row.request_id],
@@ -744,6 +761,10 @@ impl SqliteStore {
             if row.exposure == Exposure::Exposed {
                 return Ok(());
             }
+            // C9 gate: the last one before protected bytes may be opened. An
+            // attempt already exposed is not blocked here (it cannot be
+            // un-exposed); it settles, and release is refused downstream.
+            gate_request(tx, &row.request_id)?;
             mark_exposed(tx, &row, actor.as_str(), now_i)?;
             outbox_append(
                 tx,

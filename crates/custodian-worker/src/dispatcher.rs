@@ -380,8 +380,24 @@ impl Dispatcher {
             }
         };
 
-        // Step 3.
-        ledger.start()?;
+        // Step 3. A refusal here (the epoch was contaminated, changed or
+        // retired since reservation, C9) happens before anything was exposed:
+        // settle it as a refunded pre-start failure.
+        match ledger.start() {
+            Ok(()) => {}
+            Err(R::EligibilityDenied) => {
+                ledger.fail_before_start(R::EligibilityDenied.core_reason())?;
+                return Ok(report(
+                    ExecutionOutcome::Rejected,
+                    R::EligibilityDenied,
+                    Exposure::NotExposed,
+                    true,
+                    None,
+                    None,
+                ));
+            }
+            Err(e) => return Err(e),
+        }
 
         match self.drive(job, ledger, corpus, cancel, &pins, quotas) {
             Ok(v) => {
@@ -463,7 +479,18 @@ impl Dispatcher {
         }
 
         // Step 5: write-ahead exposure record, then and only then the corpus.
-        led(ledger.record_exposure(), Exposure::NotExposed)?;
+        match ledger.record_exposure() {
+            Ok(()) => {}
+            // The last gate before protected bytes: nothing was opened.
+            Err(R::EligibilityDenied) => {
+                return verdict(
+                    ExecutionOutcome::Rejected,
+                    R::EligibilityDenied,
+                    Exposure::NotExposed,
+                )
+            }
+            other => led(other, Exposure::NotExposed)?,
+        }
         let exposed = Exposure::Exposed;
         let _close = CloseOnDrop(corpus);
 

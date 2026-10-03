@@ -94,6 +94,14 @@ pub const PAYLOAD_KEY_ALLOWLIST: &[&str] = &[
     "actor",
     "authorization_ref",
     "lease_token",
+    // C9 (ADR 0073): epoch standing and revocation feed events.
+    "actor_kind",
+    "retired",
+    "target_kind",
+    "successor_epoch",
+    "feed_sequence",
+    "document_digest",
+    "destination",
 ];
 
 fn safe_token(s: &str) -> bool {

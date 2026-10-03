@@ -61,6 +61,9 @@ pub enum StoreError {
     Invariant(&'static str),
     /// A value is outside the representable or allowed range.
     InvalidInput,
+    /// The epoch the request draws on is contaminated, possibly changed or
+    /// retired (C9). Nothing was changed.
+    EpochBlocked,
     /// Fault injection fired (tests only; never produced without an injector).
     InjectedCrash(FaultPoint),
     /// Any other SQLite failure.
@@ -80,6 +83,7 @@ impl StoreError {
                 ReasonCode::InvalidTransition
             }
             Self::IdentityConflict => ReasonCode::DuplicateRequest,
+            Self::EpochBlocked => ReasonCode::AuthorizationDenied,
             _ => ReasonCode::StoreUnavailable,
         }
     }
@@ -109,6 +113,7 @@ impl fmt::Display for StoreError {
             Self::Constraint => "store_constraint",
             Self::Invariant(_) => "store_invariant",
             Self::InvalidInput => "store_invalid_input",
+            Self::EpochBlocked => "store_epoch_blocked",
             Self::InjectedCrash(_) => "store_injected_crash",
             Self::Database => "store_database",
         };
