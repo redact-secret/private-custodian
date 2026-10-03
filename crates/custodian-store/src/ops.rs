@@ -88,7 +88,7 @@ fn utf8(bytes: Vec<u8>) -> Result<String, StoreError> {
     String::from_utf8(bytes).map_err(|_| StoreError::InvalidInput)
 }
 
-fn intake_from_contracts(
+pub(crate) fn intake_from_contracts(
     req: &EvaluationRequest,
     approval: &Approval,
     observed: &ObservedActivation,

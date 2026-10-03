@@ -32,10 +32,19 @@ pub enum FaultOp {
     FeedAppend,
     FeedDelivered,
     RecordRotation,
+    IntakeClaim,
+    IntakeEnqueue,
+    IntakeLease,
+    IntakeComplete,
+    IntakeRemoval,
+    SubmitRequest,
+    ApproveSubmission,
+    CancelSubmission,
+    RecordActivation,
 }
 
 impl FaultOp {
-    pub const ALL: [FaultOp; 20] = [
+    pub const ALL: [FaultOp; 29] = [
         Self::ProvisionBudget,
         Self::Reserve,
         Self::Retry,
@@ -56,6 +65,15 @@ impl FaultOp {
         Self::FeedAppend,
         Self::FeedDelivered,
         Self::RecordRotation,
+        Self::IntakeClaim,
+        Self::IntakeEnqueue,
+        Self::IntakeLease,
+        Self::IntakeComplete,
+        Self::IntakeRemoval,
+        Self::SubmitRequest,
+        Self::ApproveSubmission,
+        Self::CancelSubmission,
+        Self::RecordActivation,
     ];
 }
 

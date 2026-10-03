@@ -16,6 +16,7 @@ pub mod clock;
 mod disclosure;
 pub mod error;
 pub mod fault;
+mod intake;
 mod integrity;
 mod lifecycle;
 pub mod migrations;
@@ -30,6 +31,10 @@ pub use clock::{Clock, ManualClock, SystemClock};
 pub use disclosure::{ChargeOutcome, DisclosureHistoryEntry, ReleaseCharge, ReleaseScope};
 pub use error::StoreError;
 pub use fault::{CrashOnce, FaultInjector, FaultOp, FaultPhase, FaultPoint, NoFault};
+pub use intake::{
+    ApproveCommand, ApproveOutcome, LeasedRequest, SubmissionChannel, SubmissionRecord,
+    SubmissionStatus, SubmitCommand, Submitted, CLAIM_WINDOW_SECS, MAX_PENDING_QUEUE,
+};
 pub use lifecycle::{
     EpochEventCommand, EpochEventOutcome, EpochEventRecord, EpochStandingRecord, FeedAppend,
     FeedEnvelopeRecord, FeedHead, ObligationAction, ObligationCommand, ObligationRecord,

@@ -88,6 +88,23 @@ const CHECKS: &[(&str, &str)] = &[
         "SELECT COUNT(*) FROM attempts a WHERE a.exposure = 'exposed' AND NOT EXISTS \
          (SELECT 1 FROM transitions t WHERE t.attempt_id = a.attempt_id AND t.kind = 'exposure')",
     ),
+    (
+        "approved_submission_has_approval_and_attempt",
+        "SELECT COUNT(*) FROM submissions s WHERE s.status = 'approved' AND \
+         (NOT EXISTS (SELECT 1 FROM approvals a WHERE a.request_id = s.request_id \
+              AND a.approval_id = s.approval_id) \
+          OR NOT EXISTS (SELECT 1 FROM attempts t WHERE t.attempt_id = s.attempt_id))",
+    ),
+    (
+        "approved_submission_has_audit_event",
+        "SELECT COUNT(*) FROM submissions s WHERE s.status = 'approved' AND NOT EXISTS \
+         (SELECT 1 FROM outbox o WHERE o.event_id = 'approved:' || s.request_id)",
+    ),
+    (
+        "queued_request_has_permanent_claim",
+        "SELECT COUNT(*) FROM intake_queue q WHERE NOT EXISTS \
+         (SELECT 1 FROM intake_deliveries d WHERE d.delivery_id = q.delivery_id AND d.enqueued = 1)",
+    ),
 ];
 
 impl SqliteStore {
