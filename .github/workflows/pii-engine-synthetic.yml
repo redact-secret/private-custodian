@@ -1,0 +1,73 @@
+name: pii-engine-synthetic
+
+# Reusable, artifact-driven gate. pii-eval is private: no cross-repo credential
+# or GitHub App is assumed. Caller builds/uploads the synthetic artifact bundle
+# in this SAME workflow run and explicitly pins the two real CLI file digests.
+# Source/patch claims in provenance are informational, not verified attestations.
+on:
+  workflow_call:
+    inputs:
+      custodian-commit:
+        type: string
+        required: true
+      artifact-name:
+        type: string
+        required: true
+      adopted-sha256:
+        type: string
+        required: true
+      upstream-sha256:
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pii-engine:
+    name: "PII engine through custodian: public synthetic data, actual Linux sandbox"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Require an immutable custodian source revision
+        env:
+          CUSTODIAN_COMMIT: ${{ inputs.custodian-commit }}
+        run: |
+          [[ "$GITHUB_REPOSITORY" == redact-secret/private-custodian ]]
+          [[ "$CUSTODIAN_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: redact-secret/private-custodian
+          # Caller must pin this to the same revision as the reusable workflow.
+          ref: ${{ inputs.custodian-commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ runner.temp }}/pii-synthetic-assets
+      - name: Verify explicit artifact pins and fixed synthetic layout
+        env:
+          ADOPTED_SHA256: ${{ inputs.adopted-sha256 }}
+          UPSTREAM_SHA256: ${{ inputs.upstream-sha256 }}
+        run: python3 tools/engines/verify-pii-synthetic.py "$RUNNER_TEMP/pii-synthetic-assets"
+      - name: Install bubblewrap and allow unprivileged user namespaces
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          bwrap --version
+          command -v prlimit
+          uname -smr
+      - name: Actual custodian pipeline (no artifact or isolation skips)
+        env:
+          CUSTODIAN_PII_ASSETS: ${{ runner.temp }}/pii-synthetic-assets
+          CUSTODIAN_REQUIRE_ISOLATION: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p custodian-daemon --test pii_engine -- --nocapture --test-threads=1 2>&1 | tee pii-pipeline.log
+          grep -q 'PII-PIPELINE-VERIFIED normal adopted=true memory-mib=1024' pii-pipeline.log
+          grep -q 'PII-PIPELINE-VERIFIED normal adopted=false' pii-pipeline.log
+          ! grep -q 'ISOLATION-TEST-SKIPPED' pii-pipeline.log
+      - name: Offline artifact CLI hostile controls
+        run: cargo test --locked -p custodian-cli --test artifact

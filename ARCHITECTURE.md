@@ -125,3 +125,13 @@ The store imports reviewed legacy consumption additively (migration 0005, ADR 01
 ## Recovery tooling and the full synthetic flow (S6)
 
 Two cases the C12 drill could not resolve are now operator commands, both human-only with exact confirmations, both audited, and neither able to lower or reset a spent budget. A store restored behind the ledger with no newer copy continues only through an explicit loss acceptance: the store adopts the ledger's acknowledged audit tail byte for byte, budgets rise to the ledger's figures (and saturate rather than exceed a limit), standing tightens, affected epochs retire, and the acceptance is recorded (`custodian-store` migration 0008, [ADR 0130](docs/adr/0130-restore-loss-acceptance-with-no-newer-copy.md)). A compromised signing key is revoked by the new, pinned key and the old lineage is re-attested with superseding records under the new key, nothing rewritten, corroborated against the store, with the walker marking the old records instead of failing on them ([ADR 0131](docs/adr/0131-ledger-reissue-after-key-revocation.md)). One dedicated CI job runs the whole flow from request to consumer rejection, including the real bubblewrap sandbox on Linux, plus the restore and key variants and the hostile negatives. Deployment examples are placeholders only and scanned for real-looking values; the post-server work is one checklist ([ADR 0132](docs/adr/0132-full-synthetic-flow-job-deployment-examples-and-the-server-prerequisite-checklist.md), [docs/server-prerequisites-checklist.md](docs/server-prerequisites-checklist.md)). Functional verification on public synthetic data; nothing is deployed.
+
+## PII engine adoption (#37)
+
+[ADR 0135](docs/adr/0135-pii-worker-contract-and-synthetic-adoption.md) finalizes the case roster,
+embedded aggregate channel, nine-label profile and opaque artifact roles.
+The [exact handoff](docs/pii-eval-adoption.md) supplies a reference patch against the merged pii-eval CLI,
+keeps upstream and adopted artifact identities distinct, and defines synthetic validation through the
+actual custodian pipeline and an offline structural CLI. Engine codecs and measurements remain engine-owned;
+no engine source is imported into custodian crates. Runtime sizing evidence is artifact metadata; limits
+stay explicitly approved and capped. Live App/webhook activation and operational policy remain deferred.

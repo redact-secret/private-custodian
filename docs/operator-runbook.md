@@ -362,3 +362,11 @@ These are not automated and not delegated to an agent:
 | Repair cannot reset budgets | `tests/operator.rs` (`repair_needs_the_exact_store_id...`, `an_exposed_attempt_that_lapses...`) |
 | Restore with no newer copy: plan, exact confirmations, acceptance, audited, budgets only rise | `tests/s6_recovery.rs`, `custodian-store/tests/loss.rs` (ADR 0130) |
 | Key compromise: revoke, re-issue under a new key, clear, start again | `tests/s6_key_revocation.rs`, `custodian-ledger/tests/reissue.rs` (ADR 0131) |
+
+## Offline engine artifact binding (#37)
+
+`custodian artifact validate --request F --receipt F --result F` requires no deployment or authentication.
+It consumes bounded local documents and prints only a fixed verdict; `artifact_bound` proves structural
+binding, not authorization, execution, signature, freshness or disclosure approval. No state is mutated.
+Use only public synthetic artifacts for development/CI. Exact engine handoff and evidence:
+[pii-eval-adoption.md](pii-eval-adoption.md).

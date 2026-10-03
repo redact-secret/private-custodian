@@ -31,7 +31,17 @@ fn read_file(path: &str, max: usize) -> Result<Vec<u8>, CliReason> {
     if meta.len() > max as u64 {
         return Err(CliReason::DocumentTooLarge);
     }
-    std::fs::read(p).map_err(|_| CliReason::InvalidDocument)
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(p)
+        .map_err(|_| CliReason::InvalidDocument)?
+        .take(max as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| CliReason::InvalidDocument)?;
+    if bytes.len() > max {
+        return Err(CliReason::DocumentTooLarge);
+    }
+    Ok(bytes)
 }
 
 /// The credential: file contents without one trailing newline.
@@ -50,6 +60,10 @@ fn read_credential(path: &str) -> Result<Vec<u8>, CliReason> {
 
 fn main() -> std::process::ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
+
+    if argv.first().map(String::as_str) == Some("artifact") {
+        return finish(&custodian_cli::artifact::command(&argv, &read_file));
+    }
 
     // `custodian credential-digest --token-file F`: prints the digest to put
     // in the operator policy. Needs no deployment and no authentication.

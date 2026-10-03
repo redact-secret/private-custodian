@@ -1,0 +1,378 @@
+diff --git a/crates/pii-eval-cli/src/worker/contract.rs b/crates/pii-eval-cli/src/worker/contract.rs
+index f46bee6..92b45ad 100644
+--- a/crates/pii-eval-cli/src/worker/contract.rs
++++ b/crates/pii-eval-cli/src/worker/contract.rs
+@@ -1,20 +1,7 @@
+-//! The seam between what the custodian has decided and what it has not.
+-//!
+-//! Every undecided item of the worker contract is one [`Slot`], reached through
+-//! an adapter trait. Each adapter reports a [`ContractStatus`]. The production
+-//! wiring ([`Adapters::production`]) holds NO adapter for any slot, so
+-//! `worker-job` refuses with `contract-not-final: <slot>` before it reads
+-//! anything protected. There is no flag, environment variable or configuration
+-//! field that installs an adapter: the only way in is the Rust API, and the test
+-//! adapters exist only in builds with the cargo feature `worker-test-adapters`.
+-//!
+-//! When the custodian decides a slot, enabling it means implementing a
+-//! [`ContractStatus::Decided`] adapter for it, with tests, and installing it in
+-//! [`Adapters::production`]. Nothing else changes.
+-//!
+-//! Decided items need no slot: the job and result documents (A4, A5), the digest
+-//! syntax (A10) and the stage names (A2) are implemented as stated
+-//! ([`DECIDED`]).
++//! Custodian issue 37 reference adoption: five Decided production adapters.
++//! Proposed and TestOnly replacements remain refused by the production policy.
++//! No operator, flag or environment variable selects test adapters. Bundle/entry
++//! codecs remain engine-owned; aggregate delivery is the bounded embedded result.
+ 
+ use std::path::{Path, PathBuf};
+ 
+@@ -92,9 +79,9 @@ impl Slot {
+         }
+     }
+ 
+-    /// The custodian-side status of the item. Every slot is `Proposed` today.
++    /// Status agreed by private-custodian ADR 0133.
+     pub const fn contract_status(self) -> ContractStatus {
+-        ContractStatus::Proposed
++        ContractStatus::Decided
+     }
+ }
+ 
+@@ -259,10 +246,9 @@ pub struct Resolved<'a> {
+ }
+ 
+ impl Adapters {
+-    /// The production wiring: every undecided slot is unconfigured, so a
+-    /// release binary refuses with `contract-not-final`.
++    /// Fixed Decided wiring agreed by private-custodian ADR 0133.
+     pub fn production() -> Self {
+-        Self::default()
++        super::production::adapters()
+     }
+ 
+     /// Install a layout adapter.
+@@ -349,24 +335,13 @@ mod tests {
+     use super::*;
+ 
+     #[test]
+-    fn production_wiring_has_no_adapter_and_names_the_first_slot() {
++    fn production_wiring_is_decided() {
+         let a = Adapters::production();
+         for slot in Slot::ALL {
+-            assert_eq!(a.status(slot), None);
+-            assert_eq!(slot.contract_status(), ContractStatus::Proposed);
++            assert_eq!(a.status(slot), Some(ContractStatus::Decided));
++            assert_eq!(slot.contract_status(), ContractStatus::Decided);
+         }
+-        assert_eq!(
+-            a.first_not_final(AdapterPolicy::Production),
+-            Some(Slot::StageLayout)
+-        );
+-        let Err(f) = a.resolve(AdapterPolicy::Production) else {
+-            panic!("production must refuse");
+-        };
+-        assert_eq!(
+-            (f.exit, f.reason),
+-            (Exit::Execution, reason::CONTRACT_NOT_FINAL)
+-        );
+-        assert_eq!(f.detail.as_deref(), Some("stage-layout"));
++        assert!(a.resolve(AdapterPolicy::Production).is_ok());
+     }
+ 
+     #[test]
+diff --git a/crates/pii-eval-cli/src/worker/job.rs b/crates/pii-eval-cli/src/worker/job.rs
+index c5adb11..a09c233 100644
+--- a/crates/pii-eval-cli/src/worker/job.rs
++++ b/crates/pii-eval-cli/src/worker/job.rs
+@@ -207,14 +207,33 @@ pub fn protocol_value() -> Value {
+ /// The result document, single line, no trailing newline. Refuses (never
+ /// truncates) above [`MAX_RESULT_BYTES`].
+ pub fn render_result(roster: &Roster) -> Result<String, Failure> {
+-    let text = json!({
++    render_result_with_aggregates(roster, None)
++}
++
++/// Embed the aggregate object and bound the ENTIRE stdout document.
++pub fn render_result_with_aggregates(
++    roster: &Roster,
++    aggregates: Option<&[u8]>,
++) -> Result<String, Failure> {
++    let mut value = json!({
+         "schema": RESULT_SCHEMA,
+         "domain": DOMAIN,
+         "protocol": protocol_value(),
+         "status": roster.status(),
+         "roster": roster.to_value(),
+-    })
+-    .to_string();
++    });
++    if let Some(bytes) = aggregates {
++        let object: Value = serde_json::from_slice(bytes)
++            .map_err(|_| Failure::new(Exit::Output, reason::AGGREGATES_CHANNEL_FAILED))?;
++        if !object.is_object() {
++            return Err(Failure::new(
++                Exit::Output,
++                reason::AGGREGATES_CHANNEL_FAILED,
++            ));
++        }
++        value["aggregates"] = object;
++    }
++    let text = value.to_string();
+     if text.len() > MAX_RESULT_BYTES {
+         return Err(Failure::new(Exit::Output, reason::RESULT_TOO_LARGE));
+     }
+@@ -338,4 +357,28 @@ mod tests {
+         );
+         assert!(!text.contains('\n'));
+     }
++    #[test]
++    fn embedded_aggregates_are_one_object_and_whole_output_is_bounded() {
++        let r = Roster {
++            expected: 3,
++            observed: 3,
++            failed: 0,
++        };
++        let text = render_result_with_aggregates(
++            &r,
++            Some(br#"{"schema":"private-custodian.aggregates/1"}"#),
++        )
++        .unwrap();
++        let value: Value = serde_json::from_str(&text).unwrap();
++        assert!(value["aggregates"].is_object());
++        assert!(!text.contains('\n'));
++        assert!(render_result_with_aggregates(&r, Some(br#""not-an-object""#)).is_err());
++        let huge = json!({"padding": "x".repeat(MAX_RESULT_BYTES)}).to_string();
++        assert_eq!(
++            render_result_with_aggregates(&r, Some(huge.as_bytes()))
++                .unwrap_err()
++                .reason,
++            reason::RESULT_TOO_LARGE
++        );
++    }
+ }
+diff --git a/crates/pii-eval-cli/src/worker/launch.rs b/crates/pii-eval-cli/src/worker/launch.rs
+index 7693bfe..a5d986f 100644
+--- a/crates/pii-eval-cli/src/worker/launch.rs
++++ b/crates/pii-eval-cli/src/worker/launch.rs
+@@ -220,14 +220,13 @@ pub fn run_worker_job(
+             cli_reason::PLATFORM_UNSUPPORTED,
+         ));
+     }
++    // 2. Validate the bounded job before accessing the staged artifacts.
++    let job = job::read_job(request.job)?;
+     let layout: WorkerLayout = resolved.stage_layout.layout();
+     let stage_dir = layout_dir(&layout.stage, "stage")?;
+     let input_dir = layout_dir(&layout.input, "input")?;
+     let scratch_dir = layout_dir(&layout.scratch, "scratch")?;
+ 
+-    // 2. The job.
+-    let job = job::read_job(request.job)?;
+-
+     ensure_live(cancel)?;
+     // 3. The staged files.
+     for name in [
+@@ -457,7 +456,7 @@ pub fn run_worker_job(
+             .map_err(|_| reason::output(reason::AGGREGATES_CHANNEL_FAILED, ""))?;
+         delivered = Some(document);
+     }
+-    let result = job::render_result(&roster)?;
++    let result = job::render_result_with_aggregates(&roster, delivered.as_deref())?;
+     Ok(WorkerOutput {
+         result,
+         roster,
+diff --git a/crates/pii-eval-cli/src/worker/mod.rs b/crates/pii-eval-cli/src/worker/mod.rs
+index 97f838d..676033d 100644
+--- a/crates/pii-eval-cli/src/worker/mod.rs
++++ b/crates/pii-eval-cli/src/worker/mod.rs
+@@ -7,11 +7,9 @@
+ //! `pii-eval run` (`crate::run`, the bounded executor, the verifying writer) and
+ //! prints exactly one `private-custodian.worker-result/1` document.
+ //!
+-//! What the custodian has decided is implemented as stated. What it has not
+-//! decided lives behind the adapters of [`contract`], each with a
+-//! [`contract::ContractStatus`]; the production wiring has none of them and
+-//! refuses with `contract-not-final` before reading any entry
+-//! (docs/custodian-contract-status.md).
++//! The five production adapters follow private-custodian ADR 0133. Proposed
++//! or TestOnly adapters still fail closed under the production policy.
++//! `WorkerOutput.result` carries the embedded aggregates object on stdout.
+ //!
+ //! Nothing here measures anything: numerators and denominators come from the
+ //! kernel's accounting through the run artifact the writer has verified.
+@@ -28,3 +26,5 @@ pub mod reason;
+ pub mod stage;
+ #[cfg(feature = "worker-test-adapters")]
+ pub mod test_adapters;
++
++pub mod production;
+diff --git a/crates/pii-eval-cli/src/worker/production.rs b/crates/pii-eval-cli/src/worker/production.rs
+new file mode 100644
+index 0000000..25d8b61
+--- /dev/null
++++ b/crates/pii-eval-cli/src/worker/production.rs
+@@ -0,0 +1,93 @@
++//! Reference adoption of private-custodian issue 37; no test adapter selection.
++use super::contract::*;
++use super::{bundle, entry};
++use pii_eval_contracts::Case;
++use std::path::Path;
++
++pub const METRICS: [&str; 9] = [
++    "type-miss-rate",
++    "wrong-family-rate",
++    "wrong-jurisdiction-rate",
++    "sensitive-miss-rate",
++    "non-sensitive-flag-rate",
++    "context-discrimination-rate",
++    "benign-suppression-rate",
++    "jurisdiction-collision-rate",
++    "range-collateral-rate",
++];
++struct Layout;
++impl StageLayoutAdapter for Layout {
++    fn status(&self) -> ContractStatus {
++        ContractStatus::Decided
++    }
++    fn layout(&self) -> WorkerLayout {
++        WorkerLayout {
++            stage: "/stage".into(),
++            input: "/input".into(),
++            scratch: "/scratch".into(),
++        }
++    }
++}
++struct Bundle;
++impl BundleFormatAdapter for Bundle {
++    fn status(&self) -> ContractStatus {
++        ContractStatus::Decided
++    }
++    fn extract(&self, bytes: &[u8], dest: &Path) -> Result<(), BundleError> {
++        bundle::extract_bytes(bytes, dest)
++    }
++}
++struct Entry;
++impl EntryFormatAdapter for Entry {
++    fn status(&self) -> ContractStatus {
++        ContractStatus::Decided
++    }
++    fn decode(&self, name: &str, bytes: &[u8]) -> Result<Case, EntryError> {
++        entry::decode(name, bytes)
++    }
++}
++// Delivery is exclusively render_result_with_aggregates in launch.rs. No file or stderr channel.
++struct Embedded;
++impl AggregatesChannelAdapter for Embedded {
++    fn status(&self) -> ContractStatus {
++        ContractStatus::Decided
++    }
++    fn deliver(&self, _: &WorkerLayout, _: &[u8]) -> Result<(), ChannelError> {
++        Ok(())
++    }
++}
++struct Labels;
++impl AggregateLabelsAdapter for Labels {
++    fn status(&self) -> ContractStatus {
++        ContractStatus::Decided
++    }
++    fn overall_stratum(&self) -> &str {
++        "overall"
++    }
++    fn metric(&self, id: &str) -> Option<String> {
++        METRICS.contains(&id).then(|| id.to_owned())
++    }
++}
++pub fn adapters() -> Adapters {
++    Adapters::default()
++        .with_stage_layout(Box::new(Layout))
++        .with_bundle_format(Box::new(Bundle))
++        .with_entry_format(Box::new(Entry))
++        .with_aggregates_channel(Box::new(Embedded))
++        .with_aggregate_labels(Box::new(Labels))
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn production_resolves_and_labels_are_closed() {
++        let a = adapters();
++        let r = a.resolve(AdapterPolicy::Production).unwrap();
++        assert_eq!(r.stage_layout.layout().stage, Path::new("/stage"));
++        for m in METRICS {
++            assert_eq!(r.aggregate_labels.metric(m).as_deref(), Some(m));
++        }
++        assert_eq!(r.aggregate_labels.metric("measurable-share"), None);
++        assert_eq!(r.aggregate_labels.metric("unknown-metric"), None);
++    }
++}
+diff --git a/crates/pii-eval-cli/tests/worker_default.rs b/crates/pii-eval-cli/tests/worker_default.rs
+index d46d7fe..c252c0b 100644
+--- a/crates/pii-eval-cli/tests/worker_default.rs
++++ b/crates/pii-eval-cli/tests/worker_default.rs
+@@ -1,9 +1,6 @@
+-//! The production wiring of `worker-job`: the binary has no adapter for any
+-//! undecided slot, so it refuses with `contract-not-final` before it reads
+-//! anything; the test adapters are not in a default build; the alias has the
+-//! exact shape the custodian starts. Runs with and without the feature
+-//! `worker-test-adapters` (the feature changes what the binary contains, never
+-//! what it will run).
++//! Reference adoption: production adapters resolve, job and stage checks still
++//! refuse malformed inputs; test adapters stay out of default artifacts and
++//! cannot be selected through command-line flags or environment variables.
+ #![cfg(unix)]
+ 
+ mod cli_support;
+@@ -42,34 +39,30 @@ fn a_feature_build_says_so_and_does_contain_the_marker_so_the_check_can_fail() {
+     );
+ }
+ 
+-/// Both builds: the BINARY has no way to select a test adapter.
++/// Both builds use fixed production adapters.
+ #[test]
+-fn the_binary_refuses_with_contract_not_final_and_prints_nothing_on_stdout() {
++fn the_binary_reports_an_unreadable_job_and_prints_nothing_on_stdout() {
+     for args in [
+         vec!["worker-job", "--job", "/nonexistent/job.json"],
+         vec!["--job", "/nonexistent/job.json"],
+     ] {
+         let out = run_cli(&args);
+-        assert_eq!(code(&out), 6, "{args:?}");
++        assert_eq!(code(&out), 3, "{args:?}");
+         assert!(out.stdout.is_empty(), "{args:?}: stdout must be empty");
+         let err = stderr(&out);
+-        assert_eq!(
+-            err,
+-            "pii-eval: contract-not-final (execution-refused, exit 6): stage-layout\n"
+-        );
++        assert_eq!(err, "pii-eval: job-unreadable (invalid-input, exit 3)\n");
+     }
+ }
+ 
+ #[test]
+-fn nothing_is_read_before_the_refusal_not_even_the_job() {
++fn malformed_jobs_are_refused_before_stage_reads() {
+     let ws = common::TempDir::new("wd-noread");
+     let job = ws.0.join("job.json");
+     std::fs::write(&job, "this is not even json").unwrap();
+     let out = run_cli(&["worker-job", "--job", s(&job)]);
+-    // A job that cannot be parsed would be exit 3 `job-invalid`; the refusal
+-    // comes first.
+-    assert_eq!(code(&out), 6);
+-    assert!(stderr(&out).contains("contract-not-final"));
++    // Adapter resolution succeeds; malformed input refuses before stage access.
++    assert_eq!(code(&out), 3);
++    assert!(stderr(&out).contains("job-invalid"));
+ }
+ 
+ #[test]
+@@ -106,8 +99,8 @@ fn no_environment_variable_or_flag_selects_a_test_adapter() {
+             ("WORKER_TEST_ADAPTERS", "1"),
+         ],
+     );
+-    assert_eq!(code(&out), 6);
+-    assert!(stderr(&out).contains("contract-not-final"));
++    assert_eq!(code(&out), 3);
++    assert!(stderr(&out).contains("job-unreadable"));
+     let out = run_cli(&["worker-job", "--job", "/x", "--test-adapters"]);
+     assert_eq!(code(&out), 2);
+ }

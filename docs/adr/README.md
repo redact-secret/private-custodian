@@ -75,6 +75,8 @@ ADR.
 | [0133](0133-remote-worker-experiment-boundary.md) | Remote worker experiment boundary | Proposed; offline envelope prototype, no remote sandbox |
 | [0134](0134-serverless-control-plane-feasibility.md) | Ordinary Lambda control-plane feasibility | Proposed assessment; migration NO-GO |
 
+| [0135](0135-pii-worker-contract-and-synthetic-adoption.md) | PII worker contract and synthetic adoption | Accepted contract design; reference adoption and synthetic gate implemented, not deployed |
+
 Accepted (design) means the decision is frozen for downstream issues (C2 to C12). It does not mean any of it
 is implemented or deployed. See each ADR's status table.
 
