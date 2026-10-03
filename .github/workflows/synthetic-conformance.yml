@@ -1,0 +1,188 @@
+name: synthetic-conformance
+
+# "Synthetic conformance" job set, part 2 of 2 (S1, ADR 0110). Part 1 lives in
+# ci.yml: the `rust` job (unit, integration and the C12 suite) and the
+# `worker-isolation` job (Linux bubblewrap probes with
+# CUSTODIAN_REQUIRE_ISOLATION=1).
+#
+# This workflow is the caller/test workflow for the reusable workflow
+# .github/workflows/verify-signed-results.yml. It runs the checked-in
+# SYNTHETIC bundles (crates/custodian-verify/fixtures/synthetic, signed by a
+# public throwaway test key) through it, positive and negative, plus the
+# synthetic end-to-end subset of the C12 suite.
+#
+# FUNCTIONAL VERIFICATION ON PUBLIC SYNTHETIC DATA, NOT INDEPENDENT PROTECTED
+# EVALUATION. Nothing here receives a protected corpus, a production signing
+# key, a private-ledger token or a webhook secret; no job declares or passes a
+# secret. A negative case passes only when the verifier REJECTS it with
+# exactly the expected exit code and reason.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: synthetic-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # One locked release build of the verifier, shared by the matrix below
+  # through the reusable workflow's artifact mode (pinned by SHA-256).
+  build-verifier:
+    name: "synthetic conformance: build verifier"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      sha256: ${{ steps.digest.outputs.sha256 }}
+    steps:
+      # actions/checkout v4.2.2, pinned to the commit its release tag points at.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Release build (locked)
+        run: cargo build --release --locked -p custodian-verify
+      - name: Digest
+        id: digest
+        run: |
+          set -euo pipefail
+          mkdir dist
+          cp target/release/custodian-verify dist/
+          echo "sha256=$(sha256sum dist/custodian-verify | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      # actions/upload-artifact v7.0.1, pinned to the commit its tag points at.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: custodian-verify-synthetic
+          path: dist/custodian-verify
+          retention-days: 1
+          if-no-files-found: error
+
+  # The verifier is built from this repository's own commit inside the
+  # reusable workflow (build mode), one positive case.
+  verify-build-mode:
+    name: "synthetic conformance: verify positive (build mode)"
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-signed-results.yml
+    with:
+      bundle-path: crates/custodian-verify/fixtures/synthetic/positive/bundle
+      keys-file: crates/custodian-verify/fixtures/synthetic/keys.json
+      feed-id: fed_synthetic000000000001
+      expectations-file: crates/custodian-verify/fixtures/synthetic/positive/expectations.json
+      now: "1800000120"
+      verifier-source: build
+      verifier-source-ref: ${{ github.sha }}
+      expected-exit-code: "0"
+      expected-reason: ok
+
+  # Every case, with the exit code and reason the verifier must give. The
+  # `include` lines are checked against the fixtures by
+  # crates/custodian-verify/tests/workflow_matrix.rs. Negative cases pass only
+  # if the verifier rejects them exactly as stated.
+  verify-synthetic-bundles:
+    name: "synthetic conformance: verify ${{ matrix.case }}"
+    needs: build-verifier
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {case: positive, exit: "0", reason: ok, now: "1800000120"}
+          - {case: stale-feed, exit: "10", reason: stale, now: "1800003661"}
+          - {case: wrong-domain, exit: "10", reason: wrong_domain, now: "1800000120"}
+          - {case: wrong-candidate, exit: "10", reason: wrong_candidate, now: "1800000120"}
+          - {case: revoked, exit: "10", reason: revoked, now: "1800000120"}
+          - {case: tampered, exit: "10", reason: bad_signature, now: "1800000120"}
+          - {case: feed-gap, exit: "11", reason: feed_gap, now: "1800000120"}
+    uses: ./.github/workflows/verify-signed-results.yml
+    with:
+      bundle-path: crates/custodian-verify/fixtures/synthetic/${{ matrix.case }}/bundle
+      keys-file: crates/custodian-verify/fixtures/synthetic/keys.json
+      feed-id: fed_synthetic000000000001
+      expectations-file: crates/custodian-verify/fixtures/synthetic/${{ matrix.case }}/expectations.json
+      now: ${{ matrix.now }}
+      verifier-source: artifact
+      verifier-artifact-name: custodian-verify-synthetic
+      verifier-sha256: ${{ needs.build-verifier.outputs.sha256 }}
+      expected-exit-code: ${{ matrix.exit }}
+      expected-reason: ${{ matrix.reason }}
+
+  # The caller reads the reusable workflow's outputs, which is how a real
+  # caller would branch on a rejection.
+  negative-outputs:
+    name: "synthetic conformance: verify revoked (outputs)"
+    needs: build-verifier
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-signed-results.yml
+    with:
+      bundle-path: crates/custodian-verify/fixtures/synthetic/revoked/bundle
+      keys-file: crates/custodian-verify/fixtures/synthetic/keys.json
+      feed-id: fed_synthetic000000000001
+      expectations-file: crates/custodian-verify/fixtures/synthetic/revoked/expectations.json
+      now: "1800000120"
+      verifier-source: artifact
+      verifier-artifact-name: custodian-verify-synthetic
+      verifier-sha256: ${{ needs.build-verifier.outputs.sha256 }}
+      expected-exit-code: "10"
+
+  assert-negative-outputs:
+    name: "synthetic conformance: assert rejection outputs"
+    needs: negative-outputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Assert the verifier rejected the revoked bundle
+        env:
+          EXIT_CODE: ${{ needs.negative-outputs.outputs.exit-code }}
+          VERDICT: ${{ needs.negative-outputs.outputs.verdict }}
+          REASON: ${{ needs.negative-outputs.outputs.reason }}
+        run: |
+          set -euo pipefail
+          [ "$EXIT_CODE" = "10" ] && [ "$VERDICT" = "rejected" ] && [ "$REASON" = "revoked" ]
+
+  # The synthetic end-to-end part of the C12 suite: intake to bridge consumer,
+  # revocation and canary leakage, with a real store and test-generated keys.
+  # The full suite also runs in ci.yml's `rust` job.
+  c12-end-to-end:
+    name: "synthetic conformance: C12 end-to-end"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: C12 end-to-end, revocation and leakage tests
+        run: cargo test --locked -p custodian-cli --test c12_e2e --test c12_revocation --test c12_leakage
+
+  # One status for the whole synthetic conformance set of this workflow.
+  synthetic-conformance:
+    name: "synthetic conformance (functional verification, not independent evaluation)"
+    if: ${{ always() }}
+    needs:
+      - build-verifier
+      - verify-build-mode
+      - verify-synthetic-bundles
+      - negative-outputs
+      - assert-negative-outputs
+      - c12-end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every job in the set must have succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = "success" ] || exit 1; done

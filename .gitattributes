@@ -1,0 +1,2 @@
+# Generated synthetic fixtures are byte-exact (canonical JSON, no trailing newline).
+crates/custodian-verify/fixtures/** -text

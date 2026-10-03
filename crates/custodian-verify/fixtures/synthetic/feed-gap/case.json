@@ -1,0 +1,6 @@
+{
+  "expected_exit": 11,
+  "expected_reason": "feed_gap",
+  "feed_id": "fed_synthetic000000000001",
+  "now": 1800000120
+}

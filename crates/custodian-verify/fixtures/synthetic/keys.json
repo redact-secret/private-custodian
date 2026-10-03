@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "key_id": "key_synthetic000000000001",
+      "public_key": "f80cccdce4ae1c07ae208a2adf99a310ae4207e0306fa0236110b06827bbb8d0",
+      "purposes": [
+        "projection",
+        "revocation"
+      ],
+      "valid_from": 1799990000
+    }
+  ],
+  "schema": "private-custodian.verify-keys/1"
+}

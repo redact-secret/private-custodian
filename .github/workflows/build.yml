@@ -1,0 +1,133 @@
+name: build
+
+# Locked release build of `custodian-verify` and `custodian` (S1, ADR 0110).
+#
+# What this does: compile, print SHA-256 digests in the job summary, keep the
+# binaries as a one-day workflow artifact, and (tag pushes and manual dispatch
+# only) record a build provenance attestation for them.
+#
+# What this never does: create a release, publish a package or image, deploy,
+# call another repository or service, or read a secret. The only token is the
+# automatic read-only GITHUB_TOKEN; the attestation job additionally holds the
+# two OIDC/attestation scopes it needs, and nothing else does.
+#
+# FUNCTIONAL BUILD ON PUBLIC SYNTHETIC DATA. The smoke test below verifies a
+# checked-in synthetic bundle signed by a public throwaway test key. It is not
+# an independent protected evaluation, and the attestation says where and how
+# the binary was built, not that its results are correct.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/build.yml"
+      - ".github/workflows/verify-signed-results.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      verify-sha256: ${{ steps.digests.outputs.verify }}
+      custodian-sha256: ${{ steps.digests.outputs.custodian }}
+    steps:
+      # actions/checkout v4.2.2, pinned to the commit its release tag points at.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Toolchain versions
+        run: |
+          cargo --version
+          rustc --version
+      - name: Release build (locked)
+        run: cargo build --release --locked -p custodian-verify -p custodian-cli
+      - name: Stage binaries
+        run: |
+          mkdir dist
+          cp target/release/custodian-verify target/release/custodian dist/
+      - name: Smoke test on the synthetic positive bundle
+        run: |
+          set -euo pipefail
+          d=crates/custodian-verify/fixtures/synthetic
+          dist/custodian-verify \
+            --bundle "$d/positive/bundle" \
+            --keys "$d/keys.json" \
+            --feed-id "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["feed_id"])' "$d/positive/case.json")" \
+            --expect "$d/positive/expectations.json" \
+            --now "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["now"])' "$d/positive/case.json")"
+      - name: SHA-256 digests
+        id: digests
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum custodian-verify custodian | tee ../digests.txt
+          {
+            echo "### Release build digests"
+            echo
+            echo '```'
+            cat ../digests.txt
+            echo '```'
+            echo
+            echo "_Built from commit ${GITHUB_SHA} with the locked dependency set. Functional build on public synthetic data; not an independent protected evaluation._"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "verify=$(sha256sum custodian-verify | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "custodian=$(sha256sum custodian | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      # actions/upload-artifact v7.0.1, pinned to the commit its tag points at.
+      - name: Upload binaries (one day)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: custodian-binaries
+          path: dist/
+          retention-days: 1
+          if-no-files-found: error
+
+  # Provenance attestation: tag pushes and manual dispatch only. This is the
+  # only job with `id-token: write` and `attestations: write`. It runs no
+  # project code: it downloads the artifact, checks it against the digests the
+  # build job computed, and attests. Artifact attestations for a private
+  # repository need a plan that supports them (docs/ci-and-reusable-workflows.md);
+  # on a plan without it this job fails visibly and nothing else is affected.
+  attest:
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      # actions/download-artifact v8.0.1, pinned to the commit its tag points at.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: custodian-binaries
+          path: dist
+      - name: Check the artifact against the build job's digests
+        env:
+          VERIFY_SHA256: ${{ needs.build.outputs.verify-sha256 }}
+          CUSTODIAN_SHA256: ${{ needs.build.outputs.custodian-sha256 }}
+        run: |
+          set -euo pipefail
+          [ "$(sha256sum dist/custodian-verify | cut -d' ' -f1)" = "$VERIFY_SHA256" ]
+          [ "$(sha256sum dist/custodian | cut -d' ' -f1)" = "$CUSTODIAN_SHA256" ]
+      # actions/attest-build-provenance v4.2.2, pinned to the commit its tag points at.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: |
+            dist/custodian-verify
+            dist/custodian

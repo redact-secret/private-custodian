@@ -1,0 +1,6 @@
+{
+  "expected_exit": 10,
+  "expected_reason": "revoked",
+  "feed_id": "fed_synthetic000000000001",
+  "now": 1800000120
+}

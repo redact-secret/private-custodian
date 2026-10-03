@@ -1,0 +1,29 @@
+[package]
+name = "custodian-verify"
+description = "Standalone verifier CLI over the C11 reference consumer: checks a signed public projection and revocation-feed bundle with pinned public keys and pins only. No ledger, corpus, store or signing access. Synthetic conformance data only in this repository."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "custodian_verify"
+path = "src/lib.rs"
+
+[[bin]]
+name = "custodian-verify"
+path = "src/main.rs"
+
+# No new third-party crate (ADR 0110): argument parsing is std, JSON is the
+# workspace-pinned serde_json. The verifier depends on the reference consumer
+# and the public-key types only. Private runtime crates are never dependencies
+# of this crate (tests/no_private_access.rs).
+[dependencies]
+custodian-bridge = { path = "../custodian-bridge" }
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-ledger = { path = "../custodian-ledger" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
