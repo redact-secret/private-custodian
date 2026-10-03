@@ -7,24 +7,16 @@
 use std::sync::Arc;
 use std::thread;
 
-use custodian_core::ports::{Disclosure, Refusal, RunRequest, StateStore};
+use custodian_core::ports::{Refusal, RunRequest, StateStore};
 use custodian_core::testing::{
-    ExecMode, InMemoryDisclosure, InMemoryStore, ScriptedExecutor, StaticAuthorizer,
-    SyntheticCorpus,
+    ExecMode, InMemoryStore, ScriptedExecutor, StaticAuthorizer, SyntheticCorpus,
 };
 use custodian_core::{
-    ActorId, DisclosureState, Exposure, IdempotencyKey, PlanDigest, PopulationId, ReasonCode,
-    RunState,
+    ActorId, Exposure, IdempotencyKey, PlanDigest, PopulationId, ReasonCode, RunState,
 };
 use custodian_service::ControlService;
 
-type Svc = ControlService<
-    StaticAuthorizer,
-    SyntheticCorpus,
-    InMemoryStore,
-    ScriptedExecutor,
-    InMemoryDisclosure,
->;
+type Svc = ControlService<StaticAuthorizer, SyntheticCorpus, InMemoryStore, ScriptedExecutor>;
 
 fn plan() -> PlanDigest {
     PlanDigest::new("synthetic-plan-a")
@@ -51,12 +43,11 @@ fn service(mode: ExecMode, budget: u32, corpus_available: bool) -> Svc {
         SyntheticCorpus::new(corpus_available),
         store,
         ScriptedExecutor::new(mode),
-        InMemoryDisclosure::new(),
     )
 }
 
 #[test]
-fn happy_path_completes_without_release() {
+fn happy_path_completes() {
     let svc = service(ExecMode::Ok, 1, true);
     let report = svc.run(&request("k1")).unwrap();
     assert_eq!(report.state, RunState::Completed);
@@ -68,35 +59,6 @@ fn happy_path_completes_without_release() {
     assert_eq!(
         &states[..3],
         &[RunState::Proposed, RunState::Authorized, RunState::Reserved]
-    );
-    // Completion does not release anything.
-    let projection = svc
-        .prepare_disclosure(&report, &ActorId::new("synthetic-requester"))
-        .unwrap();
-    assert_eq!(
-        svc.disclosure.state(&projection),
-        Some(DisclosureState::Prepared)
-    );
-    assert_eq!(
-        svc.disclosure.release(&projection),
-        Err(Refusal(ReasonCode::DisclosureNotPermitted))
-    );
-}
-
-#[test]
-fn requester_cannot_approve_own_disclosure() {
-    let svc = service(ExecMode::Ok, 1, true);
-    let report = svc.run(&request("k1")).unwrap();
-    let requester = ActorId::new("synthetic-requester");
-    let projection = svc.prepare_disclosure(&report, &requester).unwrap();
-    assert!(svc.disclosure.approve(&projection, &requester).is_err());
-    svc.disclosure
-        .approve(&projection, &ActorId::new("synthetic-approver"))
-        .unwrap();
-    svc.disclosure.release(&projection).unwrap();
-    assert_eq!(
-        svc.disclosure.state(&projection),
-        Some(DisclosureState::Released)
     );
 }
 
@@ -119,7 +81,6 @@ fn unapproved_or_expired_plan_is_denied_before_any_charge() {
         SyntheticCorpus::new(true),
         store,
         ScriptedExecutor::new(ExecMode::Ok),
-        InMemoryDisclosure::new(),
     );
     assert_eq!(
         expired.run(&request("k1")).unwrap_err(),
@@ -141,7 +102,6 @@ fn authorizer_bound_to_wrong_plan_is_caught() {
         SyntheticCorpus::new(true),
         store,
         ScriptedExecutor::new(ExecMode::Ok),
-        InMemoryDisclosure::new(),
     );
     assert_eq!(
         svc.run(&request("k1")).unwrap_err(),
@@ -219,30 +179,6 @@ fn malicious_or_mismatched_output_is_rejected_and_budget_stays_spent() {
         );
         assert_eq!(svc.store.budget_remaining(&pop()), 0);
     }
-}
-
-#[test]
-fn disclosure_requires_a_completed_run() {
-    let svc = service(ExecMode::WrongPlan, 1, true);
-    let _ = svc.run(&request("k1"));
-    // Forge a report for the failed run: the store state, not the caller, decides.
-    let run = custodian_core::RunId::new("synthetic-run-1");
-    let forged = custodian_service::RunReport {
-        run,
-        state: RunState::Completed,
-        replay: false,
-        outcome: Some(custodian_core::ports::ExecutionOutcome {
-            plan: plan(),
-            roster_complete: true,
-            passed: 1,
-            total: 1,
-        }),
-    };
-    assert_eq!(
-        svc.prepare_disclosure(&forged, &ActorId::new("synthetic-requester"))
-            .unwrap_err(),
-        Refusal(ReasonCode::DisclosureNotPermitted)
-    );
 }
 
 #[test]

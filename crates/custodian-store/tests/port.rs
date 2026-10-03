@@ -9,22 +9,14 @@ use std::thread;
 
 use common::*;
 use custodian_core::ports::{Refusal, RunRequest, StateStore};
-use custodian_core::testing::{
-    ExecMode, InMemoryDisclosure, ScriptedExecutor, StaticAuthorizer, SyntheticCorpus,
-};
+use custodian_core::testing::{ExecMode, ScriptedExecutor, StaticAuthorizer, SyntheticCorpus};
 use custodian_core::{
     ActorId, Exposure, IdempotencyKey, PlanDigest, PopulationId, ReasonCode, RunId, RunState,
 };
 use custodian_service::ControlService;
 use custodian_store::{ManualClock, SqliteStore};
 
-type Svc = ControlService<
-    StaticAuthorizer,
-    SyntheticCorpus,
-    SqliteStore,
-    ScriptedExecutor,
-    InMemoryDisclosure,
->;
+type Svc = ControlService<StaticAuthorizer, SyntheticCorpus, SqliteStore, ScriptedExecutor>;
 
 fn plan() -> PlanDigest {
     PlanDigest::new("synthetic-plan-a")
@@ -55,7 +47,6 @@ fn service(db: &TempDb, mode: ExecMode, budget: u64, corpus_available: bool) -> 
         SyntheticCorpus::new(corpus_available),
         store,
         ScriptedExecutor::new(mode),
-        InMemoryDisclosure::new(),
     )
 }
 
@@ -181,29 +172,6 @@ fn malicious_or_mismatched_output_is_rejected_and_budget_stays_spent() {
         );
         assert_eq!(remaining(&svc), 0);
     }
-}
-
-#[test]
-fn disclosure_requires_a_completed_run() {
-    let db = TempDb::new("port-disc");
-    let svc = service(&db, ExecMode::WrongPlan, 1, true);
-    let _ = svc.run(&request("k1"));
-    let forged = custodian_service::RunReport {
-        run: attempt_of(&svc, "k1"),
-        state: RunState::Completed,
-        replay: false,
-        outcome: Some(custodian_core::ports::ExecutionOutcome {
-            plan: plan(),
-            roster_complete: true,
-            passed: 1,
-            total: 1,
-        }),
-    };
-    assert_eq!(
-        svc.prepare_disclosure(&forged, &ActorId::new("synthetic-requester"))
-            .unwrap_err(),
-        Refusal(ReasonCode::DisclosureNotPermitted)
-    );
 }
 
 #[test]

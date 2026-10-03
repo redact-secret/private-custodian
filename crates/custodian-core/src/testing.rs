@@ -4,15 +4,15 @@
 //! so lifecycle behavior can be tested in ordinary CI with public synthetic
 //! values only.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
 
-use crate::ids::{ActorId, AuthorizationId, IdempotencyKey, PlanDigest, PopulationId, RunId};
-use crate::lifecycle::{budget_refundable, DisclosureState, Exposure, ReasonCode, RunState};
+use crate::ids::{AuthorizationId, IdempotencyKey, PlanDigest, PopulationId, RunId};
+use crate::lifecycle::{budget_refundable, Exposure, ReasonCode, RunState};
 use crate::ports::{
-    Authorization, Authorizer, CorpusAccess, CorpusHandle, Disclosure, ExecutionOutcome, Executor,
-    ProjectionId, Refusal, Reserved, RunRecord, RunRequest, StateStore,
+    Authorization, Authorizer, CorpusAccess, CorpusHandle, ExecutionOutcome, Executor, Refusal,
+    Reserved, RunRecord, RunRequest, StateStore,
 };
 
 /// Authorizer approving a fixed set of plan digests.
@@ -282,87 +282,5 @@ impl Executor for ScriptedExecutor {
                 total: 4,
             }),
         }
-    }
-}
-
-struct Projection {
-    requester: ActorId,
-    state: DisclosureState,
-}
-
-pub struct InMemoryDisclosure {
-    inner: Mutex<(HashMap<ProjectionId, Projection>, u64, HashSet<RunId>)>,
-}
-
-impl InMemoryDisclosure {
-    pub fn new() -> Self {
-        Self {
-            inner: Mutex::new((HashMap::new(), 0, HashSet::new())),
-        }
-    }
-}
-
-impl Default for InMemoryDisclosure {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Disclosure for InMemoryDisclosure {
-    fn prepare(
-        &self,
-        run: &RunId,
-        _outcome: &ExecutionOutcome,
-        requester: &ActorId,
-    ) -> Result<ProjectionId, Refusal> {
-        let mut g = self.inner.lock().unwrap();
-        // One projection per run: no duplicate publication.
-        if !g.2.insert(run.clone()) {
-            return Err(Refusal(ReasonCode::DuplicateRequest));
-        }
-        g.1 += 1;
-        let id = ProjectionId(format!("synthetic-projection-{}", g.1));
-        g.0.insert(
-            id.clone(),
-            Projection {
-                requester: requester.clone(),
-                state: DisclosureState::Prepared,
-            },
-        );
-        Ok(id)
-    }
-
-    fn approve(&self, projection: &ProjectionId, approver: &ActorId) -> Result<(), Refusal> {
-        let mut g = self.inner.lock().unwrap();
-        let p =
-            g.0.get_mut(projection)
-                .ok_or(Refusal(ReasonCode::InvalidTransition))?;
-        // The requester cannot approve its own disclosure.
-        if &p.requester == approver || !p.state.can_transition(DisclosureState::Approved) {
-            return Err(Refusal(ReasonCode::DisclosureNotPermitted));
-        }
-        p.state = DisclosureState::Approved;
-        Ok(())
-    }
-
-    fn release(&self, projection: &ProjectionId) -> Result<(), Refusal> {
-        let mut g = self.inner.lock().unwrap();
-        let p =
-            g.0.get_mut(projection)
-                .ok_or(Refusal(ReasonCode::InvalidTransition))?;
-        if !p.state.can_transition(DisclosureState::Released) {
-            return Err(Refusal(ReasonCode::DisclosureNotPermitted));
-        }
-        p.state = DisclosureState::Released;
-        Ok(())
-    }
-
-    fn state(&self, projection: &ProjectionId) -> Option<DisclosureState> {
-        self.inner
-            .lock()
-            .unwrap()
-            .0
-            .get(projection)
-            .map(|p| p.state)
     }
 }
