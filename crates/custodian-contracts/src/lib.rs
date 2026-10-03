@@ -1,19 +1,33 @@
-//! Placeholder for the versioned contracts crate.
+//! Versioned request, approval, reservation, execution, receipt, public
+//! projection, revocation and policy-activation contracts (C2).
 //!
-//! Request, approval, execution, receipt and disclosure contracts, including
-//! canonical serialization and digest rules, are defined by issue C2 and must
-//! not be invented here. This crate exists so the workspace layout, crate name
-//! and dependency direction are fixed before C2 starts. See ADR 0002.
+//! Internal contracts (`request`, `approval`, `reservation`, `execution`,
+//! `policy`) never leave the control service. Public contracts (`public`,
+//! `revocation`) are explicit allowlists with bounded fields. Canonical
+//! serialization, digests and domain separation are in `canonical`
+//! (ADR 0004); freshness and revocation semantics are in `policy` and
+//! `revocation` (ADR 0005); the policy summary is `docs/contracts.md`.
+//!
+//! This crate defines shapes and checks only. It does no I/O, holds no keys,
+//! implements no signing algorithm and decides no budget: those are C3 to C9.
 
-/// Marks that no contract has been defined yet. C2 removes this constant.
-pub const CONTRACTS_STATUS: &str = "placeholder: contracts are not defined (C2)";
+#![forbid(unsafe_code)]
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod approval;
+pub mod canonical;
+pub mod common;
+pub mod error;
+pub mod execution;
+pub mod policy;
+pub mod public;
+pub mod request;
+pub mod reservation;
+pub mod revocation;
+pub mod schema;
+pub mod types;
 
-    #[test]
-    fn placeholder_is_explicit() {
-        assert!(CONTRACTS_STATUS.starts_with("placeholder"));
-    }
-}
+pub use canonical::{Contract, DomainTag, MAX_DOCUMENT_BYTES};
+pub use error::{BindingError, ContractError};
+
+/// Contract schema generation. Bumped only with a new `schemas/vN/` directory.
+pub const CONTRACT_MAJOR_VERSION: u32 = 1;

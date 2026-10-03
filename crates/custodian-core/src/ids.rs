@@ -1,9 +1,9 @@
 //! Distinct identity types. They are separate Rust types so they cannot be
 //! interchanged by accident (see CONVENTIONS.md, "Identity and transitions").
 //!
-//! The inner representation is an opaque string. Canonical serialization and
-//! digest rules are part of the C2 contract and are intentionally not decided
-//! here.
+//! The inner representation is an opaque string. Wire encodings, canonical
+//! serialization and digests are defined in `custodian-contracts` (ADR 0004);
+//! adapters convert between these and the validated contract types.
 
 macro_rules! opaque_id {
     ($(#[$m:meta])* $name:ident) => {
@@ -27,7 +27,7 @@ opaque_id!(
     ActorId
 );
 opaque_id!(
-    /// Digest of an exact frozen evaluation plan. Encoding is deferred to C2.
+    /// Digest of an exact frozen evaluation plan (wire form: `custodian_contracts::types::PlanDigest`).
     PlanDigest
 );
 opaque_id!(

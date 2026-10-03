@@ -1,0 +1,1 @@
+{"activates_at":1799999000,"activation_id":"pac_synthetic000000000001","changed_at":1799999000,"expires_at":1800100000,"policy":{"domain":"credential","kind":"approval","name":"synthetic-approval","version":1},"schema":"private-custodian.policy-activation/1","sequence":3,"status":"active"}

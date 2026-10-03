@@ -1,0 +1,198 @@
+{
+  "$defs": {
+    "BudgetKind": {
+      "description": "What kind of budget a reservation draws on.",
+      "oneOf": [
+        {
+          "const": "run",
+          "description": "One protected execution attempt.",
+          "type": "string"
+        },
+        {
+          "const": "release_query",
+          "description": "One public release or query of an aggregate.",
+          "type": "string"
+        }
+      ]
+    },
+    "BudgetScope": {
+      "description": "Budget scope. Two legacy semantics stay distinct (ADR 0003): holdout\nattempts are per population (and family) epoch; blind attempts are per\ncandidate lineage per epoch. They are different variants, never one counter.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "corpus_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^cor_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "epoch_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^epo_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "family_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^fam_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "scope": {
+              "const": "population_epoch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "scope",
+            "corpus_id",
+            "epoch_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "corpus_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^cor_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "epoch_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^epo_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "family_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^fam_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "lineage_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^lin_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "scope": {
+              "const": "candidate_lineage_epoch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "scope",
+            "corpus_id",
+            "epoch_id",
+            "lineage_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExposureState": {
+      "description": "Whether protected bytes were acquired. Wire form of `custodian_core::Exposure`.",
+      "enum": [
+        "not_exposed",
+        "exposed"
+      ],
+      "type": "string"
+    },
+    "ReservationState": {
+      "oneOf": [
+        {
+          "const": "held",
+          "description": "Reserved; execution not finished.",
+          "type": "string"
+        },
+        {
+          "const": "consumed",
+          "description": "Spent. The default once protected bytes were acquired.",
+          "type": "string"
+        },
+        {
+          "const": "refunded",
+          "description": "Returned. Only possible when no protected bytes were acquired.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "approval_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^apr_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "budget": {
+      "$ref": "#/$defs/BudgetScope"
+    },
+    "exposure": {
+      "$ref": "#/$defs/ExposureState"
+    },
+    "kind": {
+      "$ref": "#/$defs/BudgetKind"
+    },
+    "lease_expires_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "plan_digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "request_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^req_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "reservation_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^rsv_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "reserved_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema": {
+      "const": "private-custodian.reservation/1"
+    },
+    "state": {
+      "$ref": "#/$defs/ReservationState"
+    },
+    "units": {
+      "maximum": 16,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema",
+    "reservation_id",
+    "request_id",
+    "approval_id",
+    "plan_digest",
+    "kind",
+    "budget",
+    "units",
+    "state",
+    "exposure",
+    "reserved_at",
+    "lease_expires_at"
+  ],
+  "title": "Reservation",
+  "type": "object"
+}

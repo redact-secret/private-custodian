@@ -1,0 +1,125 @@
+{
+  "$defs": {
+    "ActivationStatus": {
+      "enum": [
+        "active",
+        "revoked",
+        "superseded"
+      ],
+      "type": "string"
+    },
+    "EvaluationDomain": {
+      "description": "Evaluation domain. Plan, protocol, population and policies must all agree.",
+      "enum": [
+        "credential",
+        "pii"
+      ],
+      "type": "string"
+    },
+    "PolicyKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "budget",
+            "retention",
+            "signer"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "approval",
+          "description": "Execution approval and authorization rules.",
+          "type": "string"
+        },
+        {
+          "const": "disclosure",
+          "description": "Projection allowlist, strata and composition rules.",
+          "type": "string"
+        }
+      ]
+    },
+    "PolicyRef": {
+      "additionalProperties": false,
+      "description": "A named, versioned policy. Changing a policy is a reviewed revision, i.e. a\nnew version, never an in-place edit.",
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "kind": {
+          "$ref": "#/$defs/PolicyKind"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "domain",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One state of one activation. State changes append a new record with a\nhigher `sequence`; a record is never edited in place.",
+  "properties": {
+    "activates_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "activation_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^pac_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "changed_at": {
+      "description": "When this state (sequence) was recorded.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "expires_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "policy": {
+      "$ref": "#/$defs/PolicyRef"
+    },
+    "schema": {
+      "const": "private-custodian.policy-activation/1"
+    },
+    "sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/ActivationStatus"
+    }
+  },
+  "required": [
+    "schema",
+    "policy",
+    "activation_id",
+    "sequence",
+    "status",
+    "activates_at",
+    "expires_at",
+    "changed_at"
+  ],
+  "title": "PolicyActivation",
+  "type": "object"
+}

@@ -1,0 +1,1 @@
+{"entries":[{"action":{"action":"contaminated"},"effective_at":1800000050,"reason":"contamination","target":{"candidate":"sha256:b7802eb35e558fc140633ff80d06d0c4381250f9a4a439f57976e45b515eeae6","target":"candidate"}}],"feed_id":"fed_synthetic000000000001","fresh_until":1800003650,"issued_at":1800000050,"schema":"private-custodian.revocation-envelope/1","sequence":1}
