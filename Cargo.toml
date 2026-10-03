@@ -11,6 +11,7 @@ members = [
     "crates/custodian-worker",
     "crates/custodian-disclosure",
     "crates/custodian-lifecycle",
+    "crates/custodian-bridge",
 ]
 
 [workspace.package]

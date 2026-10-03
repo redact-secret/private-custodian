@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "How the custodian answered, as an index. Unsigned and untrusted.",
+  "properties": {
+    "destination": {
+      "description": "The channel this answer was prepared for. A label, not a proof: see\nADR 0090 on destination binding.",
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+      "type": "string"
+    },
+    "feed_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^fed_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "first_sequence": {
+      "description": "First and last feed sequence included. Both 0 when none is.",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "last_sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "projections": {
+      "description": "Digests of the projection payloads included, in order.",
+      "items": {
+        "maxLength": 71,
+        "minLength": 71,
+        "pattern": "^sha256:[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "type": "array"
+    },
+    "request_digest": {
+      "description": "Digest of the request this answers.",
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema": {
+      "const": "private-custodian.bridge-response/1"
+    }
+  },
+  "required": [
+    "schema",
+    "request_digest",
+    "feed_id",
+    "destination",
+    "projections",
+    "first_sequence",
+    "last_sequence"
+  ],
+  "title": "BridgeManifest",
+  "type": "object"
+}
