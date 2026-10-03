@@ -350,6 +350,7 @@ fn library_code_has_no_ad_hoc_logging_or_printing() {
     let allowed: &[&str] = &[
         "custodian-cli/src/main.rs",
         "custodian-service/src/main.rs",
+        "custodian-signer/src/main.rs",
         "custodian-worker/src/bin/",
     ];
     let mut files = Vec::new();

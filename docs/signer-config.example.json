@@ -1,0 +1,21 @@
+{
+  "schema": "private-custodian.signer-config/1",
+  "key_id": "key_synthetic000000000001",
+  "key_path": "/var/lib/custodian-signer/PLACEHOLDER-key-file",
+  "socket_path": "/run/custodian-signer/signer.sock",
+  "allowed_peer_uid": 1001,
+  "purposes": [
+    "private-custodian/v1/ledger/audit-event",
+    "private-custodian/v1/ledger/store-checkpoint",
+    "private-custodian/v1/ledger/registry-checkpoint",
+    "private-custodian/v1/ledger/policy",
+    "private-custodian/v1/ledger/publication",
+    "private-custodian/v1/ledger/reconciliation",
+    "private-custodian/v1/ledger/key-event"
+  ],
+  "valid_from": 1800000000,
+  "not_after": 1900000000,
+  "io_timeout_secs": 5,
+  "max_concurrent": 4,
+  "max_request_skew_secs": 120
+}

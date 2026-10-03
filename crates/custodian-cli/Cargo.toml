@@ -24,7 +24,7 @@ name = "c12_measure"
 path = "examples/c12_measure.rs"
 test = true
 
-# No new third-party crate (ADR 0080): argument parsing is std, hashing is the
+# No new third-party crate (ADR 0080; ADR 0113 for the signer transport crate): argument parsing is std, hashing is the
 # workspace-pinned sha2, JSON is the workspace-pinned serde_json.
 [dependencies]
 custodian-core = { path = "../custodian-core" }
@@ -33,6 +33,7 @@ custodian-store = { path = "../custodian-store" }
 custodian-intake = { path = "../custodian-intake" }
 custodian-corpus = { path = "../custodian-corpus" }
 custodian-ledger = { path = "../custodian-ledger" }
+custodian-signer = { path = "../custodian-signer" }
 custodian-lifecycle = { path = "../custodian-lifecycle" }
 custodian-disclosure = { path = "../custodian-disclosure" }
 custodian-worker = { path = "../custodian-worker" }

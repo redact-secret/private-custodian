@@ -50,6 +50,10 @@ ADR.
 | [0102](0102-deferred-destination-binding-and-legacy-consumption-import.md) | Deferred changes: destination binding in the public projection and legacy consumption import | Accepted as designs; not implemented |
 | [0103](0103-solo-maintainer-operating-decisions-license-reporting-and-publication.md) | Solo-maintainer operating decisions: license, reporting route, requester and approver, clean-snapshot publication | Accepted |
 | [0110](0110-serverless-verification-with-github-actions.md) | Server-less verification with GitHub Actions: verifier CLI, reusable workflow, locked build, synthetic conformance set | Accepted; implemented on synthetic data, not deployed |
+| [0111](0111-isolated-signer-process-socket-transport-and-framed-protocol.md) | Isolated signer process, local-socket transport and framed protocol | Accepted (design); implemented with test keys, not deployed |
+| [0112](0112-signer-key-provider-contract-key-file-rules-and-process-hardening.md) | Signer key provider contract, key file rules and process hardening | Accepted (design); implemented with test keys, not deployed |
+| [0113](0113-signer-crate-dependencies-and-no-unsafe.md) | Signer crate dependencies and the no-`unsafe` rule | Accepted (design); implemented |
+| [0114](0114-control-service-signer-wiring-fail-closed-semantics-and-platform-limits.md) | Control-service signer wiring, fail-closed semantics and platform limits | Accepted (design); implemented, not deployed |
 
 Accepted (design) means the decision is frozen for downstream issues (C2 to C12). It does not mean any of it
 is implemented or deployed. See each ADR's status table.
