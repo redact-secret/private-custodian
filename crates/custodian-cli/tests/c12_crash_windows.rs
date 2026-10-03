@@ -26,9 +26,7 @@ use custodian_cli::{Command, Control};
 use custodian_core::{Exposure, RunState};
 use custodian_ledger::{ExportFaultPoint, Exporter, Verifier};
 use custodian_lifecycle::{CrashOnce as LifeCrash, LifecyclePoint};
-use custodian_store::{
-    FaultInjector, FaultOp, FaultPhase, FaultPoint, SqliteStore, StoreConfig,
-};
+use custodian_store::{FaultInjector, FaultOp, FaultPhase, FaultPoint, SqliteStore, StoreConfig};
 
 /// Fires once at a chosen store boundary.
 #[derive(Default)]
@@ -159,7 +157,10 @@ fn step(p: &Pipe, arm: &Arm, i: usize, cx: &mut Cx) -> bool {
             let o = p.approve(1);
             if let Some(a) = o.field("attempt_id").and_then(|v| v.as_str()) {
                 cx.attempt = Some(custodian_core::RunId::new(a.to_owned()));
-                cx.approval_id = o.field("approval_id").and_then(|v| v.as_str()).map(str::to_owned);
+                cx.approval_id = o
+                    .field("approval_id")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned);
             }
         }
         3 => {
@@ -299,7 +300,11 @@ fn check_end_state(p: &Pipe, label: &str) {
             ),
             Exposure::NotExposed => {
                 assert_eq!(p.sandbox.runs(), 0, "{label}: ran without exposure record");
-                assert_eq!((b.consumed, b.refunded), (0, 1), "{label}: unexposed refunds once");
+                assert_eq!(
+                    (b.consumed, b.refunded),
+                    (0, 1),
+                    "{label}: unexposed refunds once"
+                );
             }
         }
     }
@@ -336,7 +341,14 @@ fn a_crash_at_every_reachable_boundary_of_the_full_pipeline_converges_safely() {
             let label = format!("{op:?}/{phase:?}");
             // Only the release steps need the full authorized roster; a small
             // population keeps the rest of the sweep fast.
-            let entries = if matches!(op, FaultOp::ChargeRelease | FaultOp::AppendDisclosureHistory) { ROSTER } else { 4 };
+            let entries = if matches!(
+                op,
+                FaultOp::ChargeRelease | FaultOp::AppendDisclosureHistory
+            ) {
+                ROSTER
+            } else {
+                4
+            };
             let mut p = Pipe::new(3, entries);
             let arm = Arc::new(Arm::default());
             open_with(&mut p, Some(&arm));
@@ -373,12 +385,12 @@ fn a_crash_at_every_reachable_boundary_of_the_full_pipeline_converges_safely() {
             p.w.clock.advance(10_000);
             {
                 let acts = p.activations();
-                p.start(&acts)
-                    .unwrap_or_else(|e| panic!("{label}: restart refused at {}: {:?}", e.step, e.reason));
+                p.start(&acts).unwrap_or_else(|e| {
+                    panic!("{label}: restart refused at {}: {:?}", e.step, e.reason)
+                });
             }
             // Drive the whole idempotent script again.
-            let mut none = Arm::default();
-            none.0 = Mutex::new(None);
+            let none = Arm::default();
             let mut cx = Cx {
                 attempt: cx.attempt,
                 approval_id: cx.approval_id,
@@ -432,16 +444,18 @@ fn export_crashes_converge_with_each_event_written_once() {
         // The restart finishes the job; identical bytes are a no-op.
         assert_eq!(code(&p.export()), "exported", "{point:?}");
         assert_eq!(p.w.rw.store.outbox_pending_count().unwrap(), 0);
-        let audit_files = p
-            .w
-            .ledger
-            .paths()
-            .into_iter()
-            .filter(|f| f.starts_with("records/audit/"))
-            .count();
+        let audit_files =
+            p.w.ledger
+                .paths()
+                .into_iter()
+                .filter(|f| f.starts_with("records/audit/"))
+                .count();
         assert!(audit_files as u64 >= pending, "{point:?}: events missing");
         assert!(
-            !p.w.ledger.paths().iter().any(|f| f.starts_with("quarantine/")),
+            !p.w.ledger
+                .paths()
+                .iter()
+                .any(|f| f.starts_with("quarantine/")),
             "{point:?}: a retry must never conflict"
         );
         assert_eq!(
@@ -482,15 +496,26 @@ fn lifecycle_crashes_converge_when_the_same_command_is_repeated() {
     // the crash interrupted, in the store and in the registry.
     let again = p.w.run(Who::Operator, &report);
     assert!(again.is_ok(), "{}", again.render());
-    let standing = p.w.rw.store.epoch_standing(p.w.rw.epoch.as_str()).unwrap().unwrap();
+    let standing =
+        p.w.rw
+            .store
+            .epoch_standing(p.w.rw.epoch.as_str())
+            .unwrap()
+            .unwrap();
     assert!(standing.standing.retired);
     assert_eq!(
         p.w.rw.fx.pop.state(&p.w.rw.epoch).unwrap(),
         custodian_corpus::EpochState::Retired
     );
-    assert_eq!(code(&p.w.run(Who::Operator, &Command::FeedPublish)), "published");
+    assert_eq!(
+        code(&p.w.run(Who::Operator, &Command::FeedPublish)),
+        "published"
+    );
     p.export();
-    assert_eq!(code(&p.w.run(Who::Auditor, &Command::Reconcile(ReconcileTarget::Feed))), "consistent");
+    assert_eq!(
+        code(&p.w.run(Who::Auditor, &Command::Reconcile(ReconcileTarget::Feed))),
+        "consistent"
+    );
 
     // Rotation: crash at each of the four steps; the repeat converges and the
     // old epoch's budget is never touched.
@@ -519,10 +544,17 @@ fn lifecycle_crashes_converge_when_the_same_command_is_repeated() {
         assert_eq!(code(&p.submit(5)), "epoch_blocked", "{point:?}");
         let o = p.w.run(Who::Operator, &rotate);
         assert_eq!(code(&o), "rotated", "{point:?}: {}", o.render());
-        assert_eq!(p.w.budget(), spent, "{point:?}: the old budget is untouched");
+        assert_eq!(
+            p.w.budget(),
+            spent,
+            "{point:?}: the old budget is untouched"
+        );
         p.w.rw.store.verify_lifecycle_invariants().unwrap();
         p.export();
-        assert_eq!(code(&p.w.run(Who::Auditor, &Command::Verify(VerifyTarget::All))), "verified");
+        assert_eq!(
+            code(&p.w.run(Who::Auditor, &Command::Verify(VerifyTarget::All))),
+            "verified"
+        );
     }
 
     // Feed publication: crash at each of its three boundaries.
@@ -542,7 +574,10 @@ fn lifecycle_crashes_converge_when_the_same_command_is_repeated() {
         assert!(again.is_ok(), "{point:?}: {}", again.render());
         let seqs = p.w.feed.sequences(&lc::feed_id());
         let expected: Vec<u64> = (1..=seqs.len() as u64).collect();
-        assert_eq!(seqs, expected, "{point:?}: contiguous, no gap, no duplicate");
+        assert_eq!(
+            seqs, expected,
+            "{point:?}: contiguous, no gap, no duplicate"
+        );
         assert_eq!(
             code(&p.w.run(Who::Auditor, &Command::Reconcile(ReconcileTarget::Feed))),
             "consistent",
@@ -561,21 +596,23 @@ fn a_crash_inside_repair_recover_and_clear_reconcile_is_resumable() {
         let mut p = Pipe::new(3, 4);
         let (attempt, _) = p.reserve(1);
         // Start it, then lose the worker.
-        let lease = p
-            .w
-            .rw
+        let lease =
+            p.w.rw
+                .store
+                .start_attempt(&custodian_store::StartCommand {
+                    attempt: &attempt,
+                    owner: "worker-lost",
+                    actor: &sc::actor(),
+                    now: NOW + 1,
+                    lease_secs: 300,
+                    observed: Some(&cc::observed(cc::activation(), NOW + 1)),
+                    max_state_age_secs: 300,
+                })
+                .unwrap();
+        p.w.rw
             .store
-            .start_attempt(&custodian_store::StartCommand {
-                attempt: &attempt,
-                owner: "worker-lost",
-                actor: &sc::actor(),
-                now: NOW + 1,
-                lease_secs: 300,
-                observed: Some(&cc::observed(cc::activation(), NOW + 1)),
-                max_state_age_secs: 300,
-            })
+            .record_exposure(&lease, &sc::actor(), NOW + 2)
             .unwrap();
-        p.w.rw.store.record_exposure(&lease, &sc::actor(), NOW + 2).unwrap();
         p.w.clock.advance(5_000);
         let arm = Arc::new(Arm::default());
         open_with(&mut p, Some(&arm));
@@ -592,7 +629,11 @@ fn a_crash_inside_repair_recover_and_clear_reconcile_is_resumable() {
         assert!(arm.fired(), "{phase:?}: {}", first.code());
         open_with(&mut p, None);
         let second = recover(&p);
-        assert!(second.is_ok() || second.code() == "recovered", "{phase:?}: {}", second.code());
+        assert!(
+            second.is_ok() || second.code() == "recovered",
+            "{phase:?}: {}",
+            second.code()
+        );
         let b = p.w.budget();
         assert_eq!((b.held, b.consumed, b.refunded), (0, 1, 0), "{phase:?}");
         p.w.rw.store.verify_invariants().unwrap();
@@ -623,7 +664,11 @@ fn a_crash_inside_repair_recover_and_clear_reconcile_is_resumable() {
             assert_eq!(code(&clear(&q)), "cleared", "{phase:?}");
         }
         assert!(!q.w.rw.store.needs_reconcile().unwrap());
-        assert_eq!(q.w.budget().held, 1, "{phase:?}: budget untouched by the clear");
+        assert_eq!(
+            q.w.budget().held,
+            1,
+            "{phase:?}: budget untouched by the clear"
+        );
         q.w.rw.store.verify_invariants().unwrap();
     }
 }

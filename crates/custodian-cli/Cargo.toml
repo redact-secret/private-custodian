@@ -17,6 +17,13 @@ path = "src/lib.rs"
 name = "custodian"
 path = "src/main.rs"
 
+# C12 measurements (docs/measurements.md). `test = true` runs only the example's
+# own tiny consistency test under `cargo test`; the timings run on demand.
+[[example]]
+name = "c12_measure"
+path = "examples/c12_measure.rs"
+test = true
+
 # No new third-party crate (ADR 0080): argument parsing is std, hashing is the
 # workspace-pinned sha2, JSON is the workspace-pinned serde_json.
 [dependencies]

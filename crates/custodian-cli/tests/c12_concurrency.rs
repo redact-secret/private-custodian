@@ -54,7 +54,10 @@ fn concurrent_approvals_for_the_last_units_reserve_exactly_the_limit() {
     assert_eq!((b.held, b.consumed, b.refunded), (3, 0, 0));
     // The five losers are recorded denials: no free run, and audited.
     let kinds = p.w.kinds();
-    assert_eq!(kinds.iter().filter(|k| *k == "reservation.created").count(), 3);
+    assert_eq!(
+        kinds.iter().filter(|k| *k == "reservation.created").count(),
+        3
+    );
     assert_eq!(kinds.iter().filter(|k| *k == "request.denied").count(), 5);
     p.w.rw.store.verify_invariants().unwrap();
     assert_eq!(p.sandbox.runs(), 0);
@@ -94,7 +97,9 @@ fn duplicate_dispatch_of_one_attempt_runs_the_engine_once_and_charges_once() {
                 let (req, attempt) = (req.clone(), attempt.clone());
                 s.spawn(move || {
                     let store = SqliteStore::open(p.w.rw.db.path()).unwrap();
-                    p.dispatch_on(&store, &req, &attempt).ok().map(|r| r.outcome)
+                    p.dispatch_on(&store, &req, &attempt)
+                        .ok()
+                        .map(|r| r.outcome)
                 })
             })
             .collect();
@@ -107,7 +112,10 @@ fn duplicate_dispatch_of_one_attempt_runs_the_engine_once_and_charges_once() {
         "{outcomes:?}"
     );
     let rec = p.w.rw.store.attempt(&attempt).unwrap().unwrap();
-    assert_eq!((rec.state, rec.exposure), (RunState::Completed, Exposure::Exposed));
+    assert_eq!(
+        (rec.state, rec.exposure),
+        (RunState::Completed, Exposure::Exposed)
+    );
     let b = p.w.budget();
     assert_eq!((b.held, b.consumed, b.refunded), (0, 1, 0));
     p.w.rw.store.verify_invariants().unwrap();
@@ -182,13 +190,20 @@ fn concurrent_exports_write_each_audit_event_once_and_the_ledger_stays_trustwort
     });
     // A racing exporter may find work already done; none may corrupt the ledger.
     assert!(
-        codes.iter().all(|c| *c == "exported" || *c == "export_conflict" || *c == "ledger_unavailable"),
+        codes
+            .iter()
+            .all(|c| *c == "exported" || *c == "export_conflict" || *c == "ledger_unavailable"),
         "{codes:?}"
     );
-    assert_eq!(p.export().code(), "exported", "a final pass drains the outbox");
+    assert_eq!(
+        p.export().code(),
+        "exported",
+        "a final pass drains the outbox"
+    );
     assert_eq!(p.w.rw.store.outbox_pending_count().unwrap(), 0);
     assert_eq!(
-        p.w.run(Who::Auditor, &Command::Verify(VerifyTarget::All)).code(),
+        p.w.run(Who::Auditor, &Command::Verify(VerifyTarget::All))
+            .code(),
         "verified"
     );
 }

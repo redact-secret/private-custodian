@@ -23,8 +23,10 @@ pub fn with_disclosure<R>(
 ) -> R {
     // As the control plane's own export does: the verifier is the pinned roots
     // extended by the verified key events of the ledger (a rotated key).
-    let walk = custodian_ledger::walk_ledger(&p.w.ledger, &p.w.roots).unwrap();
-    let verifier = Verifier::new(walk.keyring);
+    let keyring = custodian_ledger::walk_ledger(&p.w.ledger, &p.w.roots)
+        .map(|w| w.keyring)
+        .unwrap_or_else(|_| p.w.roots.clone());
+    let verifier = Verifier::new(keyring);
     let exporter = Exporter::new(&p.w.ledger, &p.w.key.signer, &verifier);
     let names = StaticNames(lc::opaque(1));
     let d = svc.disclosure_service(&p.w.rw.store, &exporter, &names);
@@ -118,5 +120,7 @@ pub fn release(
     sink: &RecordingSink,
     at: u64,
 ) -> Result<ReleasedEnvelope, &'static str> {
-    with_disclosure(p, svc, |d| release_on(d, prepared, approval, dest, sink, at))
+    with_disclosure(p, svc, |d| {
+        release_on(d, prepared, approval, dest, sink, at)
+    })
 }

@@ -82,20 +82,19 @@ fn a_lost_lease_renewal_acknowledgement_does_not_stop_the_holder_or_double_charg
         let (attempt, _) = p.reserve(1);
         let arm = Arc::new(Arm::default());
         open_with(&mut p, Some(&arm));
-        let lease = p
-            .w
-            .rw
-            .store
-            .start_attempt(&StartCommand {
-                attempt: &attempt,
-                owner: "worker-renew",
-                actor: &sc::actor(),
-                now: NOW + 1,
-                lease_secs: 300,
-                observed: Some(&cc::observed(cc::activation(), NOW + 1)),
-                max_state_age_secs: 300,
-            })
-            .unwrap();
+        let lease =
+            p.w.rw
+                .store
+                .start_attempt(&StartCommand {
+                    attempt: &attempt,
+                    owner: "worker-renew",
+                    actor: &sc::actor(),
+                    now: NOW + 1,
+                    lease_secs: 300,
+                    observed: Some(&cc::observed(cc::activation(), NOW + 1)),
+                    max_state_age_secs: 300,
+                })
+                .unwrap();
         arm.arm(FaultOp::RenewLease, phase);
         assert!(p.w.rw.store.renew_lease(&lease, NOW + 10, 300).is_err());
         assert!(arm.fired());
@@ -154,7 +153,8 @@ fn queue_lease_and_completion_crashes_redeliver_and_never_lose_or_duplicate() {
                         q.w.rw.store.queue_lease("c3", t, 60).unwrap().is_none(),
                         "two live leases"
                     );
-                    q.w.rw.store
+                    q.w.rw
+                        .store
                         .queue_complete(l.seq, l.lease_token, t + 1)
                         .unwrap();
                 }

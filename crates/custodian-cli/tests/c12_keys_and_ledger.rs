@@ -41,20 +41,22 @@ fn audit_file_count(p: &Pipe) -> usize {
 
 /// The audit record file with the lowest sequence number.
 fn lowest_audit_path(p: &Pipe) -> String {
-    let mut all: Vec<(u64, String)> = p
-        .w
-        .ledger
-        .paths()
-        .into_iter()
-        .filter(|f| f.starts_with("records/audit/"))
-        .map(|f| {
-            let rec = custodian_ledger::SignedLedgerRecord::decode_canonical(&p.w.ledger.raw(&f).unwrap()).unwrap();
-            match rec.payload.body {
-                custodian_ledger::record::RecordBody::AuditEvent(b) => (b.seq, f),
-                _ => unreachable!(),
-            }
-        })
-        .collect();
+    let mut all: Vec<(u64, String)> =
+        p.w.ledger
+            .paths()
+            .into_iter()
+            .filter(|f| f.starts_with("records/audit/"))
+            .map(|f| {
+                let rec = custodian_ledger::SignedLedgerRecord::decode_canonical(
+                    &p.w.ledger.raw(&f).unwrap(),
+                )
+                .unwrap();
+                match rec.payload.body {
+                    custodian_ledger::record::RecordBody::AuditEvent(b) => (b.seq, f),
+                    _ => unreachable!(),
+                }
+            })
+            .collect();
     all.sort();
     all.remove(0).1
 }
@@ -83,7 +85,10 @@ fn a_ledger_rolled_back_to_an_older_state_is_found_by_the_independent_copy_and_r
         }
     }
     let walk = custodian_ledger::walk_ledger(&p.w.ledger, &p.w.roots).unwrap();
-    assert!(walk.is_trustworthy(), "a clean prefix looks trustworthy by itself");
+    assert!(
+        walk.is_trustworthy(),
+        "a clean prefix looks trustworthy by itself"
+    );
     let ledger_head = walk.store_checkpoint.unwrap();
     assert!(
         ledger_head.seq < independent.seq,
@@ -98,7 +103,8 @@ fn a_ledger_rolled_back_to_an_older_state_is_found_by_the_independent_copy_and_r
         code(&p.w.run(Who::Auditor, &Command::Verify(VerifyTarget::Checkpoint))),
         "verified"
     );
-    let rec = p.w.run(Who::Auditor, &Command::Reconcile(ReconcileTarget::Ledger));
+    let rec =
+        p.w.run(Who::Auditor, &Command::Reconcile(ReconcileTarget::Ledger));
     assert_ne!(code(&rec), "consistent", "{}", rec.render());
 
     // The designed repair re-writes identical bytes (signatures are
@@ -119,7 +125,10 @@ fn a_ledger_rolled_back_to_an_older_state_is_found_by_the_independent_copy_and_r
     assert!(after.is_trustworthy());
     assert!(after.store_checkpoint.unwrap().seq >= independent.seq);
     assert!(
-        !p.w.ledger.paths().iter().any(|f| f.starts_with("quarantine/")),
+        !p.w.ledger
+            .paths()
+            .iter()
+            .any(|f| f.starts_with("quarantine/")),
         "nothing conflicted"
     );
 }
@@ -135,7 +144,9 @@ fn a_hole_a_forged_record_or_a_foreign_signature_in_the_ledger_blocks_the_store(
     assert_eq!((code(&o), o.exit_code()), ("ledger_untrusted", 8));
     assert!(p.w.rw.store.needs_reconcile().unwrap());
     let acts = p.activations();
-    let err = Service::start(p.w.parts(), &startup_config(), &acts).err().unwrap();
+    let err = Service::start(p.w.parts(), &startup_config(), &acts)
+        .err()
+        .unwrap();
     assert_eq!(
         err.reason,
         CliReason::LedgerUntrusted,
@@ -204,7 +215,12 @@ fn export_and_signer_outages_keep_events_pending_and_disclosure_closed_then_drai
         assert_eq!((code(&o), o.exit_code()), ("ledger_unavailable", 7));
         assert_eq!(p.w.rw.store.outbox_pending_count().unwrap(), pending);
     }
-    assert!(p.w.rw.store.check_disclosure_precondition(&attempt).is_err());
+    assert!(p
+        .w
+        .rw
+        .store
+        .check_disclosure_precondition(&attempt)
+        .is_err());
     // The budget is exactly what the run spent; an outage resets nothing.
     let b = p.w.budget();
     assert_eq!((b.held, b.consumed, b.refunded), (0, 1, 0));
@@ -230,7 +246,10 @@ fn export_and_signer_outages_keep_events_pending_and_disclosure_closed_then_drai
     // Everything is restored: one pass drains, in order, and the gate opens.
     assert_eq!(code(&p.export()), "exported");
     assert_eq!(p.w.rw.store.outbox_pending_count().unwrap(), 0);
-    p.w.rw.store.check_disclosure_precondition(&attempt).unwrap();
+    p.w.rw
+        .store
+        .check_disclosure_precondition(&attempt)
+        .unwrap();
     assert_eq!(
         code(&p.w.run(Who::Auditor, &Command::Verify(VerifyTarget::All))),
         "verified"
@@ -314,7 +333,10 @@ fn key_rotation_continues_the_chain_of_trust_from_the_one_pinned_root() {
     // The retired key can no longer produce records that verify for later
     // times: a late record signed by it is a finding.
     let late = LedgerRecord::store_checkpoint(
-        &custodian_store::Checkpoint { seq: 1, chain: "b".repeat(64) },
+        &custodian_store::Checkpoint {
+            seq: 1,
+            chain: "b".repeat(64),
+        },
         NOW + 2_000,
     )
     .unwrap();
@@ -322,18 +344,24 @@ fn key_rotation_continues_the_chain_of_trust_from_the_one_pinned_root() {
         .signer
         .sign(&ApprovedPayload::ledger_record(&late).unwrap())
         .unwrap();
-    let signed = custodian_ledger::SignedLedgerRecord { payload: late, signature: sig };
+    let signed = custodian_ledger::SignedLedgerRecord {
+        payload: late,
+        signature: sig,
+    };
     p.w.ledger.inject(
         &format!("records/store-checkpoint/{}.json", signed.payload.record_id),
         &signed.canonical_bytes().unwrap(),
     );
     let walk = custodian_ledger::walk_ledger(&p.w.ledger, &p.w.roots).unwrap();
-    assert!(!walk.is_trustworthy(), "a retired key cannot sign later records");
+    assert!(
+        !walk.is_trustworthy(),
+        "a retired key cannot sign later records"
+    );
 }
 
 #[test]
 fn publishing_and_retiring_in_the_same_second_fails_closed_so_rotation_needs_distinct_times() {
-    // Observed during the C12 drill and recorded as register entry G-R5: the
+    // Observed during the C12 drill and recorded as register entry R-5: the
     // walker applies key events in (issued_at, record id) order and a retire
     // whose effective time equals the publish record's own issue time also
     // invalidates that publish record. Either way the result is a finding and
@@ -345,14 +373,20 @@ fn publishing_and_retiring_in_the_same_second_fails_closed_so_rotation_needs_dis
     let next = lc::test_key(2, &SignDomain::ALL);
     publish_key(&p, &p.w.key.signer, &next, NOW + 1_000);
     let _old = std::mem::replace(&mut p.w.key, next);
-    key_event(&p, &p.w.key.signer, &first_id, KeyAction::Retired, NOW + 1_000);
+    key_event(
+        &p,
+        &p.w.key.signer,
+        &first_id,
+        KeyAction::Retired,
+        NOW + 1_000,
+    );
     let o = p.submit(2);
     assert_eq!((code(&o), o.exit_code()), ("ledger_untrusted", 8));
 }
 
 #[test]
 fn events_still_pending_when_the_signer_switches_cannot_be_signed_by_the_new_key() {
-    // Register entry G-R6: a key signs only records issued at or after its
+    // Register entry R-6: a key signs only records issued at or after its
     // own start. Audit events keep the time they happened, so an outbox
     // backlog that is exported after the switch is refused by the exporter's
     // self-check. The rotation procedure therefore drains the outbox first
@@ -366,7 +400,10 @@ fn events_still_pending_when_the_signer_switches_cannot_be_signed_by_the_new_key
     p.w.clock.set(NOW + 1_100);
     let o = p.export();
     assert!(!o.is_ok(), "{}", o.render());
-    assert!(p.w.rw.store.outbox_pending_count().unwrap() > 0, "nothing is lost, only blocked");
+    assert!(
+        p.w.rw.store.outbox_pending_count().unwrap() > 0,
+        "nothing is lost, only blocked"
+    );
 }
 
 #[test]
@@ -399,23 +436,33 @@ fn revoking_the_signing_key_makes_its_history_untrusted_until_it_is_reissued() {
     // Documented consequence (ADR 0050, docs/ledger.md): a revocation rejects
     // every signature by the key, past ones included. The control plane then
     // refuses to start on that ledger. There is no bulk re-issue tool yet;
-    // recorded as register entry G-R4 in docs/release-readiness.md.
+    // recorded as register entry R-4 in docs/release-readiness.md.
     let mut p = Pipe::new(5, 4);
     spend(&p, 1);
     let first_id = p.w.key.signer.key_id().clone();
     let next = lc::test_key(2, &SignDomain::ALL);
     publish_key(&p, &p.w.key.signer, &next, NOW + 1_000);
     let _old = std::mem::replace(&mut p.w.key, next);
-    key_event(&p, &p.w.key.signer, &first_id, KeyAction::Revoked, NOW + 1_001);
+    key_event(
+        &p,
+        &p.w.key.signer,
+        &first_id,
+        KeyAction::Revoked,
+        NOW + 1_001,
+    );
 
     let walk = custodian_ledger::walk_ledger(&p.w.ledger, &p.w.roots).unwrap();
     assert!(!walk.is_trustworthy());
-    assert!(walk.findings.iter().all(|f| matches!(
-        f.code,
-        custodian_ledger::FindingCode::BadSignature(custodian_ledger::VerifyError::KeyRevoked)
-            | custodian_ledger::FindingCode::SeqGap
-            | custodian_ledger::FindingCode::ChainMismatch
-    )), "{:?}", walk.findings);
+    assert!(
+        walk.findings.iter().all(|f| matches!(
+            f.code,
+            custodian_ledger::FindingCode::BadSignature(custodian_ledger::VerifyError::KeyRevoked)
+                | custodian_ledger::FindingCode::SeqGap
+                | custodian_ledger::FindingCode::ChainMismatch
+        )),
+        "{:?}",
+        walk.findings
+    );
     let o = p.submit(2);
     assert_eq!((code(&o), o.exit_code()), ("ledger_untrusted", 8));
     assert!(p.w.rw.store.needs_reconcile().unwrap());

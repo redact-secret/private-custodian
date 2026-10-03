@@ -13,6 +13,9 @@
 //! These tests prove mechanism with project-maintained synthetic fixtures.
 //! They are not independent validation and say nothing about corpus quality.
 #![allow(dead_code)]
+// The shared fixtures of several crates are included by path, and two of them
+// include the same contract and store fixtures. Duplicate loading is intended.
+#![allow(clippy::duplicate_mod)]
 
 #[path = "../common/mod.rs"]
 pub mod base;
@@ -221,7 +224,9 @@ pub struct Pipe {
 
 pub fn startup_config() -> StartupConfig {
     StartupConfig {
-        guarded_policies: vec![serde_json::from_value::<PolicyRef>(cc::disclosure_policy()).unwrap()],
+        guarded_policies: vec![
+            serde_json::from_value::<PolicyRef>(cc::disclosure_policy()).unwrap()
+        ],
         required_activations: vec![cc::request().plan.policy_activation.clone()],
         activation_max_age_secs: 300,
     }
@@ -231,14 +236,15 @@ impl Pipe {
     /// A world with `limit` run units and a sealed, active population of
     /// `entries` synthetic entries.
     pub fn new(limit: u64, entries: usize) -> Self {
+        Self::with_entry_bytes(limit, entries, |i| format!("synthetic-entry-{i}"))
+    }
+
+    /// Like `new`, with the bytes of each protected entry chosen by the caller
+    /// (the leakage tests plant canaries here).
+    pub fn with_entry_bytes(limit: u64, entries: usize, bytes: impl Fn(usize) -> String) -> Self {
         let fx = lc::corpus::Fixture::new();
         let owned: Vec<(String, Vec<u8>)> = (0..entries)
-            .map(|i| {
-                (
-                    format!("entry{i:04}"),
-                    format!("synthetic-entry-{i}").into_bytes(),
-                )
-            })
+            .map(|i| (format!("entry{i:04}"), bytes(i).into_bytes()))
             .collect();
         let refs: Vec<(&str, &[u8])> = owned
             .iter()
@@ -302,9 +308,7 @@ impl Pipe {
         plan["population"] = serde_json::to_value(&self.w.rw.binding).unwrap();
         plan["accounting"]["budget"] = lc::budget_json(&self.w.rw.binding);
         plan["accounting"]["max_retries"] = json!(1);
-        let art = |name: &str, p: &std::path::Path| {
-            json!({"name": name, "version": "0.0.1", "digest": hash_file(p).unwrap()})
-        };
+        let art = |name: &str, p: &std::path::Path| json!({"name": name, "version": "0.0.1", "digest": hash_file(p).unwrap()});
         plan["engine"] = art("synthetic-engine", &s.engine);
         plan["adapter"] = art("synthetic-adapter", &s.adapter);
         plan["scanners"] = json!([art("synthetic-scanner", &s.scanners[0])]);
@@ -321,7 +325,8 @@ impl Pipe {
 
     pub fn submit(&self, n: u32) -> custodian_cli::Output {
         let (_, doc) = self.request(n);
-        self.w.run(Who::Requester, &Command::RequestSubmit { document: doc })
+        self.w
+            .run(Who::Requester, &Command::RequestSubmit { document: doc })
     }
 
     pub fn approve(&self, n: u32) -> custodian_cli::Output {
@@ -456,7 +461,13 @@ impl Pipe {
     }
 
     /// Assemble the internal records for a completed attempt (see `Assembled`).
-    pub fn assemble(&self, n: u32, attempt: &RunId, approval_id: &str, report: &DispatchReport) -> Assembled {
+    pub fn assemble(
+        &self,
+        n: u32,
+        attempt: &RunId,
+        approval_id: &str,
+        report: &DispatchReport,
+    ) -> Assembled {
         let (req, _) = self.request(n);
         let plan_digest = req.plan.plan_digest().unwrap();
         let rec = self.w.rw.store.attempt(attempt).unwrap().unwrap();

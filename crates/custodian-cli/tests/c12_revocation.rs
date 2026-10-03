@@ -88,7 +88,10 @@ fn stage(p: &Pipe, svc: &custodian_cli::Service<'_, custodian_corpus::FsEpochSto
     assert!(rep.result.is_some());
     let asm = p.assemble(1, &attempt, &approval_id, &rep);
     p.w.clock.set(NOW + 40);
-    assert_eq!(code(&p.w.run(Who::Operator, &Command::FeedPublish)), "published");
+    assert_eq!(
+        code(&p.w.run(Who::Operator, &Command::FeedPublish)),
+        "published"
+    );
     assert_eq!(code(&p.export()), "exported");
     Staged { req, asm }
 }
@@ -150,8 +153,15 @@ fn contamination_before_or_between_the_release_checks_stops_the_release() {
             p.w.clock.set(RELEASE_AT);
             let sink = RecordingSink::new();
             assert_eq!(
-                release_on(&d, &prepared, &release_approval(&prepared), DEST, &sink, RELEASE_AT)
-                    .unwrap_err(),
+                release_on(
+                    &d,
+                    &prepared,
+                    &release_approval(&prepared),
+                    DEST,
+                    &sink,
+                    RELEASE_AT
+                )
+                .unwrap_err(),
                 "eligibility_denied",
                 "k={k}"
             );
@@ -162,8 +172,15 @@ fn contamination_before_or_between_the_release_checks_stops_the_release() {
             p.w.clock.set(RELEASE_AT);
             let sink = RecordingSink::new();
             assert_eq!(
-                release_on(&d, &prepared, &release_approval(&prepared), DEST, &sink, RELEASE_AT)
-                    .unwrap_err(),
+                release_on(
+                    &d,
+                    &prepared,
+                    &release_approval(&prepared),
+                    DEST,
+                    &sink,
+                    RELEASE_AT
+                )
+                .unwrap_err(),
                 "eligibility_denied",
                 "k={k}"
             );
@@ -174,7 +191,7 @@ fn contamination_before_or_between_the_release_checks_stops_the_release() {
 
 #[test]
 fn contamination_after_the_last_check_releases_but_is_bounded_by_the_next_feed_entry() {
-    // KNOWN GAP (register entry G-1): a contamination that commits after the
+    // KNOWN GAP (register entry HG-1): a contamination that commits after the
     // last eligibility check cannot stop that release, because bytes cannot
     // be un-sent. What is guaranteed, and asserted here:
     //  * the obligation is durable and counts for eligibility at once;
@@ -252,23 +269,38 @@ fn contamination_after_the_last_check_releases_but_is_bounded_by_the_next_feed_e
     };
     let breq = ask(&consumer);
     let resp = service.answer(&breq.canonical_bytes().unwrap()).unwrap();
-    let out = consumer.accept_response(&breq, &resp, ts(RELEASE_AT + 10)).unwrap();
+    let out = consumer
+        .accept_response(&breq, &resp, ts(RELEASE_AT + 10))
+        .unwrap();
     assert_eq!(out.accepted.len(), 1, "{:?}", out.rejected);
     let v = out.accepted[0].clone();
     assert_eq!(consumer.standing(&v, ts(RELEASE_AT + 10)), Standing::Valid);
 
     // ... until the next feed entry, which the operator publishes at once.
     p.w.clock.set(RELEASE_AT + 20);
-    assert_eq!(code(&p.w.run(Who::Operator, &Command::FeedPublish)), "published");
+    assert_eq!(
+        code(&p.w.run(Who::Operator, &Command::FeedPublish)),
+        "published"
+    );
     assert!(svc.feed_ref().is_ok());
     let breq = ask(&consumer);
     let resp = service.answer(&breq.canonical_bytes().unwrap()).unwrap();
-    let out = consumer.accept_response(&breq, &resp, ts(RELEASE_AT + 30)).unwrap();
+    let out = consumer
+        .accept_response(&breq, &resp, ts(RELEASE_AT + 30))
+        .unwrap();
     assert_eq!(out.feed_applied, 1);
-    assert_eq!(consumer.reevaluate(ts(RELEASE_AT + 31))[0].to, Standing::Revoked);
-    assert_eq!(consumer.standing(&v, ts(RELEASE_AT + 31)), Standing::Revoked);
+    assert_eq!(
+        consumer.reevaluate(ts(RELEASE_AT + 31))[0].to,
+        Standing::Revoked
+    );
+    assert_eq!(
+        consumer.standing(&v, ts(RELEASE_AT + 31)),
+        Standing::Revoked
+    );
     // Offered again, it is rejected, not re-accepted.
-    let out = consumer.accept_response(&breq, &resp, ts(RELEASE_AT + 32)).unwrap();
+    let out = consumer
+        .accept_response(&breq, &resp, ts(RELEASE_AT + 32))
+        .unwrap();
     assert_eq!(out.rejected, vec![(0, Rejection::Revoked)]);
 
     // A consumer that never syncs again cannot be kept valid past the feed
@@ -282,7 +314,9 @@ fn contamination_after_the_last_check_releases_but_is_bounded_by_the_next_feed_e
         projections: first.projections.clone(),
         revocations: vec![first.revocations[0].clone()],
     };
-    let out = lazy.accept_response(&breq, &only_one, ts(RELEASE_AT + 10)).unwrap();
+    let out = lazy
+        .accept_response(&breq, &only_one, ts(RELEASE_AT + 10))
+        .unwrap();
     let v2 = out.accepted[0].clone();
     assert_eq!(lazy.standing(&v2, ts(RELEASE_AT + 10)), Standing::Valid);
     assert_eq!(lazy.standing(&v2, ts(NOW + 40 + 3_601)), Standing::Stale);
@@ -290,7 +324,7 @@ fn contamination_after_the_last_check_releases_but_is_bounded_by_the_next_feed_e
 
 #[test]
 fn rotation_with_a_key_valid_only_from_now_refuses_the_first_release_of_an_older_policy() {
-    // Register entry G-R6: the policy record of a release carries the time the
+    // Register entry R-6: the policy record of a release carries the time the
     // activation changed. A key valid only from the rotation instant cannot
     // sign it, the exporter self-check refuses, and the release fails closed.
     rotated(NOW - 5, false);
@@ -334,7 +368,15 @@ fn rotated(effective_at: u64, expect_release: bool) {
     assert_eq!(code(&p.export()), "exported");
     p.w.clock.set(RELEASE_AT);
     let sink = RecordingSink::new();
-    let released = release(&p, &svc, &prepared, &release_approval(&prepared), DEST, &sink, RELEASE_AT);
+    let released = release(
+        &p,
+        &svc,
+        &prepared,
+        &release_approval(&prepared),
+        DEST,
+        &sink,
+        RELEASE_AT,
+    );
     if !expect_release {
         assert_eq!(released.unwrap_err(), "signing_refused");
         assert!(sink.delivered().is_empty());
@@ -373,6 +415,8 @@ fn rotated(effective_at: u64, expect_release: bool) {
     let mut fresh = BridgeConsumer::new(pins(&p, &[&p.w.key]));
     let breq = ask(&fresh);
     let resp = service.answer(&breq.canonical_bytes().unwrap()).unwrap();
-    let out = fresh.accept_response(&breq, &resp, ts(RELEASE_AT + 10)).unwrap();
+    let out = fresh
+        .accept_response(&breq, &resp, ts(RELEASE_AT + 10))
+        .unwrap();
     assert_eq!(out.accepted.len(), 1, "{:?}", out.rejected);
 }

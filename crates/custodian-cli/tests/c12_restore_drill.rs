@@ -131,13 +131,14 @@ fn restoring_a_database_older_than_the_ledger_cannot_double_spend_or_republish()
     let o = p.w.run(Who::Operator, &clear_cmd(&p));
     assert_eq!((code(&o), o.exit_code()), ("store_behind_ledger", 5));
     assert!(p.w.rw.store.needs_reconcile().unwrap());
-    let v = p.w.run(Who::Auditor, &Command::Verify(VerifyTarget::Checkpoint));
+    let v =
+        p.w.run(Who::Auditor, &Command::Verify(VerifyTarget::Checkpoint));
     assert_eq!(code(&v), "store_rolled_back");
 
     // 5. The write block also stops the epoch-level repair that
     //    docs/operator-runbook.md section 6.3 used to name for the
     //    no-newer-copy case: it is refused, not executable. This is recorded
-    //    as register entry G-R1 in docs/release-readiness.md.
+    //    as register entry R-1 in docs/release-readiness.md.
     let retire = Command::LifecycleRetire {
         epoch: p.w.rw.epoch.clone(),
         confirm_epoch: p.w.rw.epoch.clone(),
@@ -226,15 +227,14 @@ fn a_contained_restore_is_cleared_only_by_the_audited_exact_confirmation() {
     assert!(!p.w.rw.store.needs_reconcile().unwrap());
     // Clearing is itself an audited event naming the operator; budgets are
     // exactly what they were.
-    let ev = p
-        .w
-        .rw
-        .store
-        .outbox_pending(1000)
-        .unwrap()
-        .into_iter()
-        .find(|e| e.kind == "store.reconciled")
-        .expect("audited");
+    let ev =
+        p.w.rw
+            .store
+            .outbox_pending(1000)
+            .unwrap()
+            .into_iter()
+            .find(|e| e.kind == "store.reconciled")
+            .expect("audited");
     assert!(ev.payload.contains(&Who::Operator.actor()));
     let after = p.w.budget();
     assert_eq!(
@@ -253,7 +253,7 @@ fn spend_after_the_last_export_is_the_documented_unrecoverable_window() {
     // is invisible to every check, so restoring a backup that predates it is
     // not refused, and the lost spend can be spent again. The mitigation is
     // operational (export after each approval, back up at least as often as
-    // exporting); this test pins both halves. Register entry G-R2.
+    // exporting); this test pins both halves. Register entry R-2.
     let mut p = Pipe::new(5, 10);
     spend(&p, 1);
     let b = p.w.rw.db.dir().join("window.db");
