@@ -7,8 +7,10 @@ use std::path::PathBuf;
 use custodian_contracts::schema::{all_schemas, render, Visibility};
 use serde_json::Value;
 
-fn dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schemas/v1")
+fn dir(major: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("schemas")
+        .join(major)
 }
 
 #[test]
@@ -17,22 +19,29 @@ fn checked_in_schemas_equal_generated() {
     let mut expected_files = BTreeSet::new();
     for entry in all_schemas() {
         let text = render(&entry.schema);
-        let path = dir().join(entry.file);
+        let path = dir(entry.dir).join(entry.file);
         if update {
-            std::fs::create_dir_all(dir()).unwrap();
+            std::fs::create_dir_all(dir(entry.dir)).unwrap();
             std::fs::write(&path, &text).unwrap();
         }
         let on_disk = std::fs::read_to_string(&path)
-            .unwrap_or_else(|_| panic!("missing schema file {}", entry.file));
-        assert_eq!(text, on_disk, "schema drift: {}", entry.file);
-        expected_files.insert(entry.file.to_owned());
+            .unwrap_or_else(|_| panic!("missing schema file {}/{}", entry.dir, entry.file));
+        assert_eq!(text, on_disk, "schema drift: {}/{}", entry.dir, entry.file);
+        expected_files.insert(format!("{}/{}", entry.dir, entry.file));
     }
-    // No stray or orphaned schema files.
-    let on_disk: BTreeSet<String> = std::fs::read_dir(dir())
-        .unwrap()
-        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(on_disk, expected_files, "unexpected files in schemas/v1");
+    // No stray or orphaned schema files in any major directory.
+    let mut on_disk = BTreeSet::new();
+    for major in std::fs::read_dir(dir("")).unwrap() {
+        let major = major.unwrap();
+        for f in std::fs::read_dir(major.path()).unwrap() {
+            on_disk.insert(format!(
+                "{}/{}",
+                major.file_name().to_string_lossy(),
+                f.unwrap().file_name().to_string_lossy()
+            ));
+        }
+    }
+    assert_eq!(on_disk, expected_files, "unexpected files in schemas/");
 }
 
 fn walk(v: &Value, path: &str, f: &mut dyn FnMut(&str, &serde_json::Map<String, Value>)) {
@@ -110,7 +119,7 @@ fn public() -> Vec<custodian_contracts::schema::SchemaEntry> {
 
 #[test]
 fn public_and_internal_sets_are_separate_and_nonempty() {
-    assert_eq!(public().len(), 2);
+    assert_eq!(public().len(), 3);
     let internal = all_schemas()
         .into_iter()
         .filter(|e| e.visibility == Visibility::Internal)

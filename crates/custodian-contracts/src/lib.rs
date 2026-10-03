@@ -20,6 +20,7 @@ pub mod error;
 pub mod execution;
 pub mod policy;
 pub mod public;
+pub mod public_v2;
 pub mod request;
 pub mod reservation;
 pub mod revocation;
@@ -31,3 +32,8 @@ pub use error::{BindingError, ContractError};
 
 /// Contract schema generation. Bumped only with a new `schemas/vN/` directory.
 pub const CONTRACT_MAJOR_VERSION: u32 = 1;
+
+/// Newest public projection major. v1 stays decodable and verifiable but has
+/// no destination binding; v2 carries the destination in the signed payload
+/// (ADR 0119). Its schema lives in `schemas/v2/`.
+pub const PUBLIC_PROJECTION_LATEST_MAJOR: u32 = 2;
