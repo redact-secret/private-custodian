@@ -1,0 +1,23 @@
+[package]
+name = "custodian-store"
+description = "SQLite runtime store: transactional budgets, durable run state, leases and audit outbox behind the StateStore port (C4)."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+# Exact pins (ADR 0020). Upgrades are deliberate, reviewed changes with Cargo.lock.
+# rusqlite `bundled` compiles the vetted SQLite amalgamation so the engine
+# version does not depend on the host.
+[dependencies]
+custodian-core = { path = "../custodian-core" }
+custodian-contracts = { path = "../custodian-contracts" }
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+
+[dev-dependencies]
+custodian-service = { path = "../custodian-service" }

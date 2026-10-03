@@ -88,5 +88,6 @@ disclosure.
 | --- | --- | --- | --- |
 | Responsibility and cutover map | yes | yes (this document, documentation) | n/a |
 | Core lifecycle and ports | yes | scaffold, in-memory, synthetic | no |
-| App adapter, SQLite, storage, workers, signer, ledger-writer | yes | no | no |
+| SQLite runtime store (`custodian-store`) | yes | yes (synthetic tests) | no |
+| App adapter, storage, workers, signer, ledger-writer | yes | no | no |
 | Handoff of any legacy population | yes | no | no |
