@@ -35,10 +35,11 @@ seeds, keys, raw findings or input values, and its errors never echo them.
 | `outbox_pending(limit)`, `outbox_event(seq)`, `outbox_ack(seq, ref, now)` | Producer side of the audit export (for C7). |
 | `latest_checkpoint()`, `verify_external_checkpoint(&Checkpoint)`, `needs_reconcile()`, `clear_reconcile(actor, now)` | Restore protection. |
 | `check_disclosure_precondition(attempt)` | Closed unless completed, settled and the terminal event is exported. |
+| `provision_release_budget`, `release_budget_status`, `charge_release_query`, `charge_audit_exported`, `disclosure_history`, `append_disclosure_history` | Release and query budgets and the disclosure history (C8, migration 0002, [ADR 0062](adr/0062-release-query-budgets-and-composition-accounting.md), [docs/disclosure.md](disclosure.md)). |
 | `attempt`, `request_attempts`, `history`, `budget_status`, `reservation` | Reads in one WAL snapshot. |
 | `verify_invariants()`, `integrity_check()`, `backup_to(dest)`, `schema_version()` | Integrity and operations. |
 
-## Schema (migration 0001)
+## Schema (migration 0001; migration 0002 adds `disclosure_charges` and `disclosure_history`, see docs/disclosure.md)
 
 All tables are `STRICT`. History tables are append-only by trigger.
 
@@ -198,5 +199,5 @@ event is acknowledged.
 ## Not in scope here
 
 GitHub intake (C3), protected storage (C5), the worker sandbox and the recovery scheduler (C6), signing and
-the ledger write (C7), disclosure policy (C8), epoch rotation and revocation (C9), the operator CLI (C10),
+the ledger write (C7), the disclosure policy and its decisions (C8; the store only holds the release budgets and history), epoch rotation and revocation (C9), the operator CLI (C10),
 and operational drills (C12). The store provides the primitives those issues call.
