@@ -23,6 +23,8 @@ const CHECKS: &[(&str, &str)] = &[
              WHERE r.scope_key = b.scope_key AND r.state = 'held'), 0) \
          OR b.consumed_units <> COALESCE((SELECT SUM(units) FROM settlements s \
              WHERE s.scope_key = b.scope_key AND s.result = 'consumed'), 0) \
+             + COALESCE((SELECT SUM(units) FROM disclosure_charges c \
+             WHERE c.scope_key = b.scope_key), 0) \
          OR b.refunded_units <> COALESCE((SELECT SUM(units) FROM settlements s \
              WHERE s.scope_key = b.scope_key AND s.result = 'refunded'), 0)",
     ),
@@ -74,6 +76,12 @@ const CHECKS: &[(&str, &str)] = &[
              (SELECT 1 FROM outbox o WHERE o.event_id = 'terminal:' || a.attempt_id)) \
          OR (a.state = 'denied' AND NOT EXISTS \
              (SELECT 1 FROM outbox o WHERE o.event_id = 'denied:' || a.attempt_id))",
+    ),
+    (
+        "disclosure_charge_has_audit_event",
+        "SELECT COUNT(*) FROM disclosure_charges c WHERE NOT EXISTS \
+         (SELECT 1 FROM outbox o WHERE o.event_id = \
+          'disclosure-charge:' || c.charge_id || ':' || substr(c.scope_key, 1, 16))",
     ),
     (
         "exposed_attempt_has_exposure_record",
