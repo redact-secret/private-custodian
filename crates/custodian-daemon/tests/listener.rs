@@ -476,6 +476,12 @@ fn the_connection_cap_refuses_the_next_connection_and_recovers() {
     assert!(took < Duration::from_millis(500));
     assert_eq!(h.0.load(Ordering::SeqCst), 0);
     assert!(s.stats().refused_busy.load(Ordering::SeqCst) >= 1);
+    // The refusal is written to the peer first and logged after it, so the
+    // log line can land a moment after the reply (seen on a loaded CI runner).
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while log.count("listener", "busy") < 1 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
     assert!(log.count("listener", "busy") >= 1);
     // Freeing a slot lets the next one in.
     drop(hold1);

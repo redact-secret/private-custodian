@@ -303,6 +303,7 @@ Disposition vocabulary: **fixed here**, **accepted** (with the rationale and the
 | S6-3 | `repair accept-loss` trusts the operator to read the independent checkpoint honestly; a ledger rewritten consistently with that copy would be adopted | ADR 0130 | **accepted**; a second independent copy would reduce it. Owner: maintainer |
 | S6-4 | gitleaks flags intentional synthetic fixtures (PEM header negatives, a synthetic App token constant) | section 2 | **accepted**; any scan of this tree must triage them as synthetic. No allowlist file was added |
 | S6-5 | The migration list moved to eight; a database at an older schema opens and migrates, and `provision_tx` tolerates a missing `budget_recoveries` table only for such a database | `custodian-store/tests/{migrations,legacy_import}.rs` | **fixed here** (small compatibility check) |
+| S6-7 | A timing race in an S5 test: the listener replies 503 `busy` first and logs after, and the test asserted the log immediately; it failed once on a loaded CI runner | CI run of PR 48 | **fixed here** (the test polls for the log line, 5 s; production code unchanged) |
 | S6-6 | The two configuration examples that lived in `docs/` moved to `deploy/examples/`; ADR 0128 still names the old path | `deploy/examples/README.md` | **accepted**: accepted ADRs are not rewritten; the file names are unchanged |
 
 ## 7. Human decisions required
@@ -332,4 +333,4 @@ isolation evidence is the CI run (P3); it must be re-read for the exact commit t
 | gitleaks, full history (95 commits, all refs) | local, redacted | 11 findings, all intentional synthetic fixtures (section 4) |
 | gitleaks, working tree | local, redacted | 5 findings in 2 tracked files, the same fixtures |
 | OpenSSF Scorecard | not run at S6 | **not assessable** |
-| CI on the pull request: `rust`, `dependency-audit`, `worker-isolation`, `synthetic-conformance` set, `full-synthetic-flow` | CI (Linux) | @@CI@@ |
+| CI on the pull request: `rust`, `dependency-audit`, `worker-isolation`, `synthetic-conformance` set, `full-synthetic-flow` | CI (Linux) | pull request 48 merges only when all of these pass; the real-sandbox full flow prints `FULL-FLOW-VERIFIED full_flow_real_bubblewrap` and the isolation tests print `ISOLATION-VERIFIED` on the Linux runner (the run on the final commit is the evidence; the first run of the `full-synthetic-flow` job exposed a log-after-reply race in the existing listener test `the_connection_cap_refuses_the_next_connection_and_recovers`, fixed here, test only) |
