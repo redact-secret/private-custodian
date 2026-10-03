@@ -29,7 +29,7 @@ Nothing here changes repository visibility, chooses a license, publishes anythin
 | P2 | **Private vulnerability reporting route and incident owner** are not configured or documented (SECURITY.md still says they must be before publication). `docs/incident-response.md` is the procedure; the route and the owner are people and settings | maintainer |
 | P3 | **Isolation proof on a Linux runner for the release commit**: the `worker-isolation` CI job (`CUSTODIAN_REQUIRE_ISOLATION=1`) is the only isolation evidence; macOS skips. Its green result for the commit to be published is the evidence | maintainer (reads CI) |
 | P4 | **Personal data in tracked files and history** (author email on all commits, one local home path in two tracked helper scripts) and **developer tooling in the tree** (`.claude/` helpers and settings, `.mcp.json` with a floating `@latest` package): scrub, exclude, or accept; rewriting shared history is a maintainer decision | maintainer |
-| P5 | Gate items 5 to 7 re-run green on the exact commit to publish, including `dependency-audit` in CI (added here, first run pending) | maintainer / CI |
+| P5 | Gate items 5 to 7 re-run green on the exact commit to publish, including `dependency-audit` in CI (added here; it passed on the pull request) | maintainer / CI |
 
 ### Blockers before any protected run, by owner role
 
@@ -51,7 +51,7 @@ Nothing here changes repository visibility, chooses a license, publishes anythin
 | Real bubblewrap isolation tests | **CI only** (`worker-isolation`, Linux); skipped on macOS | not assessable locally; see P3 |
 | C12 suite (`crates/custodian-cli/tests/c12_*.rs`) | local and CI, deterministic, bounded | section 2.1 |
 | Second-implementation golden vectors (`verify_golden.py`) | local; CI step added | 10 of 10 vectors reproduced |
-| `cargo deny check` (cargo-deny 0.20.2, RustSec database fetched 2026-10-03) | local; CI job `dependency-audit` added, first run pending | advisories ok, bans ok, licenses ok, sources ok |
+| `cargo deny check` (cargo-deny 0.20.2, RustSec database fetched 2026-10-03) | local; CI job `dependency-audit` added and passed on the pull request | advisories ok, bans ok, licenses ok, sources ok |
 | `cargo audit` | not installed | not run (cargo-deny reads the same RustSec database) |
 | gitleaks 8.30.1, full history, 54 commits, all refs | local, redacted | 1 finding, triaged below; 0 in the working tree (excluding untracked `target/`) |
 | trufflehog 3.97.6 on a full-history patch and the tree, `--no-verification` | local | 2 unverified findings (the same synthetic constant), 0 in the tree |
@@ -218,7 +218,7 @@ Disposition vocabulary: **fixed here**, **accepted** (with the rationale and the
 | R-7 | Every state-changing command walks and verifies the whole ledger, so latency grows with ledger size (about 1 ms empty, about 30 ms at a few hundred records, with an in-memory backend); a Git backend adds a fetch | `docs/measurements.md` | **accepted** for pilot volumes; follow-up: cache a verified prefix. Owner: engineering |
 | R-8 | Five store fault points had no injected-crash test (lease renewal, queue lease, queue complete, installation removal, submission cancel) | `c12_crash_intake.rs`; coverage rule in `c12_crash_windows.rs` | **fixed here** |
 | R-9 | S-1, S-2, S-5 above | unit and binary tests | **fixed here** |
-| R-10 | Dependency audit was not in CI and no tool config existed | `deny.toml`, `.github/workflows/ci.yml` | **fixed here** (pinned cargo-deny 0.20.2, first CI run pending) |
+| R-10 | Dependency audit was not in CI and no tool config existed | `deny.toml`, `.github/workflows/ci.yml` | **fixed here** (pinned cargo-deny 0.20.2; the CI job passed on the pull request) |
 | R-11 | Tracked developer tooling and personal data (AS-1, AS-2, author email, home path) | section 5.2 | **blocker for publication** (P4). Owner: maintainer |
 | R-12 | The AGENTS.md status line named three crates although the workspace has twelve | review | **fixed here** (one sentence) |
 
@@ -237,9 +237,11 @@ Disposition vocabulary: **fixed here**, **accepted** (with the rationale and the
 
 ## 8. Results of the final checks
 
-Run on the final change, locally (macOS arm64, rustc 1.98.1). The CI result for the merged commit, including
-`worker-isolation` and the first `dependency-audit` run, is on the pull request and is the only evidence for
-those two.
+Run on the final change, locally (macOS arm64, rustc 1.98.1). On the pull request (#25), the three CI jobs
+`rust` (fmt, clippy, tests, golden vectors), `worker-isolation` (real bubblewrap isolation tests on Ubuntu with
+`CUSTODIAN_REQUIRE_ISOLATION=1`, which fails on a skip) and the new `dependency-audit` all passed. That is the
+only isolation evidence (P3) and it is for the pull request's commits; it must be re-read for the exact commit
+that would ever be published.
 
 | Check | Result |
 | --- | --- |
