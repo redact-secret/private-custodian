@@ -1,6 +1,6 @@
 # ADR 0134: ordinary Lambda control-plane feasibility
 
-- Status: proposed assessment; no distributed adapters or Lambda handlers implemented
+- Status: proposed assessment; no distributed domain adapters or custody Lambda handlers implemented
 - Date: 2026-10-03
 - Decision owner: custody maintainer
 - Tracking: #40, #46, #47
@@ -84,3 +84,5 @@ spent budgets, standing, activation and revocation history remain immutable.
 A future migration requires additive schema/version mapping and a reviewed
 monotone import/rollback plan. Follow-up work must satisfy the complete minimum
 backlog in the assessment before reconsidering this NO-GO.
+
+The authorized live primitive experiment is recorded in [ADR 0136](0136-authorized-microvm-experiment-findings.md). Atomic AWS transactions succeeded; domain migration remains NO-GO.

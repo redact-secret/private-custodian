@@ -1,3 +1,5 @@
 *
 !Dockerfile
 !health.rs
+!Dockerfile.probe
+!probe.rs

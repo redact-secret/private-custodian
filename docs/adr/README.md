@@ -76,6 +76,7 @@ ADR.
 | [0134](0134-serverless-control-plane-feasibility.md) | Ordinary Lambda control-plane feasibility | Proposed assessment; migration NO-GO |
 
 | [0135](0135-pii-worker-contract-and-synthetic-adoption.md) | PII worker contract and synthetic adoption | Accepted contract design; reference adoption and synthetic gate implemented, not deployed |
+| [0136](0136-authorized-microvm-experiment-findings.md) | Authorized synthetic MicroVM findings | Proposed assessment; live isolation failures, migration NO-GO |
 
 Accepted (design) means the decision is frozen for downstream issues (C2 to C12). It does not mean any of it
 is implemented or deployed. See each ADR's status table.

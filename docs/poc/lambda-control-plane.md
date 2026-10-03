@@ -2,9 +2,14 @@
 
 Assessment date: 2026-10-03. Baseline: custodian
 `00e1bb0` (S6 merged). **NO-GO for migrating the current control plane.**
-No Lambda handler, DynamoDB adapter, S3 custody adapter or network signer
+No custody Lambda handler, domain DynamoDB adapter, S3 custody adapter or network signer
 transport is implemented or deployed. [ADR 0134](../adr/0134-serverless-control-plane-feasibility.md)
 records the recommendation separately from the worker decision.
+
+A disposable [live Lambda/DynamoDB primitive probe](lambda-microvm-live.md) now
+checks atomic counter/intent/outbox writes and replay under concurrent invocation.
+It implements none of the domain adapters or authority gates mapped below; the
+experiment function and table were deleted after verification.
 
 ## Dependency and authority map
 

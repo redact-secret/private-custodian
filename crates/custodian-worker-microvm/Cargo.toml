@@ -19,3 +19,7 @@ sha2 = "=0.10.9"
 [[bin]]
 name = "custodian-microvm-synthetic-health"
 path = "../../deploy/aws/microvm/health.rs"
+
+[[bin]]
+name = "custodian-microvm-isolation-probe"
+path = "../../deploy/aws/microvm/probe.rs"
