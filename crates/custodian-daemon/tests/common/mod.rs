@@ -370,6 +370,52 @@ impl Env {
             .count()
     }
 
+    /// Place the request document for (repository, pull request, head) where
+    /// the daemon looks for it, and record the candidate the control plane
+    /// staged from that commit.
+    pub fn stage_request(&self, n: u32, pull_request: u64, head: char) {
+        let (req, bytes) = self.request(n);
+        self.stage_request_bytes(&bytes, pull_request, head);
+        self.stage_commit(head, &req);
+    }
+
+    pub fn stage_request_bytes(&self, bytes: &[u8], pull_request: u64, head: char) {
+        let path = self
+            .requests_dir
+            .join(format!("{REPO}-{pull_request}-{}.json", sha40(head)));
+        fs::write(&path, bytes).unwrap();
+        set_mode(&path, 0o600);
+    }
+
+    pub fn stage_commit(&self, head: char, req: &EvaluationRequest) {
+        let dir = self.art_dir.join("commits");
+        private_dir(&dir);
+        let path = dir.join(format!("{}.json", sha40(head)));
+        fs::write(
+            &path,
+            serde_json::to_vec(&json!({
+                "schema": "private-custodian.staged-candidate/1",
+                "head_sha": sha40(head),
+                "candidate": req.plan.candidate,
+                "config_digest": req.plan.config_digest,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        set_mode(&path, 0o600);
+    }
+
+    /// The real request edge over the edge connection: signed deliveries.
+    pub fn edge_intake(&self, secret: &[u8]) -> custodian_intake::webhook::Intake {
+        custodian_intake::webhook::Intake::new(
+            intake_config(),
+            custodian_intake::config::WebhookSecret::new(secret.to_vec()).unwrap(),
+            self.edge.clone(),
+            self.edge.clone(),
+            self.edge.clone(),
+        )
+    }
+
     /// An operator publishes the revocation feed (a human action).
     pub fn publish_feed(&self) {
         let o = self
