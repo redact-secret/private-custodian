@@ -19,8 +19,8 @@ or cloud, and is the enforcement deterministic and outside the agent and the mea
 
 ## Status
 
-Design baseline plus a synthetic, in-memory Rust scaffold (`crates/custodian-core`, `custodian-contracts`,
-`custodian-service`); nothing is deployed. Stack decisions are in `docs/adr/` (SQLite-first runtime store,
+Design baseline plus synthetic-tested Rust crates (the workspace members under `crates/`; the README status
+table says what each does); nothing is deployed. Stack decisions are in `docs/adr/` (SQLite-first runtime store,
 filesystem-first protected storage behind an adapter, restricted private-ledger repository, eventual code-only
 publication); ownership is in `docs/responsibility-map.md`. Do not claim an implemented sandbox, verified
 deployment, or independent validation. Distinguish planned, implemented, and deployed. If a check, test, or tool

@@ -204,6 +204,63 @@ fn state_changing_commands_need_the_ledger_and_say_so() {
     assert!(!out.contains("synthetic-credential"));
 }
 
+/// Regression for the C12 review (finding S-5): the credential file, the
+/// operator policy and the pinned roots were read without checking that they
+/// are regular, unaliased files with safe modes. The runbook requires 0600.
+#[test]
+fn credential_policy_and_roots_files_must_be_regular_and_not_loosely_permissioned() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = Deploy::new("filemodes");
+    let auditor_args = ["request", "list"];
+    // Baseline: the 0600 credential works.
+    let (code, out, _) = d.run(Some(Who::Auditor), &auditor_args);
+    assert_eq!(code, 0, "{out}");
+
+    // A group- or other-readable credential is refused, as unauthenticated.
+    let token = d.dir.join("Auditor.token");
+    for mode in [0o640, 0o604, 0o644] {
+        std::fs::set_permissions(&token, std::fs::Permissions::from_mode(mode)).unwrap();
+        let (code, out, err) = d.run(Some(Who::Auditor), &auditor_args);
+        assert_eq!((code, err.as_str()), (3, ""), "mode {mode:o}: {out}");
+        assert_eq!(json(&out)["code"], "unauthenticated");
+    }
+    std::fs::set_permissions(&token, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let (code, _, _) = d.run(Some(Who::Auditor), &auditor_args);
+    assert_eq!(code, 0);
+
+    // A symbolic link to a good credential is refused too.
+    let link = d.dir.join("Auditor.link");
+    std::os::unix::fs::symlink(&token, &link).unwrap();
+    let mut cmd = Proc::new(env!("CARGO_BIN_EXE_custodian"));
+    cmd.env_clear()
+        .arg("--config")
+        .arg(&d.config)
+        .arg("--identity")
+        .arg(Who::Auditor.actor())
+        .arg("--token-file")
+        .arg(&link)
+        .args(auditor_args);
+    let out = cmd.output().unwrap();
+    assert_eq!(out.status.code(), Some(3));
+    assert_eq!(
+        json(&String::from_utf8(out.stdout).unwrap())["code"],
+        "unauthenticated"
+    );
+
+    // A group- or other-writable operator policy (anyone who can write it can
+    // add an operator) or pinned-roots file (a trust anchor) is not loaded.
+    for file in ["operator-policy.json", "roots.json"] {
+        let path = d.dir.join(file);
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o664)).unwrap();
+        let (code, out, _) = d.run(Some(Who::Auditor), &auditor_args);
+        assert_eq!(code, 7, "{file}: {out}");
+        assert_eq!(json(&out)["code"], "not_configured", "{file}");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    let (code, _, _) = d.run(Some(Who::Auditor), &auditor_args);
+    assert_eq!(code, 0, "restored modes work again");
+}
+
 #[test]
 fn credential_digest_prints_only_the_digest() {
     let d = Deploy::new("digest");

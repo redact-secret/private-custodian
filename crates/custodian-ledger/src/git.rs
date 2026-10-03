@@ -70,6 +70,33 @@ pub struct HistoryViolation {
     pub path: String,
 }
 
+/// Environment variables that change which repository git operates on or
+/// inject configuration, removed from every git child process.
+const AMBIENT_GIT_ENV: [&str; 14] = [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+    "GIT_INTERNAL_SUPER_PREFIX",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_EXEC_PATH",
+    "GIT_ASKPASS",
+];
+
+/// A remote URL that git would treat as a transport helper command
+/// (`ext::`, `fd::` and similar `<transport>::<address>` forms) is refused
+/// outright, whatever git's own protocol policy says.
+fn url_uses_transport_helper(url: &str) -> bool {
+    let head = url.split('/').next().unwrap_or("");
+    head.contains("::") && !head.starts_with('[')
+}
+
 fn safe_ref_component(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 64
@@ -84,7 +111,11 @@ impl GitBackend {
     /// tracks `remote_url`. For provisioning and tests; production clones the
     /// real ledger with the dedicated deploy identity.
     pub fn init(dir: &Path, remote_url: &str, cfg: GitConfig) -> Result<Self, BackendError> {
-        if remote_url.starts_with('-') || !safe_ref_component(&cfg.branch) {
+        if remote_url.starts_with('-')
+            || url_uses_transport_helper(remote_url)
+            || !safe_ref_component(&cfg.branch)
+            || !safe_ref_component(&cfg.remote)
+        {
             return Err(BackendError::InvalidPath);
         }
         let b = Self::open_unchecked(dir, cfg);
@@ -120,9 +151,17 @@ impl GitBackend {
 
     fn command(&self) -> Command {
         let mut c = Command::new("git");
+        // Ambient repository-location and config-injection variables must not
+        // redirect this backend (`-C` is overridden by `GIT_DIR`, and the
+        // backend runs `checkout -f` and `clean`). Only `GitConfig::env`
+        // may add environment, after this.
+        for var in AMBIENT_GIT_ENV {
+            c.env_remove(var);
+        }
         c.arg("-C")
             .arg(&self.dir)
             .args(["-c", "core.hooksPath=/dev/null"])
+            .args(["-c", "protocol.ext.allow=never"])
             .args(["-c", "commit.gpgsign=false"])
             .args(["-c", "core.autocrlf=false"])
             .args(["-c", "core.fsmonitor=false"])
@@ -377,5 +416,69 @@ impl LedgerBackend for GitBackend {
         self.walk(prefix, &mut out)?;
         out.sort();
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression for the C12 review: an ambient `GIT_DIR` (or any other
+    /// repository-location or config-injection variable) must never reach the
+    /// child, because it would override `-C` for a backend that runs
+    /// `checkout -f` and `clean`. The test inspects the command; it does not
+    /// touch the process environment.
+    #[test]
+    fn git_children_never_inherit_repository_location_or_config_variables() {
+        let b =
+            GitBackend::open_unchecked(Path::new("/nonexistent-synthetic"), GitConfig::default());
+        let c = b.command();
+        for var in AMBIENT_GIT_ENV {
+            let entry = c.get_envs().find(|(k, _)| *k == std::ffi::OsStr::new(var));
+            assert_eq!(
+                entry,
+                Some((std::ffi::OsStr::new(var), None)),
+                "{var} must be explicitly removed"
+            );
+        }
+        // Deployment-chosen environment is added after the removal.
+        let cfg = GitConfig {
+            env: vec![("GIT_SSH_COMMAND".to_owned(), "ssh -i synthetic".to_owned())],
+            ..GitConfig::default()
+        };
+        let c = GitBackend::open_unchecked(Path::new("/nonexistent-synthetic"), cfg).command();
+        assert!(c
+            .get_envs()
+            .any(|(k, v)| k == std::ffi::OsStr::new("GIT_SSH_COMMAND") && v.is_some()));
+    }
+
+    #[test]
+    fn transport_helper_urls_and_unsafe_remote_names_are_refused_at_init() {
+        for url in ["ext::sh -c touch% /tmp/x", "fd::3", "ext::x"] {
+            assert!(url_uses_transport_helper(url), "{url}");
+        }
+        for url in [
+            "file:///srv/ledger.git",
+            "ssh://git@example.invalid/ledger.git",
+            "https://example.invalid/ledger.git",
+            "ssh://git@[::1]/ledger.git",
+        ] {
+            assert!(!url_uses_transport_helper(url), "{url}");
+        }
+        let dir = std::env::temp_dir().join(format!("custodian-git-init-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bad_remote = GitConfig {
+            remote: "--upload-pack=x".to_owned(),
+            ..GitConfig::default()
+        };
+        assert_eq!(
+            GitBackend::init(&dir, "file:///nonexistent-synthetic", bad_remote).unwrap_err(),
+            BackendError::InvalidPath
+        );
+        assert_eq!(
+            GitBackend::init(&dir, "ext::sh -c true", GitConfig::default()).unwrap_err(),
+            BackendError::InvalidPath
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

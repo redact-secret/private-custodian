@@ -36,7 +36,9 @@ fn read_file(path: &str, max: usize) -> Result<Vec<u8>, CliReason> {
 
 /// The credential: file contents without one trailing newline.
 fn read_credential(path: &str) -> Result<Vec<u8>, CliReason> {
-    let mut bytes = read_file(path, 4096).map_err(|_| CliReason::Unauthenticated)?;
+    // A credential file must be a regular file with no group or other access.
+    let mut bytes = custodian_cli::deploy::read_checked(Path::new(path), 4096, 0o077)
+        .map_err(|_| CliReason::Unauthenticated)?;
     if bytes.last() == Some(&b'\n') {
         bytes.pop();
     }

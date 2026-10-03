@@ -35,6 +35,30 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      # C12: a second, independent implementation of the canonical encoding and
+      # the domain-separated digest, checked against the golden vectors. Python 3
+      # standard library only (preinstalled on the runner); no package install.
+      - name: Second-implementation golden vectors
+        run: python3 crates/custodian-contracts/testdata/verify_golden.py
+
+  # C12: dependency audit with a pinned tool and the policy in deny.toml
+  # (RustSec advisories, yanked crates, licenses of third-party crates, crate
+  # sources). cargo-deny is built from source with its own lockfile
+  # (`--locked`) at an exact version; no third-party action and no secret. The
+  # RustSec database is fetched fresh on every run by design: an audit against a
+  # stale copy would prove little. Update the version here and in deny.toml
+  # together, deliberately.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install cargo-deny 0.20.2
+        run: cargo install cargo-deny --locked --version 0.20.2
+      - name: Check advisories, bans, licenses and sources
+        run: cargo deny --locked check
 
   # C6: real worker isolation tests (docs/worker-isolation.md). The ordinary
   # `rust` job also compiles and runs these tests, but without bubblewrap they
