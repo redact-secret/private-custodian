@@ -21,6 +21,9 @@ ADR.
 | [0022](0022-store-migrations-audit-outbox-and-restore-protection.md) | Store migrations, audit outbox and restore protection | Accepted (design); implemented, not deployed |
 | [0030](0030-protected-population-storage-layout-and-adapter-contract.md) | Protected population storage layout and adapter contract | Accepted (design) |
 | [0031](0031-corpus-commitment-seal-and-keyed-public-commitment.md) | Corpus commitment, seal and keyed public commitment | Accepted (design) |
+| [0040](0040-worker-sandbox-interface-linux-backend-and-dependencies.md) | Worker sandbox interface, Linux backend and dependencies | Accepted (design); implemented, not deployed |
+| [0041](0041-isolation-self-check-verification-record-and-supported-deployments.md) | Isolation self-check, verification record and supported deployments | Accepted (design); implemented, not deployed |
+| [0042](0042-dispatch-order-identity-verification-staging-and-result-protocol.md) | Dispatch order, identity verification, staging and result protocol | Accepted (design); implemented, not deployed |
 | [0050](0050-receipt-signature-algorithm-keys-and-signer-isolation.md) | Receipt signature algorithm, key identifiers, key lifecycle and signer isolation | Accepted (design); implemented, not deployed |
 | [0051](0051-ledger-record-layout-identity-and-supersession.md) | Ledger record layout, identity, append-only semantics and supersession | Accepted (design); implemented, not deployed |
 | [0052](0052-ledger-backend-port-and-git-writer.md) | Ledger backend port and conflict-aware Git writer | Accepted (design); implemented, not deployed |
@@ -39,3 +42,5 @@ disclosure policy parameters (C8).
 Decided by C4 (ADR 0020 to 0022): the SQLite driver and pins, connection and file settings, the written budget accounting, lease and recovery policy, migrations, the audit outbox and restore protection. Details: [docs/state-store.md](../state-store.md). Implemented in `crates/custodian-store` with synthetic tests; not deployed.
 
 Decided by C7 (ADR 0050 to 0054): Ed25519 receipts with domain separation and isolated signing, key lifecycle, the ledger record layout and supersession, the conflict-aware ledger writer, the outbox exporter and reconciliation, external checkpoints and the startup rollback check. Details: [docs/ledger.md](../ledger.md). Implemented in `crates/custodian-ledger` with synthetic tests and test-generated keys; the private-ledger repository, signer process and key provider are not provisioned.
+
+Decided by C6 (ADR 0040 to 0042): the `Sandbox` interface and Linux backend (bubblewrap and `prlimit`, no new Rust dependency), the fail-closed refusing backend, the startup isolation self-check and verification record, supported deployment isolation and the test skip policy, the dispatch order (identity checks before protected input, write-ahead exposure), immutable staging, and worker protocol v1 with its outcome mapping. Details: [docs/worker-isolation.md](../worker-isolation.md). Implemented in `crates/custodian-worker` with synthetic tests; not deployed.
