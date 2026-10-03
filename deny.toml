@@ -1,8 +1,7 @@
 # cargo-deny policy for the dependency audit job in .github/workflows/ci.yml (C12).
 # Checks advisories (RustSec), yanked crates, licenses of third-party crates, wildcard
-# requirements and crate sources. Workspace crates are `publish = false` and carry no
-# license on purpose (README.md "Publication and licensing"), so they are ignored by the
-# license check via `private.ignore`. This file does not choose a license for the project.
+# requirements and crate sources. Workspace crates are `publish = false` and are ignored by the
+# license check via `private.ignore`. The project license (MIT, ADR 0103) is set in Cargo.toml and LICENSE.
 #
 # Pinned tool: cargo-deny 0.20.2 (see the workflow). Update both together, deliberately.
 

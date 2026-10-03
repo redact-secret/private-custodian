@@ -4,7 +4,7 @@
 
 This repository is a design baseline with a synthetic, in-memory scaffold. No production deployment or supported release is claimed. The threat model, trust zones and deployment prerequisites are in [ADR 0001](docs/adr/0001-trust-boundaries-and-threat-model.md); every control there is planned until its failure test exists.
 
-Report vulnerabilities privately to a repository maintainer through an established private channel. Use GitHub private vulnerability reporting once configured. Do not put private corpus details, operational IDs, keys, raw logs, or exploit payloads involving protected data in public issues. Before publication, maintainers must document a verified reporting route and incident owner. Response timelines are not yet guaranteed.
+Report vulnerabilities privately through GitHub private vulnerability reporting (Security Advisories) for this repository; no email address is published or monitored as a reporting route. While the repository is private only collaborators can read it, and private vulnerability reporting is enabled as a step of the publication gate. The incident owner is the repository maintainer (a single person: see [ADR 0103](docs/adr/0103-solo-maintainer-operating-decisions-license-reporting-and-publication.md)). Do not put private corpus details, operational IDs, keys, raw logs, or exploit payloads involving protected data in public issues. Response timelines are not guaranteed.
 
 Use a minimal synthetic reproduction with affected revision, boundary crossed, and preconditions. Do not submit real PII, production logs, or real credentials.
 
