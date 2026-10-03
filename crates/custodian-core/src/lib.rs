@@ -7,8 +7,9 @@
 //! and no dependencies. The model, the engine and the scanner are never the
 //! authority; these rules are.
 //!
-//! Status: scaffold. Identity types are opaque strings until C2 defines
-//! canonical encodings and digests. Nothing here is a deployed control.
+//! Status: scaffold. Identity types are opaque strings; the validated wire
+//! types and canonical encodings live in `custodian-contracts` (ADR 0004).
+//! Nothing here is a deployed control.
 
 #![forbid(unsafe_code)]
 

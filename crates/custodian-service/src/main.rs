@@ -5,8 +5,8 @@
 
 fn main() {
     println!(
-        "custodian-service {}: scaffold only; no listener, storage or credentials ({})",
+        "custodian-service {}: scaffold only; no listener, storage or credentials (contracts v{} defined, not wired)",
         env!("CARGO_PKG_VERSION"),
-        custodian_contracts::CONTRACTS_STATUS
+        custodian_contracts::CONTRACT_MAJOR_VERSION
     );
 }

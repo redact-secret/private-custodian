@@ -1,0 +1,346 @@
+{
+  "$defs": {
+    "ActivationRef": {
+      "additionalProperties": false,
+      "description": "Binding to one activation record of a policy. `sequence` is the\nactivation's state sequence seen when the binding was made; any later\nstate (revocation, supersession) has a higher sequence.",
+      "properties": {
+        "activation_id": {
+          "maxLength": 68,
+          "minLength": 20,
+          "pattern": "^pac_[a-z0-9]{16,64}$",
+          "type": "string"
+        },
+        "policy": {
+          "$ref": "#/$defs/PolicyRef"
+        },
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "policy",
+        "activation_id",
+        "sequence"
+      ],
+      "type": "object"
+    },
+    "ArtifactIdentity": {
+      "additionalProperties": false,
+      "description": "A named, versioned, content-addressed component (engine, adapter, scanner).",
+      "properties": {
+        "digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "EvaluationDomain": {
+      "description": "Evaluation domain. Plan, protocol, population and policies must all agree.",
+      "enum": [
+        "credential",
+        "pii"
+      ],
+      "type": "string"
+    },
+    "ExecutionOutcome": {
+      "description": "Terminal result of one execution attempt.",
+      "oneOf": [
+        {
+          "enum": [
+            "failed",
+            "cancelled",
+            "expired"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "success",
+          "description": "Every authorized input was measured and the artifact validated.",
+          "type": "string"
+        },
+        {
+          "const": "partial",
+          "description": "Some inputs were measured, not all. Never releasable.",
+          "type": "string"
+        },
+        {
+          "const": "rejected",
+          "description": "The result artifact failed validation (roster, version, counters,\nbindings or schema).",
+          "type": "string"
+        }
+      ]
+    },
+    "ExposureState": {
+      "description": "Whether protected bytes were acquired. Wire form of `custodian_core::Exposure`.",
+      "enum": [
+        "not_exposed",
+        "exposed"
+      ],
+      "type": "string"
+    },
+    "FrozenIdentities": {
+      "additionalProperties": false,
+      "description": "The identities frozen at approval and re-verified before and after\nexecution.",
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "candidate": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "config_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "engine": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "population_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ProtocolRef"
+        },
+        "scanners": {
+          "items": {
+            "$ref": "#/$defs/ArtifactIdentity"
+          },
+          "maxItems": 8,
+          "type": "array"
+        }
+      },
+      "required": [
+        "domain",
+        "candidate",
+        "engine",
+        "adapter",
+        "scanners",
+        "config_digest",
+        "protocol",
+        "population_digest"
+      ],
+      "type": "object"
+    },
+    "PolicyKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "budget",
+            "retention",
+            "signer"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "approval",
+          "description": "Execution approval and authorization rules.",
+          "type": "string"
+        },
+        {
+          "const": "disclosure",
+          "description": "Projection allowlist, strata and composition rules.",
+          "type": "string"
+        }
+      ]
+    },
+    "PolicyRef": {
+      "additionalProperties": false,
+      "description": "A named, versioned policy. Changing a policy is a reviewed revision, i.e. a\nnew version, never an in-place edit.",
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "kind": {
+          "$ref": "#/$defs/PolicyKind"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "domain",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "ProtocolRef": {
+      "additionalProperties": false,
+      "description": "Measurement protocol, versioned separately from schemas and policies. The\nlegacy TypeScript semantics are a named protocol here, never an implicit one.",
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "domain",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "Reason": {
+      "description": "Wire form of `custodian_core::ReasonCode` (fixed vocabulary, no free text).",
+      "enum": [
+        "requested",
+        "authorized",
+        "authorization_denied",
+        "plan_mismatch",
+        "authorization_expired",
+        "budget_reserved",
+        "budget_exhausted",
+        "duplicate_request",
+        "corpus_unavailable",
+        "execution_failed",
+        "invalid_artifact",
+        "cancelled",
+        "completed",
+        "protected_bytes_acquired",
+        "invalid_transition",
+        "store_unavailable",
+        "disclosure_not_permitted"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation": {
+      "$ref": "#/$defs/ActivationRef"
+    },
+    "approval_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^apr_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "attempt": {
+      "description": "1-based attempt number. A retry is a new attempt with a new execution id.",
+      "maximum": 16,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "execution_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^exe_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "exposure": {
+      "$ref": "#/$defs/ExposureState"
+    },
+    "finished_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "frozen": {
+      "$ref": "#/$defs/FrozenIdentities"
+    },
+    "outcome": {
+      "$ref": "#/$defs/ExecutionOutcome"
+    },
+    "plan_digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "reason": {
+      "$ref": "#/$defs/Reason"
+    },
+    "request_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^req_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "reservation_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^rsv_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "schema": {
+      "const": "private-custodian.execution/1"
+    },
+    "started_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema",
+    "execution_id",
+    "request_id",
+    "approval_id",
+    "reservation_id",
+    "plan_digest",
+    "activation",
+    "frozen",
+    "attempt",
+    "outcome",
+    "exposure",
+    "reason",
+    "started_at",
+    "finished_at"
+  ],
+  "title": "ExecutionRecord",
+  "type": "object"
+}

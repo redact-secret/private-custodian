@@ -1,0 +1,496 @@
+{
+  "$defs": {
+    "AccountingSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "budget": {
+          "$ref": "#/$defs/BudgetScope"
+        },
+        "kind": {
+          "$ref": "#/$defs/BudgetKind"
+        },
+        "max_retries": {
+          "description": "Retries permitted after a failure. Each retry passes the same checks\nand is a new auditable attempt; none is free after exposure.",
+          "maximum": 8,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "units": {
+          "description": "Budget units requested (at least one).",
+          "maximum": 16,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "budget",
+        "units",
+        "max_retries"
+      ],
+      "type": "object"
+    },
+    "ActivationRef": {
+      "additionalProperties": false,
+      "description": "Binding to one activation record of a policy. `sequence` is the\nactivation's state sequence seen when the binding was made; any later\nstate (revocation, supersession) has a higher sequence.",
+      "properties": {
+        "activation_id": {
+          "maxLength": 68,
+          "minLength": 20,
+          "pattern": "^pac_[a-z0-9]{16,64}$",
+          "type": "string"
+        },
+        "policy": {
+          "$ref": "#/$defs/PolicyRef"
+        },
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "policy",
+        "activation_id",
+        "sequence"
+      ],
+      "type": "object"
+    },
+    "ArtifactIdentity": {
+      "additionalProperties": false,
+      "description": "A named, versioned, content-addressed component (engine, adapter, scanner).",
+      "properties": {
+        "digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "BudgetKind": {
+      "description": "What kind of budget a reservation draws on.",
+      "oneOf": [
+        {
+          "const": "run",
+          "description": "One protected execution attempt.",
+          "type": "string"
+        },
+        {
+          "const": "release_query",
+          "description": "One public release or query of an aggregate.",
+          "type": "string"
+        }
+      ]
+    },
+    "BudgetScope": {
+      "description": "Budget scope. Two legacy semantics stay distinct (ADR 0003): holdout\nattempts are per population (and family) epoch; blind attempts are per\ncandidate lineage per epoch. They are different variants, never one counter.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "corpus_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^cor_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "epoch_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^epo_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "family_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^fam_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "scope": {
+              "const": "population_epoch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "scope",
+            "corpus_id",
+            "epoch_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "corpus_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^cor_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "epoch_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^epo_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "family_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^fam_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "lineage_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^lin_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "scope": {
+              "const": "candidate_lineage_epoch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "scope",
+            "corpus_id",
+            "epoch_id",
+            "lineage_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EvaluationDomain": {
+      "description": "Evaluation domain. Plan, protocol, population and policies must all agree.",
+      "enum": [
+        "credential",
+        "pii"
+      ],
+      "type": "string"
+    },
+    "EvaluationPlan": {
+      "additionalProperties": false,
+      "description": "The exact frozen plan an approval binds to. Its digest is the plan\nidentity; any change to any field is a different plan.",
+      "properties": {
+        "accounting": {
+          "$ref": "#/$defs/AccountingSettings"
+        },
+        "adapter": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "candidate": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "config_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "disclosure_policy": {
+          "$ref": "#/$defs/PolicyRef"
+        },
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "engine": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "limits": {
+          "$ref": "#/$defs/ResourceLimits"
+        },
+        "policy_activation": {
+          "$ref": "#/$defs/ActivationRef",
+          "description": "Activation of the approval/execution policy this plan runs under."
+        },
+        "population": {
+          "$ref": "#/$defs/PopulationBinding"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ProtocolRef"
+        },
+        "purpose": {
+          "$ref": "#/$defs/Purpose"
+        },
+        "scanners": {
+          "items": {
+            "$ref": "#/$defs/ArtifactIdentity"
+          },
+          "maxItems": 8,
+          "type": "array"
+        },
+        "seed_policy": {
+          "$ref": "#/$defs/SeedPolicy"
+        }
+      },
+      "required": [
+        "domain",
+        "purpose",
+        "candidate",
+        "engine",
+        "adapter",
+        "scanners",
+        "protocol",
+        "config_digest",
+        "policy_activation",
+        "population",
+        "accounting",
+        "seed_policy",
+        "limits",
+        "disclosure_policy"
+      ],
+      "type": "object"
+    },
+    "PolicyKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "budget",
+            "retention",
+            "signer"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "approval",
+          "description": "Execution approval and authorization rules.",
+          "type": "string"
+        },
+        {
+          "const": "disclosure",
+          "description": "Projection allowlist, strata and composition rules.",
+          "type": "string"
+        }
+      ]
+    },
+    "PolicyRef": {
+      "additionalProperties": false,
+      "description": "A named, versioned policy. Changing a policy is a reviewed revision, i.e. a\nnew version, never an in-place edit.",
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "kind": {
+          "$ref": "#/$defs/PolicyKind"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "domain",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "PopulationBinding": {
+      "additionalProperties": false,
+      "description": "Internal population binding. Never public: it names custody identities.",
+      "properties": {
+        "corpus_id": {
+          "maxLength": 68,
+          "minLength": 20,
+          "pattern": "^cor_[a-z0-9]{16,64}$",
+          "type": "string"
+        },
+        "custody_version": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "epoch_id": {
+          "maxLength": 68,
+          "minLength": 20,
+          "pattern": "^epo_[a-z0-9]{16,64}$",
+          "type": "string"
+        },
+        "family_id": {
+          "maxLength": 68,
+          "minLength": 20,
+          "pattern": "^fam_[a-z0-9]{16,64}$",
+          "type": "string"
+        },
+        "population_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "domain",
+        "corpus_id",
+        "epoch_id",
+        "population_digest",
+        "custody_version"
+      ],
+      "type": "object"
+    },
+    "ProtocolRef": {
+      "additionalProperties": false,
+      "description": "Measurement protocol, versioned separately from schemas and policies. The\nlegacy TypeScript semantics are a named protocol here, never an implicit one.",
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "domain",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "Purpose": {
+      "description": "Why the run is requested. A conformance control is a public synthetic\nlifecycle test, never protected-holdout evidence.",
+      "enum": [
+        "protected_evaluation",
+        "conformance_control"
+      ],
+      "type": "string"
+    },
+    "ResourceLimits": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu_seconds": {
+          "maximum": 86400,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "maximum": 1073741824,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_processes": {
+          "maximum": 4096,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memory_mib": {
+          "maximum": 1048576,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "storage_mib": {
+          "maximum": 1048576,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wall_seconds": {
+          "maximum": 86400,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cpu_seconds",
+        "wall_seconds",
+        "memory_mib",
+        "storage_mib",
+        "max_processes",
+        "max_output_bytes"
+      ],
+      "type": "object"
+    },
+    "SeedPolicy": {
+      "description": "Seed handling. Seeds are custodian-held and never appear in a contract.",
+      "enum": [
+        "custodian_held_fixed",
+        "custodian_held_per_attempt"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A request to evaluate one frozen plan. Authority is never read from it:\n`asserted_actor` is what the intake edge claims after authentication, and\nthe control service re-derives permission from stored authorization.",
+  "properties": {
+    "asserted_actor": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^act_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "idempotency_key": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^idk_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "plan": {
+      "$ref": "#/$defs/EvaluationPlan"
+    },
+    "request_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^req_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "requested_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema": {
+      "const": "private-custodian.request/1"
+    }
+  },
+  "required": [
+    "schema",
+    "request_id",
+    "idempotency_key",
+    "asserted_actor",
+    "requested_at",
+    "plan"
+  ],
+  "title": "EvaluationRequest",
+  "type": "object"
+}

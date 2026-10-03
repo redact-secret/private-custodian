@@ -1,0 +1,433 @@
+{
+  "$defs": {
+    "ActivationRef": {
+      "additionalProperties": false,
+      "description": "Binding to one activation record of a policy. `sequence` is the\nactivation's state sequence seen when the binding was made; any later\nstate (revocation, supersession) has a higher sequence.",
+      "properties": {
+        "activation_id": {
+          "maxLength": 68,
+          "minLength": 20,
+          "pattern": "^pac_[a-z0-9]{16,64}$",
+          "type": "string"
+        },
+        "policy": {
+          "$ref": "#/$defs/PolicyRef"
+        },
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "policy",
+        "activation_id",
+        "sequence"
+      ],
+      "type": "object"
+    },
+    "ArtifactIdentity": {
+      "additionalProperties": false,
+      "description": "A named, versioned, content-addressed component (engine, adapter, scanner).",
+      "properties": {
+        "digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "Attestation": {
+      "additionalProperties": false,
+      "properties": {
+        "authorship": {
+          "$ref": "#/$defs/Authorship"
+        },
+        "ground_truth": {
+          "$ref": "#/$defs/GroundTruthClaim"
+        },
+        "independence": {
+          "$ref": "#/$defs/IndependenceClaim"
+        },
+        "organisational_independence": {
+          "$ref": "#/$defs/OrganisationalIndependence"
+        },
+        "review": {
+          "$ref": "#/$defs/ReviewStatus"
+        },
+        "role_separation": {
+          "$ref": "#/$defs/RoleSeparation"
+        }
+      },
+      "required": [
+        "independence",
+        "role_separation",
+        "organisational_independence",
+        "authorship",
+        "review",
+        "ground_truth"
+      ],
+      "type": "object"
+    },
+    "Authorship": {
+      "description": "Who authored expectations. `external_*` values are declarations by the\ncustodian operator and are not verified by this system.",
+      "enum": [
+        "project_authored",
+        "external_authored_unverified"
+      ],
+      "type": "string"
+    },
+    "EvaluationDomain": {
+      "description": "Evaluation domain. Plan, protocol, population and policies must all agree.",
+      "enum": [
+        "credential",
+        "pii"
+      ],
+      "type": "string"
+    },
+    "ExecutionOutcome": {
+      "description": "Terminal result of one execution attempt.",
+      "oneOf": [
+        {
+          "enum": [
+            "failed",
+            "cancelled",
+            "expired"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "success",
+          "description": "Every authorized input was measured and the artifact validated.",
+          "type": "string"
+        },
+        {
+          "const": "partial",
+          "description": "Some inputs were measured, not all. Never releasable.",
+          "type": "string"
+        },
+        {
+          "const": "rejected",
+          "description": "The result artifact failed validation (roster, version, counters,\nbindings or schema).",
+          "type": "string"
+        }
+      ]
+    },
+    "FrozenIdentities": {
+      "additionalProperties": false,
+      "description": "The identities frozen at approval and re-verified before and after\nexecution.",
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "candidate": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "config_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "engine": {
+          "$ref": "#/$defs/ArtifactIdentity"
+        },
+        "population_digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ProtocolRef"
+        },
+        "scanners": {
+          "items": {
+            "$ref": "#/$defs/ArtifactIdentity"
+          },
+          "maxItems": 8,
+          "type": "array"
+        }
+      },
+      "required": [
+        "domain",
+        "candidate",
+        "engine",
+        "adapter",
+        "scanners",
+        "config_digest",
+        "protocol",
+        "population_digest"
+      ],
+      "type": "object"
+    },
+    "GroundTruthClaim": {
+      "description": "Custody and signatures attest origin and binding, never truth.",
+      "enum": [
+        "not_established"
+      ],
+      "type": "string"
+    },
+    "IndependenceClaim": {
+      "description": "Legacy independence vocabulary, preserved verbatim (ADR 0003). None of\nthese means \"independent\".",
+      "enum": [
+        "public-control",
+        "custodian-declared",
+        "procedural-separation"
+      ],
+      "type": "string"
+    },
+    "OrganisationalIndependence": {
+      "description": "Organizational independence. The only representable value is `not_claimed`.",
+      "enum": [
+        "not_claimed"
+      ],
+      "type": "string"
+    },
+    "PolicyKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "budget",
+            "retention",
+            "signer"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "approval",
+          "description": "Execution approval and authorization rules.",
+          "type": "string"
+        },
+        {
+          "const": "disclosure",
+          "description": "Projection allowlist, strata and composition rules.",
+          "type": "string"
+        }
+      ]
+    },
+    "PolicyRef": {
+      "additionalProperties": false,
+      "description": "A named, versioned policy. Changing a policy is a reviewed revision, i.e. a\nnew version, never an in-place edit.",
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "kind": {
+          "$ref": "#/$defs/PolicyKind"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "domain",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "PrivateArtifactRef": {
+      "additionalProperties": false,
+      "description": "Reference to a private result artifact. The artifact itself stays in\nprotected storage.",
+      "properties": {
+        "digest": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ProtocolRef",
+          "description": "Protocol the artifact claims to follow; must equal the frozen protocol."
+        },
+        "size_bytes": {
+          "maximum": 1099511627776,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "digest",
+        "size_bytes",
+        "protocol"
+      ],
+      "type": "object"
+    },
+    "ProtocolRef": {
+      "additionalProperties": false,
+      "description": "Measurement protocol, versioned separately from schemas and policies. The\nlegacy TypeScript semantics are a named protocol here, never an implicit one.",
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "domain",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "ReviewStatus": {
+      "enum": [
+        "not_reviewed",
+        "project_reviewed",
+        "external_reviewed_unverified"
+      ],
+      "type": "string"
+    },
+    "RoleSeparation": {
+      "description": "How proposal, execution approval and disclosure approval are separated.\nBoth variants are procedural. There is deliberately no organizational\nvariant: it is not offered until a reviewed schema revision adds one.",
+      "oneOf": [
+        {
+          "const": "single_operator_procedural",
+          "description": "One person holds the roles; separation is a procedure, not a control.",
+          "type": "string"
+        },
+        {
+          "const": "distinct_principals_procedural",
+          "description": "Distinct principals, still within one organization.",
+          "type": "string"
+        }
+      ]
+    },
+    "RosterCounts": {
+      "additionalProperties": false,
+      "description": "Aggregate roster counters (no case identities).",
+      "properties": {
+        "expected": {
+          "maximum": 100000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed": {
+          "maximum": 100000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "observed": {
+          "maximum": 100000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expected",
+        "observed",
+        "failed"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Internal receipt for a measured execution. Private: it names internal\nplan identities and the private result artifact. Signing (C7) uses\n`Contract::signing_input` under `DomainTag::InternalReceipt`.",
+  "properties": {
+    "activation": {
+      "$ref": "#/$defs/ActivationRef"
+    },
+    "attestation": {
+      "$ref": "#/$defs/Attestation"
+    },
+    "execution_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^exe_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "frozen": {
+      "$ref": "#/$defs/FrozenIdentities"
+    },
+    "issued_at": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "outcome": {
+      "$ref": "#/$defs/ExecutionOutcome"
+    },
+    "plan_digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "receipt_id": {
+      "maxLength": 68,
+      "minLength": 20,
+      "pattern": "^rcp_[a-z0-9]{16,64}$",
+      "type": "string"
+    },
+    "result": {
+      "$ref": "#/$defs/PrivateArtifactRef"
+    },
+    "roster": {
+      "$ref": "#/$defs/RosterCounts"
+    },
+    "schema": {
+      "const": "private-custodian.internal-receipt/1"
+    }
+  },
+  "required": [
+    "schema",
+    "receipt_id",
+    "execution_id",
+    "plan_digest",
+    "activation",
+    "frozen",
+    "outcome",
+    "result",
+    "roster",
+    "attestation",
+    "issued_at"
+  ],
+  "title": "InternalReceipt",
+  "type": "object"
+}

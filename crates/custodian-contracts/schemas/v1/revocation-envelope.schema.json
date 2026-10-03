@@ -1,0 +1,410 @@
+{
+  "$defs": {
+    "EvaluationDomain": {
+      "description": "Evaluation domain. Plan, protocol, population and policies must all agree.",
+      "enum": [
+        "credential",
+        "pii"
+      ],
+      "type": "string"
+    },
+    "PolicyKind": {
+      "oneOf": [
+        {
+          "enum": [
+            "budget",
+            "retention",
+            "signer"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "approval",
+          "description": "Execution approval and authorization rules.",
+          "type": "string"
+        },
+        {
+          "const": "disclosure",
+          "description": "Projection allowlist, strata and composition rules.",
+          "type": "string"
+        }
+      ]
+    },
+    "PolicyRef": {
+      "additionalProperties": false,
+      "description": "A named, versioned policy. Changing a policy is a reviewed revision, i.e. a\nnew version, never an in-place edit.",
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/EvaluationDomain"
+        },
+        "kind": {
+          "$ref": "#/$defs/PolicyKind"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "version": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "domain",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "PublicPopulationRef": {
+      "description": "Disclosure-safe population identity. Either a random opaque reference or a\nkeyed commitment; never a plain hash of population content.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^ppr_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "kind": {
+              "const": "opaque",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "commitment": {
+              "maxLength": 76,
+              "minLength": 76,
+              "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "key_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^key_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "kind": {
+              "const": "keyed_commitment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "key_id",
+            "commitment"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PublicRevocationReason": {
+      "description": "Fixed reasons only. Free-form text is not representable.",
+      "enum": [
+        "contamination",
+        "epoch_rotation",
+        "key_compromise",
+        "policy_revoked",
+        "error_correction",
+        "newer_evidence"
+      ],
+      "type": "string"
+    },
+    "RevocationAction": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "revoked",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Evidence from a contaminated epoch. Stays invalid for independent\nqualification; it is never cleared by a later entry.",
+          "properties": {
+            "action": {
+              "const": "contaminated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "superseded",
+              "type": "string"
+            },
+            "superseded_by": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^prj_[a-z0-9]{16,64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "superseded_by"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RevocationEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/RevocationAction"
+        },
+        "effective_at": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reason": {
+          "$ref": "#/$defs/PublicRevocationReason"
+        },
+        "target": {
+          "$ref": "#/$defs/RevocationTarget"
+        }
+      },
+      "required": [
+        "target",
+        "action",
+        "reason",
+        "effective_at"
+      ],
+      "type": "object"
+    },
+    "RevocationEnvelope": {
+      "additionalProperties": false,
+      "description": "One link of the feed. Entries are cumulative across the chain; an entry is\nnever removed by a later envelope.",
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/RevocationEntry"
+          },
+          "maxItems": 128,
+          "type": "array"
+        },
+        "feed_id": {
+          "maxLength": 68,
+          "minLength": 20,
+          "pattern": "^fed_[a-z0-9]{16,64}$",
+          "type": "string"
+        },
+        "fresh_until": {
+          "description": "Consumers must treat the feed as stale after this time. An issuer\npublishes an empty envelope to renew freshness.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "issued_at": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "previous": {
+          "description": "Digest of the previous envelope (`Contract::document_digest`); absent\nexactly when `sequence` is 1.",
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema": {
+          "const": "private-custodian.revocation-envelope/1"
+        },
+        "sequence": {
+          "description": "1-based, strictly increasing by one.",
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema",
+        "feed_id",
+        "sequence",
+        "issued_at",
+        "fresh_until",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "RevocationTarget": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "projection_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^prj_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "target": {
+              "const": "projection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "projection_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "receipt_id": {
+              "maxLength": 68,
+              "minLength": 20,
+              "pattern": "^rcp_[a-z0-9]{16,64}$",
+              "type": "string"
+            },
+            "target": {
+              "const": "receipt",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "receipt_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Every projection of this candidate digest.",
+          "properties": {
+            "candidate": {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "target": {
+              "const": "candidate",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "candidate"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Every projection of this public population (for example a\ncontaminated epoch).",
+          "properties": {
+            "population": {
+              "$ref": "#/$defs/PublicPopulationRef"
+            },
+            "target": {
+              "const": "population",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "population"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Every projection released under this disclosure policy version.",
+          "properties": {
+            "policy": {
+              "$ref": "#/$defs/PolicyRef"
+            },
+            "target": {
+              "const": "policy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "target",
+            "policy"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Signature": {
+      "additionalProperties": false,
+      "description": "Signature over `Contract::signing_input` of the enclosed payload.",
+      "properties": {
+        "algorithm": {
+          "$ref": "#/$defs/SignatureAlgorithm"
+        },
+        "key_id": {
+          "maxLength": 68,
+          "minLength": 20,
+          "pattern": "^key_[a-z0-9]{16,64}$",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 86,
+          "minLength": 86,
+          "pattern": "^[A-Za-z0-9_-]{86}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "algorithm",
+        "value"
+      ],
+      "type": "object"
+    },
+    "SignatureAlgorithm": {
+      "enum": [
+        "ed25519"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "payload": {
+      "$ref": "#/$defs/RevocationEnvelope"
+    },
+    "signature": {
+      "$ref": "#/$defs/Signature"
+    }
+  },
+  "required": [
+    "payload",
+    "signature"
+  ],
+  "title": "SignedRevocationEnvelope",
+  "type": "object"
+}
