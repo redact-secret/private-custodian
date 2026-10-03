@@ -6,6 +6,8 @@ ADR 0002 selects a Rust workspace (`crates/custodian-core`, `custodian-contracts
 
 Rust rules: `custodian-core` stays std-only with no I/O, no network and no vendor types; SQLite, HTTP, signing and GitHub code enter only in adapters. `unsafe_code` is forbidden workspace-wide. Errors and logs carry fixed reason codes, not free-form text. Add dependencies deliberately (only `custodian-contracts` has any so far: exact-pinned `serde`, `serde_json`, `sha2`, `schemars`, ADR 0004; `custodian-store` adds exact-pinned `rusqlite` with bundled SQLite, ADR 0020), commit `Cargo.lock`, and run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` and `cargo test --workspace --locked` before finishing.
 
+`custodian-intake` adds exact-pinned `hmac` for webhook signatures (ADR 0010); GitHub-facing code lives only there.
+
 Use small typed interfaces for authorization, corpus access, atomic budget/state operations, execution and disclosure (`custodian_core::ports`). Avoid vendor-specific SDKs in core contracts. Measurement engines never depend on GitHub; GitHub is confined to the request-facing App adapter and the ledger-writer. Engine invocation uses a pinned binary/package and versioned artifact schema rather than source imports.
 
 ## Repository versus operational data

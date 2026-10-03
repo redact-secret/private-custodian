@@ -24,7 +24,7 @@ use custodian_intake::reason::IntakeReason;
 use custodian_intake::testing::{FailingSigner, FakeAppApi, FakeSigningKey};
 
 // A synthetic token. The "value" is obviously fake and is checked for leaks.
-const FAKE_TOKEN: &str = "ghs_SYNTHETICTOKENVALUEnotreal0000000000";
+const FAKE_TOKEN: &str = "synthetic-installation-token-not-real";
 
 fn credential(key: &FakeSigningKey) -> RequestFacingAppCredential {
     RequestFacingAppCredential::new(AppId::new(123_456).unwrap(), Box::new(key.clone()))
@@ -281,7 +281,7 @@ fn malformed_or_expired_token_responses_fail_closed_without_echo() {
         let p = provider(Arc::new(FakeAppApi::responding(body)), &key);
         let err = p.token_for(inst(), repo(), ts(NOW)).unwrap_err();
         assert_eq!(err, IntakeReason::AppAuthFailed);
-        assert!(!format!("{err:?} {err}").contains("SYNTHETICTOKEN"));
+        assert!(!format!("{err:?} {err}").contains("synthetic-installation-token"));
     }
     let p = provider(
         Arc::new(FakeAppApi::failing(IntakeReason::TokenUnavailable)),

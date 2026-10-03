@@ -15,6 +15,7 @@ ADR.
 | [0003](0003-legacy-protected-lifecycle-handoff.md) | Legacy protected lifecycle handoff | Accepted (design) |
 | [0004](0004-canonical-encoding-digests-and-contract-dependencies.md) | Canonical encoding, digests, domain separation, time and contract dependencies | Accepted (design) |
 | [0005](0005-contract-set-freshness-and-versioning.md) | Contract set, internal versus public split, freshness and versioning | Accepted (design) |
+| [0010](0010-github-app-request-intake.md) | GitHub App request intake, authentication and credential separation | Accepted (design); implemented as a library, not deployed |
 | [0020](0020-sqlite-runtime-store-and-dependency-pins.md) | SQLite runtime store: crate, connection settings and dependency pins | Accepted (design); implemented, not deployed |
 | [0021](0021-budget-accounting-run-state-and-recovery-policy.md) | Budget accounting, run state, leases and recovery policy | Accepted (design); implemented, not deployed |
 | [0022](0022-store-migrations-audit-outbox-and-restore-protection.md) | Store migrations, audit outbox and restore protection | Accepted (design); implemented, not deployed |
