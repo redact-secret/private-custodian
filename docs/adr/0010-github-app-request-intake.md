@@ -25,7 +25,7 @@ head commit can move between the event and the work; App access is not human app
 | Webhook signature | `hmac` + `sha2`; hand-rolled HMAC; GitHub SDK | `hmac` =0.12.1 with `sha2` (already pinned); `verify_slice` is the constant-time comparison |
 | App JWT (RS256) | `jsonwebtoken` or `rsa` in this crate; signer trait with the key in the deployment adapter | signer trait. The `rsa` crate carries an unfixed timing advisory (RUSTSEC-2023-0071), `jsonwebtoken` pulls a large tree; the private key must not enter request-handling memory more than a key service requires. Production supplies an RS256 signer behind `AppJwtSigner` after its own dependency review |
 | HTTP client | embed a client; trait | trait (`AppApiTransport`, `CheckSink`, `PullRequestSource`). No client, TLS stack or async runtime enters this crate; the whole edge is testable offline |
-| Delivery replay state | in-process only; trait with durable adapter | trait (`DeliveryStore`); in-memory double now, durable adapter in C4 |
+| Delivery replay state | in-process only; trait with durable adapter | trait (`DeliveryStore`); in-memory double now; the durable adapter is a follow-up on the C4 store (not part of C3) |
 | Authority for actors | trust `asserted_actor`; derive from verified GitHub user id and an allowlist | derive; the asserted value is checked for equality, never trusted |
 | Event handling | accept all, deny some; allowlist | allowlist, with named refusal codes for comment and workflow classes |
 
@@ -112,8 +112,9 @@ adapter and C12.
 New ports in `custodian_intake::ports`, `checks` and `app_auth`: `DeliveryStore`, `InstallationRegistry`,
 `IntakeQueue`, `PullRequestSource`, `CheckSink`, `AppApiTransport`, and `credentials::AppJwtSigner`. They
 name GitHub only because this crate is the GitHub adapter; none of them is imported by `custodian-core`.
-C4 implements `DeliveryStore`, `InstallationRegistry` and `IntakeQueue` durably (queue entries and delivery
-claims must be written in one transaction with the audit outbox). The deployment supplies the HTTP listener,
+`DeliveryStore`, `InstallationRegistry` and `IntakeQueue` need durable implementations; the C4 store as merged
+does not provide them, so they are a follow-up on `custodian-store` (queue entries and delivery claims must be
+written in one transaction with the audit outbox). The deployment supplies the HTTP listener,
 the transport (no redirects, pinned host, bounded time and size) and the RS256 signer.
 
 ## Failure and recovery
@@ -121,7 +122,7 @@ the transport (no redirects, pinned host, bounded time and size) and the RS256 s
 Unreadable delivery store or registry: refuse (`store_unavailable`). Full or failing queue: refuse and release
 the claim. Token exchange failure: no Check, no head read; the gate refuses (`token_unavailable`,
 `app_auth_failed`). Process restart with the in-memory stores forgets claims, so durable stores are required
-before the webhook is enabled (C4); until then the webhook stays inactive. A crash between claim and enqueue
+before the webhook is enabled (follow-up on the C4 store); until then the webhook stays inactive. A crash between claim and enqueue
 leaves a claimed, unqueued delivery; the durable adapter must make the pair atomic. Duplicate or stale
 requests never produce a second execution: the control service still reserves idempotently (ADR 0002).
 
@@ -140,7 +141,7 @@ speed.
 | App JWT and scoped installation token behind traits, offline fake | yes | yes (no real signer or transport) | no |
 | Sanitized Check output behind a trait | yes | yes | no |
 | Credential separation types and manifest validation | yes | yes | no |
-| Durable delivery store, registry and queue | yes (C4) | no | no |
+| Durable delivery store, registry and queue | yes (follow-up on the C4 store) | no | no |
 | HTTP listener, RS256 signer, GitHub transport, webhook enabled | yes | no | no |
 
 ## Consequences, migration, exit

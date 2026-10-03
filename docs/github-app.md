@@ -131,7 +131,7 @@ suspend or uninstall the App to cut them off sooner.
 
 ## 7. Manual provisioning checklist
 
-Record completion in the private operations log. Items marked (C4), (C6), (C12) depend on those issues.
+Record completion in the private operations log. Items marked (C6), (C12) depend on those issues.
 
 - [ ] App registered under the intended account, not public, installable only on that account.
 - [ ] Permissions exactly as in section 2; no account or organization permissions.
@@ -144,7 +144,7 @@ Record completion in the private operations log. Items marked (C4), (C6), (C12) 
       `IntakeConfig::from_json`, which rejects unknown fields and empty allowlists.
 - [ ] Credential manifest validated with `validate_assignments`; worker environment validated with
       `validate_worker_environment`.
-- [ ] Durable `DeliveryStore`, `InstallationRegistry` and `IntakeQueue` in place (C4). Do not enable the webhook
+- [ ] Durable `DeliveryStore`, `InstallationRegistry` and `IntakeQueue` in place (they are not provided by the C4 store as merged; see ADR 0010). Do not enable the webhook
       on the in-memory doubles.
 - [ ] Transport adapter pins the GitHub API host, does not follow redirects, bounds time and response size.
 - [ ] Listener serves HTTPS only, passes raw bytes, never logs bodies, headers or tokens.
