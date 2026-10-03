@@ -505,9 +505,12 @@ fn unsupported_algorithm_and_bad_public_key_are_rejected() {
 
 #[test]
 fn software_signer_debug_output_never_shows_key_material() {
-    let s = SoftwareSigner::from_seed(key_id(1), &[0x42; 32], all_domains());
+    let seed = random_seed();
+    let s = SoftwareSigner::from_seed(key_id(1), &seed, all_domains());
     let text = format!("{s:?}");
-    assert!(!text.contains("42"));
+    let seed_hex: String = seed.iter().map(|b| format!("{b:02x}")).collect();
+    assert!(!text.contains(&seed_hex));
+    assert!(!text.contains(&s.public_key_hex()));
     assert!(text.contains("redacted"));
 }
 

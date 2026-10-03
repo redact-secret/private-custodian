@@ -87,7 +87,8 @@ mod tests {
         assert_eq!(encode(b"Man"), "TWFu");
         assert_eq!(encode(b"Ma"), "TWE");
         assert!(decode("TWE=").is_none());
-        assert!(decode("TWF").is_some());
+        assert!(decode("TWE").is_some());
+        assert!(decode("TWF").is_none());
         assert!(decode("TWFv ").is_none());
         // Non-zero trailing bits are not canonical.
         assert!(decode("TWG").is_none());
