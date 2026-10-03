@@ -91,6 +91,7 @@ impl<'a> StoreRunLedger<'a> {
     fn map(e: StoreError) -> R {
         match e {
             StoreError::LeaseLost => R::LeaseLost,
+            StoreError::EpochBlocked => R::EligibilityDenied,
             _ => R::LedgerUnavailable,
         }
     }

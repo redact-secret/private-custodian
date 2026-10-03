@@ -164,6 +164,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "custodian-lifecycle"
+version = "0.0.0"
+dependencies = [
+ "custodian-contracts",
+ "custodian-core",
+ "custodian-corpus",
+ "custodian-disclosure",
+ "custodian-ledger",
+ "custodian-store",
+ "custodian-worker",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "custodian-service"
 version = "0.0.0"
 dependencies = [

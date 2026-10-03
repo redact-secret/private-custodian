@@ -43,6 +43,9 @@ pub enum WorkerReason {
     LedgerUnavailable,
     LeaseLost,
     Cancelled,
+    /// The epoch is contaminated, possibly changed, retired or its evidence
+    /// revoked (C9). Refused before protected bytes were opened.
+    EligibilityDenied,
 }
 
 impl WorkerReason {
@@ -79,6 +82,7 @@ impl WorkerReason {
             Self::LedgerUnavailable => "ledger_unavailable",
             Self::LeaseLost => "lease_lost",
             Self::Cancelled => "cancelled",
+            Self::EligibilityDenied => "eligibility_denied",
         }
     }
 
@@ -87,6 +91,7 @@ impl WorkerReason {
         match self {
             Self::Completed => ReasonCode::Completed,
             Self::Cancelled | Self::LeaseLost => ReasonCode::Cancelled,
+            Self::EligibilityDenied => ReasonCode::AuthorizationDenied,
             Self::IdentityMismatch
             | Self::IdentityChangedAfterStaging
             | Self::IdentityChangedAfterExecution

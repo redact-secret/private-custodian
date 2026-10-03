@@ -17,6 +17,7 @@ mod disclosure;
 pub mod error;
 pub mod fault;
 mod integrity;
+mod lifecycle;
 pub mod migrations;
 pub mod model;
 mod ops;
@@ -29,6 +30,11 @@ pub use clock::{Clock, ManualClock, SystemClock};
 pub use disclosure::{ChargeOutcome, DisclosureHistoryEntry, ReleaseCharge, ReleaseScope};
 pub use error::StoreError;
 pub use fault::{CrashOnce, FaultInjector, FaultOp, FaultPhase, FaultPoint, NoFault};
+pub use lifecycle::{
+    EpochEventCommand, EpochEventOutcome, EpochEventRecord, EpochStandingRecord, FeedAppend,
+    FeedEnvelopeRecord, FeedHead, ObligationAction, ObligationCommand, ObligationRecord,
+    ObligationTarget, RotationCommand, PUBLIC_REASONS,
+};
 pub use model::{
     AckOutcome, AttemptRecord, BudgetStatus, Checkpoint, Lease, OutboxEvent, RecoveryReport,
     ReserveCommand, ReserveOutcome, RetryCommand, Settlement, StartCommand, TransitionRecord,

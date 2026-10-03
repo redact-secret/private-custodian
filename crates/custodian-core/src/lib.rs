@@ -16,7 +16,9 @@
 pub mod ids;
 pub mod lifecycle;
 pub mod ports;
+pub mod standing;
 pub mod testing;
 
 pub use ids::{ActorId, AuthorizationId, IdempotencyKey, PlanDigest, PopulationId, RunId};
 pub use lifecycle::{budget_refundable, DisclosureState, Exposure, ReasonCode, RunState};
+pub use standing::{Contamination, EpochChange, EpochStanding};

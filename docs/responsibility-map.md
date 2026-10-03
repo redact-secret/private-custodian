@@ -90,4 +90,5 @@ disclosure.
 | Core lifecycle and ports | yes | scaffold, in-memory, synthetic | no |
 | SQLite runtime store (`custodian-store`) | yes | yes (synthetic tests) | no |
 | App adapter, storage, workers, signer, ledger-writer | yes | no | no |
+| Contamination, rotation and revocation feed (`custodian-lifecycle`) | yes | yes (synthetic tests) | no |
 | Handoff of any legacy population | yes | no | no |

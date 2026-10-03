@@ -8,6 +8,8 @@ Rust rules: `custodian-core` stays std-only with no I/O, no network and no vendo
 
 `custodian-intake` adds exact-pinned `hmac` for webhook signatures (ADR 0010); GitHub-facing code lives only there.
 
+`custodian-lifecycle` adds no third-party crate (ADR 0070); it orchestrates epoch standing, eligibility and the revocation feed over the core rule, the store and the ledger, and the standing rule itself lives in `custodian-core` like the run and disclosure state machines.
+
 `custodian-disclosure` adds no third-party crate (ADR 0060); it is the only place a public projection is built, and it reuses `custodian-intake` only to render Checks from fixed reason codes.
 
 Use small typed interfaces for authorization, corpus access, atomic budget/state operations, execution and disclosure (`custodian_core::ports`). Avoid vendor-specific SDKs in core contracts. Measurement engines never depend on GitHub; GitHub is confined to the request-facing App adapter and the ledger-writer. Engine invocation uses a pinned binary/package and versioned artifact schema rather than source imports.
