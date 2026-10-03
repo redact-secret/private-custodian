@@ -1,0 +1,10 @@
+[package]
+name = "custodian-core"
+description = "Policy and state core: lifecycle rules and vendor-neutral ports. Scaffold only."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true

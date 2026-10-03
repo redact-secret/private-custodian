@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/custodian-core",
+    "crates/custodian-contracts",
+    "crates/custodian-service",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "UNLICENSED" # No license is granted yet; see README.md "Publication and licensing".
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

@@ -19,9 +19,12 @@ or cloud, and is the enforcement deterministic and outside the agent and the mea
 
 ## Status
 
-Design baseline; no implementation has shipped. Do not claim an implemented sandbox, verified deployment, or
-independent validation. If a check, test, or tool does not exist yet, report that instead of inventing a
-command.
+Design baseline plus a synthetic, in-memory Rust scaffold (`crates/custodian-core`, `custodian-contracts`,
+`custodian-service`); nothing is deployed. Stack decisions are in `docs/adr/` (SQLite-first runtime store,
+filesystem-first protected storage behind an adapter, restricted private-ledger repository, eventual code-only
+publication); ownership is in `docs/responsibility-map.md`. Do not claim an implemented sandbox, verified
+deployment, or independent validation. Distinguish planned, implemented, and deployed. If a check, test, or tool
+does not exist yet, report that instead of inventing a command.
 
 ## Working rules
 
@@ -41,8 +44,10 @@ command.
 
 ## Before finishing
 
-Run all validation, test, lint, schema, and formatting checks that exist in the repository. If implementation
-is not present yet, report that fact. Confirm that no protected material, deployment-specific identifier, or
+Run all validation, test, lint, schema, and formatting checks that exist in the repository: today
+`cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+`cargo test --workspace` (also run by `.github/workflows/ci.yml`). If a layer is not implemented yet, report that
+fact. Never erase prior receipts or reset exhausted budgets when migrating legacy lifecycles. Confirm that no protected material, deployment-specific identifier, or
 engine measurement logic entered the change, and state the boundary affected, failure modes tested, and any
 policy change in the PR description.
 

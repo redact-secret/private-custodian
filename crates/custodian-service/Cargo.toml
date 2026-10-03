@@ -1,0 +1,14 @@
+[package]
+name = "custodian-service"
+description = "Control service scaffold: orchestrates the run lifecycle over the core ports. No listener, no credentials."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+custodian-core = { path = "../custodian-core" }
+custodian-contracts = { path = "../custodian-contracts" }
+
+[lints]
+workspace = true
