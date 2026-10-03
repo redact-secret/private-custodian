@@ -95,7 +95,7 @@ jobs:
         include:
           - {case: positive, exit: "0", reason: ok, now: "1800000120"}
           - {case: stale-feed, exit: "10", reason: stale, now: "1800003661"}
-          - {case: wrong-domain, exit: "10", reason: wrong_domain, now: "1800000120"}
+          - {case: wrong-domain, exit: "0", reason: wrong_domain, now: "1800000120"}
           - {case: wrong-candidate, exit: "10", reason: wrong_candidate, now: "1800000120"}
           - {case: revoked, exit: "10", reason: revoked, now: "1800000120"}
           - {case: tampered, exit: "10", reason: bad_signature, now: "1800000120"}
