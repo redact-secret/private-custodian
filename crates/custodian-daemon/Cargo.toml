@@ -25,6 +25,13 @@ path = "src/main.rs"
 name = "custodian-synthetic-engine"
 path = "src/bin/synthetic_engine.rs"
 
+# The worker's isolation probe (std only), built from the same source so the
+# Linux pipeline test can run the startup self-check without depending on
+# another package's binary. It is a test fixture and never shipped.
+[[bin]]
+name = "custodian-daemon-probe"
+path = "../custodian-worker/src/bin/probe.rs"
+
 # Dependencies: ADR 0123 (listener is std only), ADR 0124 (`ring` for the
 # App's RS256 JWT, `zeroize` and `nix` already in the lock for the signer).
 # Everything else is a path dependency or a workspace-pinned crate.

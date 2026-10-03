@@ -604,7 +604,7 @@ fn the_https_client_is_a_skeleton_that_fails_closed_and_the_plain_client_is_loop
         NotBuiltHttps.execute(&request).err(),
         Some(IntakeReason::TokenUnavailable)
     );
-    assert_eq!(format!("{request:?}").contains("ghs_SYNTHETIC"), false);
+    assert!(!format!("{request:?}").contains("ghs_SYNTHETIC"));
     for not_loopback in [
         "8.8.8.8:443",
         "192.0.2.1:80",

@@ -306,7 +306,7 @@ pub fn with_stack_in<R>(
     let roots = Keyring::new().with_root(
         KeyEntry::root(
             key_id.clone(),
-            &host.engine.public_key_hex(),
+            host.engine.public_key_hex(),
             SignDomain::ALL,
             Timestamp::new(1).unwrap(),
         )
@@ -399,6 +399,7 @@ pub fn with_stack_in<R>(
             "attestation": {"authorship": "project_authored", "review": "project_reviewed"},
             "required_activations": [cc::request().plan.policy_activation],
             "queue": {"poll_ms": 20, "lease_secs": 60, "max_attempts": 5},
+            "schedule": {"export_secs": 1},
             "pipeline": {"poll_ms": 20, "shutdown_grace_secs": 2}
         }))
         .unwrap(),

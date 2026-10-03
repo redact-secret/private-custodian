@@ -558,9 +558,8 @@ fn many_consumers_on_real_threads_submit_every_item_exactly_once() {
             s.spawn(move || {
                 // Run until the queue is empty.
                 loop {
-                    match c.step(&shutdown) {
-                        Ok(Step::Idle) => break,
-                        Ok(_) | Err(_) => {}
+                    if let Ok(Step::Idle) = c.step(&shutdown) {
+                        break;
                     }
                 }
             });

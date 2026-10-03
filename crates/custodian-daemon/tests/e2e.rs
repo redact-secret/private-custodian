@@ -16,18 +16,11 @@ use std::time::Duration;
 
 use common::stack::{with_stack, with_stack_in, Stack};
 use common::*;
-use custodian_bridge::wire::{BridgeManifest, BridgeManifestSchema};
-use custodian_bridge::{BridgeConsumer, ConsumerPins};
-use custodian_contracts::canonical::Contract as _;
-use custodian_contracts::public_v2::AnyProjectionEnvelope;
-use custodian_contracts::types::{BoundedVec, DestinationId, FeedId, Seq};
 use custodian_core::{Exposure, RunId, RunState};
+use custodian_ledger::walk_ledger;
 use custodian_ledger::LedgerBackend as _;
-use custodian_ledger::{walk_ledger, Verifier};
-use custodian_lifecycle::FeedSource;
 use custodian_store::PipelineStep;
-use custodian_verify::{Bundle, Expectations, Pins, Verdict};
-use serde_json::json;
+use custodian_verify::Verdict;
 
 fn rid(env: &Env, n: u32) -> String {
     env.request(n).0.request_id.as_str().to_owned()
@@ -63,114 +56,30 @@ fn approve_and_publish(st: &Stack<'_>, n: u32) -> RunId {
     attempt
 }
 
-/// Everything the issue's acceptance asks to be verifiable from public inputs
-/// alone: a bundle with the released projection and the feed, the pinned
-/// public key, and the expectations the caller holds out of band.
+/// The consumer's view, from public inputs only (`common::verify`).
 fn verify_bundle(
     st: &Stack<'_>,
     tamper: bool,
     wrong_key: bool,
     now: u64,
 ) -> custodian_verify::Report {
-    let env = st.env;
-    let (req, _) = env.request(1);
-    let files = env.released_files();
-    assert_eq!(files.len(), 1);
-    let mut projection = std::fs::read(&files[0]).unwrap();
-    let envelope = AnyProjectionEnvelope::decode(&projection).unwrap();
-    if tamper {
-        let i = projection
-            .windows(8)
-            .position(|w| w == b"reported")
-            .unwrap();
-        projection[i] = b'R';
-    }
-    let dir = st.root.join(format!("verify-{tamper}-{wrong_key}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(dir.join("bundle/projections")).unwrap();
-    std::fs::create_dir_all(dir.join("bundle/revocations")).unwrap();
     let feed_id = st.parts.feed_config.feed_id.clone();
-
-    let expect_json = json!({
-        "schema": "private-custodian.verify-expectations/1",
-        "domain": "credential",
-        "candidate": req.plan.candidate,
-        "config": req.plan.config_digest,
-        "destination": DEST,
-        "populations": [lc::opaque(1)],
-        "policies": [cc::disclosure_policy()]
-    });
-    let expect = Expectations::parse(&serde_json::to_vec(&expect_json).unwrap()).unwrap();
-    // The request the verifier will rebuild from the expectations: the
-    // manifest must answer exactly that.
-    let consumer = BridgeConsumer::new(ConsumerPins {
-        domain: expect.domain,
-        feed_id: feed_id.clone(),
-        destination: expect.destination.clone(),
-        verifier: Verifier::new(st.roots.clone()),
-        accepted_populations: expect.populations.clone(),
-        accepted_policies: expect.policies.clone(),
-    });
-    let request_digest = consumer
-        .request(
-            expect.candidate.clone(),
-            expect.config.clone(),
-            expect.populations.clone(),
-        )
-        .unwrap()
-        .digest()
-        .unwrap();
-    let mut seqs = Vec::new();
-    for e in env.store().feed_envelopes(feed_id.as_str(), 1).unwrap() {
-        let bytes = st
-            .feed
-            .get(&feed_id, e.sequence)
-            .unwrap()
-            .expect("delivered");
-        std::fs::write(
-            dir.join(format!("bundle/revocations/{:04}.json", e.sequence)),
-            bytes,
-        )
-        .unwrap();
-        seqs.push(e.sequence);
-    }
-    let manifest = BridgeManifest {
-        schema: BridgeManifestSchema,
-        request_digest,
-        feed_id: feed_id.clone(),
-        destination: DestinationId::parse(DEST).unwrap(),
-        projections: BoundedVec::new(vec![envelope.projection_digest().unwrap()]).unwrap(),
-        first_sequence: Seq::new(*seqs.first().unwrap_or(&0)).unwrap(),
-        last_sequence: Seq::new(*seqs.last().unwrap_or(&0)).unwrap(),
-    };
-    std::fs::write(
-        dir.join("bundle/manifest.json"),
-        manifest.canonical_bytes().unwrap(),
+    let key_hex = st.signer.lock().unwrap().engine.public_key_hex().to_owned();
+    verify::verify_released(
+        st.env,
+        &verify::Public {
+            feed: st.feed,
+            feed_id: &feed_id,
+            key_hex,
+            key_id: cc::id("key_", 1),
+            roots: st.roots,
+        },
+        &st.root,
+        1,
+        tamper,
+        wrong_key,
+        now,
     )
-    .unwrap();
-    std::fs::write(dir.join("bundle/projections/0001.json"), &projection).unwrap();
-
-    // The pinned public key, from the signer's own public half only.
-    let key_hex = if wrong_key {
-        "00".repeat(32)
-    } else {
-        st.signer.lock().unwrap().engine.public_key_hex().to_owned()
-    };
-    let keys = json!({
-        "schema": "private-custodian.verify-keys/1",
-        "keys": [{
-            "key_id": cc::id("key_", 1),
-            "public_key": key_hex,
-            "purposes": ["projection_v2", "revocation"],
-            "valid_from": 1
-        }]
-    });
-    let keys_path = dir.join("keys.json");
-    std::fs::write(&keys_path, serde_json::to_vec(&keys).unwrap()).unwrap();
-    let pins = Pins::load(&keys_path, feed_id.as_str()).unwrap();
-    let bundle = Bundle::load(&dir.join("bundle")).unwrap();
-    let _ = FeedId::parse(feed_id.as_str());
-    custodian_verify::verify(&pins, &expect, &bundle, now)
 }
 
 #[test]
@@ -501,4 +410,81 @@ fn a_restart_between_prepare_and_release_resumes_the_same_projection() {
     });
     assert!(exit.is_ok());
     let _ = Ordering::SeqCst;
+}
+
+// ---- no protected or hostile text anywhere the stack writes or prints ----------------
+
+/// Every file under `dir`, read as bytes.
+fn all_files(dir: &std::path::Path, out: &mut Vec<(String, Vec<u8>)>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        match e.file_type() {
+            Ok(t) if t.is_dir() => all_files(&p, out),
+            Ok(t) if t.is_file() => out.push((
+                p.display().to_string(),
+                std::fs::read(&p).unwrap_or_default(),
+            )),
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn nothing_protected_or_hostile_reaches_a_log_a_check_the_ledger_the_feed_or_a_projection() {
+    const CANARY: &str = "SYNTHETIC-CANARY-PROTECTED-ENTRY-0000";
+    for mode in ["ok", "leak"] {
+        let env = Env::with_entries(3, mode, |i| format!("{CANARY}-{i}"));
+        let ((), exit) = with_stack(&env, |st| {
+            submit_through_the_edge(st, 1, 7, 1);
+            let attempt = approve_and_publish(st, 1);
+            if mode == "ok" {
+                st.wait_for("prepared", || {
+                    st.run_step(&attempt) == Some(PipelineStep::Prepared)
+                });
+                env.at(RELEASE_AT);
+                env.write_release_approval(&attempt, 1);
+                st.wait_for("released", || {
+                    st.run_step(&attempt) == Some(PipelineStep::Released)
+                });
+            } else {
+                st.wait_for("the run to close", || {
+                    st.run_step(&attempt) == Some(PipelineStep::Closed)
+                });
+                assert_eq!(st.run_reason(&attempt), "execution_rejected");
+            }
+            st.wait_for("the export to drain", || {
+                env.store().outbox_pending_count().unwrap() == 0
+            });
+            // Everything the stack wrote outside the protected corpus: the
+            // ledger clone, the feed, the released projections, the signer's
+            // directory (public material only), the request documents, the
+            // store file, the log and every GitHub call.
+            let mut hay: Vec<(String, Vec<u8>)> = Vec::new();
+            all_files(&st.root, &mut hay);
+            all_files(&env.out_dir, &mut hay);
+            all_files(&env.requests_dir, &mut hay);
+            hay.push(("store".into(), std::fs::read(env.p.w.rw.db.path()).unwrap()));
+            hay.push(("log".into(), env.log.lines().join("\n").into_bytes()));
+            for s in st.fake.seen() {
+                hay.push(("github".into(), format!("{s:?}").into_bytes()));
+            }
+            for (what, bytes) in &hay {
+                let text = String::from_utf8_lossy(bytes);
+                assert!(
+                    !text.contains("SYNTHETIC-CANARY"),
+                    "{mode}: canary in {what}"
+                );
+                // The hostile pull request title and body are never read.
+                assert!(
+                    !text.contains("SYNTHETIC HOSTILE"),
+                    "{mode}: hostile text in {what}"
+                );
+            }
+            assert!(hay.len() > 10, "the scan covered real files");
+        });
+        assert!(exit.is_ok(), "{mode}");
+    }
 }

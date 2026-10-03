@@ -20,6 +20,7 @@
 pub mod c12;
 
 pub mod stack;
+pub mod verify;
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -317,13 +318,24 @@ impl Env {
         fault: &dyn PipelineFault,
         f: impl FnOnce(&Pipeline<'_, FsEpochStore>, &custodian_cli::Service<'_, FsEpochStore>) -> R,
     ) -> Option<R> {
+        let dispatcher = self.dispatcher();
+        self.try_with_pipeline_using(&dispatcher, fault, f)
+    }
+
+    /// Like `try_with_pipeline` with a worker of the caller's choosing (the
+    /// Linux test passes the real bubblewrap one).
+    pub fn try_with_pipeline_using<R>(
+        &self,
+        dispatcher: &Dispatcher,
+        fault: &dyn PipelineFault,
+        f: impl FnOnce(&Pipeline<'_, FsEpochStore>, &custodian_cli::Service<'_, FsEpochStore>) -> R,
+    ) -> Option<R> {
         // The same clock wrapping the daemon applies (`runtime::run`).
         let pin = ClockPin::new();
         let mut parts = self.p.w.parts();
         parts.clock = Arc::new(PinnableClock::new(self.p.w.clock.clone(), pin.clone()));
         let acts = StoreActivations::new(&self.p.w.rw.store, parts.clock.clone());
         let svc = custodian_cli::Service::start(parts.clone(), &startup_config(), &acts).ok()?;
-        let dispatcher = self.dispatcher();
         let reporter = CheckReporter::new(intake_config(), self.edge.clone(), self.checks.clone());
         let scope = ScopeGuard {
             config: intake_config(),
@@ -333,7 +345,7 @@ impl Env {
             pin: &pin,
             parts: parts.clone(),
             svc: &svc,
-            dispatcher: Some(&dispatcher),
+            dispatcher: Some(dispatcher),
             artifacts: &self.artifacts,
             approvals: &self.approvals,
             sink: &self.sink,
