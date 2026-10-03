@@ -1,5 +1,5 @@
 //! Linux backend: bubblewrap (`bwrap`) for namespaces and mounts, `prlimit`
-//! for resource limits, structured argv only (ADR 0041).
+//! for resource limits, structured argv only (ADR 0040).
 //!
 //! What this backend asks the kernel for:
 //! - new user, IPC, PID, network, UTS and cgroup namespaces; the network
