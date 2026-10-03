@@ -87,6 +87,28 @@ fn main() {
             eprintln!("token=SYNTHETIC-SECRET-SHAPED-0000000000000000 password=hunter2-synthetic");
             ok(&domain);
         }
+        // S5: a result that also carries the aggregate artifact (an object
+        // the worker validates only as an object; the disclosure crate
+        // validates its content). "aggregates-scalar" is not an object.
+        "with-aggregates" | "aggregates-scalar" => {
+            let agg = if mode == "with-aggregates" {
+                format!(
+                    "{{\"schema\":\"private-custodian.aggregates/1\",\"domain\":\"{domain}\",\
+                     \"protocol\":{{\"name\":\"synthetic-protocol\",\"version\":\"1\"}},\
+                     \"roster\":{{\"expected\":{n},\"observed\":{n},\"failed\":0}},\
+                     \"cells\":[]}}"
+                )
+            } else {
+                "7".to_owned()
+            };
+            println!(
+                "{{\"schema\":\"private-custodian.worker-result/1\",\"domain\":\"{domain}\",\
+                 \"protocol\":{{\"name\":\"synthetic-protocol\",\"version\":\"1\"}},\
+                 \"status\":\"complete\",\
+                 \"roster\":{{\"expected\":{n},\"observed\":{n},\"failed\":0}},\
+                 \"aggregates\":{agg}}}"
+            );
+        }
         "wrong-roster" => result(n, n + 1, n + 1, 0, "complete", &domain),
         "wrong-domain" => ok(if domain == "pii" { "credential" } else { "pii" }),
         "unknown-field" => println!(

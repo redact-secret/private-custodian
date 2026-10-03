@@ -44,10 +44,16 @@ pub enum FaultOp {
     ApplyLegacyImport,
     RetentionExpire,
     RetentionPurge,
+    // S5 (migration 0007): the daemon's queue and pipeline bookkeeping.
+    QueueSettle,
+    QueueRelease,
+    PipelineEnroll,
+    PipelineStep,
+    PipelineArtifacts,
 }
 
 impl FaultOp {
-    pub const ALL: [FaultOp; 32] = [
+    pub const ALL: [FaultOp; 37] = [
         Self::ProvisionBudget,
         Self::Reserve,
         Self::Retry,
@@ -80,6 +86,11 @@ impl FaultOp {
         Self::ApplyLegacyImport,
         Self::RetentionExpire,
         Self::RetentionPurge,
+        Self::QueueSettle,
+        Self::QueueRelease,
+        Self::PipelineEnroll,
+        Self::PipelineStep,
+        Self::PipelineArtifacts,
     ];
 }
 

@@ -93,6 +93,12 @@ struct WireResult {
     protocol: WireProtocol,
     status: WireStatus,
     roster: WireRoster,
+    /// The private aggregate artifact (`private-custodian.aggregates/1`), when
+    /// the engine reports one on this channel (S5, ADR 0127). Optional and
+    /// additive: an engine that does not emit it keeps a valid result, which
+    /// can be settled but never projected. The worker does not interpret it.
+    #[serde(default)]
+    aggregates: Option<serde_json::Value>,
 }
 
 /// A result that passed every check. `raw` is the private artifact and must be
@@ -103,12 +109,22 @@ pub struct ValidatedResult {
     pub roster: RosterCounts,
     pub artifact: PrivateArtifactRef,
     raw: Vec<u8>,
+    aggregates: Option<Vec<u8>>,
 }
 
 impl ValidatedResult {
     /// The exact bytes the worker printed, for private storage by the caller.
     pub fn private_bytes(&self) -> &[u8] {
         &self.raw
+    }
+
+    /// The aggregate artifact the engine embedded in its result, serialized
+    /// from the parsed JSON object (so its digest is over exactly these
+    /// bytes, not over whitespace the engine chose). `None` when the engine
+    /// reported none. Private: the caller stores it privately and never logs
+    /// it; the disclosure crate validates its content and binding.
+    pub fn aggregates_bytes(&self) -> Option<&[u8]> {
+        self.aggregates.as_deref()
     }
 }
 
@@ -171,6 +187,15 @@ pub fn validate_result(
         // never releasable.
         (ExecutionOutcome::Partial, R::EnginePartial)
     };
+    // The embedded aggregates must be a JSON object; its content is the
+    // disclosure crate's to validate (strict, closed, bound to the receipt).
+    let aggregates = match w.aggregates {
+        None => None,
+        Some(v @ serde_json::Value::Object(_)) => {
+            Some(serde_json::to_vec(&v).map_err(|_| R::ResultMalformed)?)
+        }
+        Some(_) => return Err(R::ResultMalformed),
+    };
     let artifact = PrivateArtifactRef {
         digest: ResultDigest::from_raw(Sha256::digest(stdout).into()),
         size_bytes: Count::new(stdout.len() as u64).map_err(|_| R::ResultOversized)?,
@@ -182,5 +207,6 @@ pub fn validate_result(
         roster,
         artifact,
         raw: stdout.to_vec(),
+        aggregates,
     })
 }

@@ -29,6 +29,7 @@ pub mod sandbox;
 
 pub use dispatcher::{
     ArtifactSources, DispatchJob, DispatchReport, Dispatcher, DispatcherConfig, OperatorCaps,
+    ResultSink,
 };
 pub use isolation::{run_self_check, IsolationVerification, SelfCheckError};
 pub use reason::WorkerReason;

@@ -27,6 +27,10 @@ use crate::b64;
 use crate::domain::SignDomain;
 use crate::record::LedgerRecord;
 
+/// Domain tag of the liveness probe. It is not a signing domain, so no signer
+/// signs it; a live signer answers `sign_unknown_domain`.
+const PROBE_DOMAIN: &str = "private-custodian/v1/liveness-probe";
+
 /// Largest request the signer service parses.
 pub const MAX_WIRE_BYTES: usize = 262_144;
 
@@ -261,6 +265,16 @@ impl ApprovedPayload {
 pub trait Signer: Send + Sync {
     fn key_id(&self) -> &KeyId;
     fn sign(&self, payload: &ApprovedPayload) -> Result<Signature, SignRefusal>;
+
+    /// Whether the signer can currently be reached and answers in protocol,
+    /// without asking it to sign anything. An in-process signer is always
+    /// live. [`RemoteSigner`] sends a fixed probe the signer must refuse by
+    /// name, so a dead socket, a wrong server and a garbled answer are all
+    /// `SignerUnavailable`. The daemon's scheduler uses it (S5, ADR 0125); it
+    /// is never a substitute for the refusal a real signing call returns.
+    fn liveness(&self) -> Result<(), SignRefusal> {
+        Ok(())
+    }
 }
 
 /// Ed25519 signer holding its key in process memory. For tests and for the
@@ -407,6 +421,28 @@ impl<T: SignerTransport> RemoteSigner<T> {
 impl<T: SignerTransport> Signer for RemoteSigner<T> {
     fn key_id(&self) -> &KeyId {
         &self.key_id
+    }
+
+    fn liveness(&self) -> Result<(), SignRefusal> {
+        // A request no signer signs: an unknown domain with an empty payload.
+        // A live signer refuses it by name; anything else is not a signer
+        // speaking this protocol.
+        let req = WireRequest {
+            domain: PROBE_DOMAIN.to_owned(),
+            payload: String::new(),
+            release_digest: None,
+        };
+        let bytes = serde_json::to_vec(&req).map_err(|_| SignRefusal::PayloadInvalid)?;
+        let resp = self.transport.call(&bytes)?;
+        if resp.len() > MAX_WIRE_BYTES {
+            return Err(SignRefusal::SignerUnavailable);
+        }
+        let resp: WireResponse =
+            serde_json::from_slice(&resp).map_err(|_| SignRefusal::SignerUnavailable)?;
+        match (resp.signature, resp.refused) {
+            (None, Some(code)) if code == SignRefusal::UnknownDomain.code() => Ok(()),
+            _ => Err(SignRefusal::SignerUnavailable),
+        }
     }
 
     fn sign(&self, payload: &ApprovedPayload) -> Result<Signature, SignRefusal> {

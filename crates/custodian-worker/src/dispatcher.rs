@@ -109,6 +109,22 @@ pub struct DispatchJob<'a> {
     pub sources: &'a ArtifactSources,
 }
 
+/// Durable private storage for a validated result, called before the attempt
+/// is settled (see [`Dispatcher::run_attempt_with`]). The result is private:
+/// an implementation stores it where protected results live and never logs it.
+pub trait ResultSink {
+    fn persist(&self, result: &ValidatedResult) -> Result<()>;
+}
+
+/// Keeps nothing. What [`Dispatcher::run_attempt`] uses.
+struct DiscardResult;
+
+impl ResultSink for DiscardResult {
+    fn persist(&self, _result: &ValidatedResult) -> Result<()> {
+        Ok(())
+    }
+}
+
 /// Result of one dispatched attempt. Carries no worker text.
 pub struct DispatchReport {
     pub outcome: ExecutionOutcome,
@@ -336,6 +352,25 @@ impl Dispatcher {
         corpus: &dyn CorpusPort,
         cancel: &CancelToken,
     ) -> Result<DispatchReport> {
+        self.run_attempt_with(job, ledger, corpus, cancel, &DiscardResult)
+    }
+
+    /// Like [`Dispatcher::run_attempt`], but a validated result is handed to
+    /// `sink` for durable private storage BEFORE the attempt is settled. If
+    /// the sink fails, the attempt settles as `Failed` with
+    /// `ledger_unavailable` (the unit is consumed: the run happened, and a
+    /// result that cannot be kept cannot be projected). A crash after the
+    /// sink and before the settlement leaves a stored result for an attempt
+    /// that recovery then settles as failed; a consumer must read the
+    /// attempt's state, never the stored result alone, to decide anything.
+    pub fn run_attempt_with(
+        &self,
+        job: &DispatchJob<'_>,
+        ledger: &dyn RunLedger,
+        corpus: &dyn CorpusPort,
+        cancel: &CancelToken,
+        sink: &dyn ResultSink,
+    ) -> Result<DispatchReport> {
         let t0 = Instant::now();
         let report = |outcome, reason, exposure, settled, term, result| DispatchReport {
             outcome,
@@ -400,7 +435,14 @@ impl Dispatcher {
         }
 
         match self.drive(job, ledger, corpus, cancel, &pins, quotas) {
-            Ok(v) => {
+            Ok(mut v) => {
+                if let Some(res) = &v.result {
+                    if sink.persist(res).is_err() {
+                        v.outcome = ExecutionOutcome::Failed;
+                        v.reason = R::LedgerUnavailable;
+                        v.result = None;
+                    }
+                }
                 let settled = match ledger.finish(v.outcome, v.reason.core_reason()) {
                     Ok(()) => true,
                     Err(R::LeaseLost) => false,

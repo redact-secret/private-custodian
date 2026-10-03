@@ -125,6 +125,35 @@ const CHECKS: &[(&str, &str)] = &[
          (SELECT 1 FROM outbox o WHERE o.event_id = 'approved:' || s.request_id)",
     ),
     (
+        "pipeline_run_follows_an_approved_attempt",
+        "SELECT COUNT(*) FROM pipeline_runs p WHERE NOT EXISTS \
+         (SELECT 1 FROM submissions s WHERE s.attempt_id = p.attempt_id \
+          AND s.request_id = p.request_id AND s.approval_id = p.approval_id \
+          AND s.status = 'approved')",
+    ),
+    (
+        "pipeline_prepared_run_has_its_projection",
+        "SELECT COUNT(*) FROM pipeline_runs p WHERE \
+         (p.step IN ('prepared', 'released') AND p.release_key IS NULL) \
+         OR (p.step NOT IN ('prepared', 'released', 'closed') AND p.release_key IS NOT NULL)",
+    ),
+    (
+        "pipeline_assembled_run_has_its_records",
+        "SELECT COUNT(*) FROM pipeline_runs p WHERE p.step IN ('assembled', 'prepared', 'released') \
+         AND NOT EXISTS (SELECT 1 FROM pipeline_artifacts a WHERE a.attempt_id = p.attempt_id \
+              AND a.execution IS NOT NULL AND a.receipt IS NOT NULL)",
+    ),
+    (
+        "pipeline_receipt_has_audit_event",
+        "SELECT COUNT(*) FROM pipeline_artifacts a WHERE a.receipt IS NOT NULL AND NOT EXISTS \
+         (SELECT 1 FROM outbox o WHERE o.event_id = 'receipt:' || a.attempt_id)",
+    ),
+    (
+        "pipeline_released_attempt_completed",
+        "SELECT COUNT(*) FROM pipeline_runs p JOIN attempts a ON a.attempt_id = p.attempt_id \
+         WHERE p.step IN ('assembled', 'prepared', 'released') AND a.state <> 'completed'",
+    ),
+    (
         "queued_request_has_permanent_claim",
         "SELECT COUNT(*) FROM intake_queue q WHERE NOT EXISTS \
          (SELECT 1 FROM intake_deliveries d WHERE d.delivery_id = q.delivery_id AND d.enqueued = 1)",

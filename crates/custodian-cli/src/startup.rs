@@ -45,8 +45,10 @@ use custodian_worker::ports::RunLedger;
 use crate::control::{export_reason, Control, Parts};
 use crate::reason::CliReason;
 
-/// The check every state-changing path runs first.
-pub(crate) fn check<S: EpochBlobStore>(
+/// The check every state-changing path runs first. Public so the daemon
+/// (S5, ADR 0126) runs exactly this check, with no bypass, before each
+/// scheduled pass instead of carrying a copy.
+pub fn check<S: EpochBlobStore>(
     p: &Parts<'_, S>,
 ) -> Result<StartupReport, (CliReason, StartupRefusal)> {
     let view = p.populations.registry().view().map_err(|_| {
@@ -75,8 +77,9 @@ pub(crate) fn check<S: EpochBlobStore>(
 
 /// Export every pending outbox event, then record the store and registry
 /// checkpoints. Returns the export report and whether a store checkpoint was
-/// written.
-pub(crate) fn export_all<S: EpochBlobStore>(
+/// written. Public for the same reason as [`check`]: the daemon's export
+/// barrier and scheduler are this function, not a second implementation.
+pub fn export_all<S: EpochBlobStore>(
     p: &Parts<'_, S>,
     now: Timestamp,
 ) -> Result<(ExportReport, bool), CliReason> {
