@@ -37,3 +37,7 @@ path = "src/bin/probe.rs"
 [[bin]]
 name = "custodian-worker-fixture"
 path = "src/bin/fixture.rs"
+
+[[bin]]
+name = "custodian-worker-runner"
+path = "src/bin/runner.rs"
