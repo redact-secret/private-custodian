@@ -1,0 +1,84 @@
+{
+  "schema": "private-custodian.example.arm64-sandbox-image/0",
+  "note": "Shape only (issue 54, ADR 0137). Nothing here is a provisioned host or image. This restates, for an ARM64 CI tools image or future ARM64 host, the deployment requirements docs/worker-isolation.md section 8 already states for Linux (x86_64 or aarch64). It does not change crates/custodian-worker, and nothing parses or enforces this file.",
+  "architecture": "aarch64",
+  "runner_label": "ubuntu-24.04-arm (GitHub-hosted; availability on this repository's current plan is unconfirmed until a probe workflow actually runs)",
+  "image_requirements": {
+    "kernel_version_min": "5.14",
+    "sysctls": {
+      "kernel.unprivileged_userns_clone": 1,
+      "kernel.apparmor_restrict_unprivileged_userns": 0
+    },
+    "required_packages": [
+      {
+        "name": "bubblewrap",
+        "binary": "bwrap",
+        "fixed_locations": ["/usr/bin/bwrap", "/bin/bwrap", "/usr/local/bin/bwrap"],
+        "min_version": "0.8",
+        "never_found_via": "PATH"
+      },
+      {
+        "name": "util-linux",
+        "binary": "prlimit",
+        "fixed_location": "/usr/bin/prlimit",
+        "note": "same inner path used by BubblewrapSandbox::build_argv; must exist inside the mounted system roots, not only on the host"
+      }
+    ],
+    "forbidden_on_image": [
+      "protected corpus or any sealed population data",
+      "production signing, ledger, App, or database-admin credentials",
+      "operational environment variables (see crate's ENV_ALLOWLIST / DENY_FRAGMENTS)",
+      "a container runtime socket or host PID namespace exposed to the worker account"
+    ]
+  },
+  "worker_account": {
+    "identity": "dedicated, non-root, distinct from control-service/runtime-DB/signer/ledger-writer identities",
+    "supplementary_groups": [],
+    "home_directory_mounted_into_sandbox": false,
+    "note": "open risk: supplementary-group dropping is not independently probed by run_self_check today (ADR 0137 privilege-drop step 7)"
+  },
+  "per_dispatch_privilege_and_mount_contract": {
+    "namespaces_unshared": ["user", "ipc", "pid", "net", "uts", "cgroup (try)"],
+    "capabilities": "--cap-drop ALL, applied before any mount or exec",
+    "session": "--new-session, --die-with-parent",
+    "environment": "--clearenv, then only the fixed ENV_ALLOWLIST names set via --setenv; credential-shaped names refused even if added to the allowlist",
+    "filesystem_root": "fresh tmpfs, system roots (/usr, /lib*, /bin, /sbin) bound read-only, then --remount-ro / after every mount is in place",
+    "proc_visibility": "--proc /proc, a fresh procfs for the new PID namespace; self-check requires at most 8 visible processes",
+    "dev_visibility": "--dev /dev, minimal device nodes only",
+    "scratch": {
+      "mount": "--tmpfs /scratch",
+      "writable": true,
+      "size_bytes_source": "SandboxSpec.quotas.storage_bytes (from the approved plan, capped by OperatorCaps)",
+      "host_backed": false
+    },
+    "read_only_mounts": "every SandboxSpec.ro_mounts entry (staged engine/adapter/scanner/candidate/config, staged inputs) bound with --ro-bind before the final remount",
+    "runner_state_visibility": "none: control-plane SQLite connection, staging-base parent directory, signer socket, and ledger clone are never bind-mounted or reachable from inside the sandbox",
+    "inherited_descriptors": "stdin=/dev/null, stdout and stderr explicitly redirected and bounded by the supervisor; the launcher passes no other open file descriptor (Rust marks its own fds close-on-exec by default)",
+    "result_channel": "stdout only, min(plan limit, 64 KiB) bound with a one-byte-over kill; stderr counted and discarded, never retained",
+    "resource_limits_applied_by": "prlimit, run inside the already-restricted namespaces, before exec of the pinned target: RLIMIT_CPU, RLIMIT_AS, RLIMIT_NPROC, RLIMIT_FSIZE, core dumps disabled, open-file cap",
+    "process_tree_cleanup": "PID namespace death plus --die-with-parent, and the supervisor kills the child's own process group (process_group(0)) and reaps on every exit path"
+  },
+  "refusal_not_fallback": {
+    "sandbox_unavailable_or_detect_failed": "no dispatcher is built; no candidate ever runs outside the boundary",
+    "self_check_failed_or_incomplete": "Dispatcher::new refuses without a Verified IsolationVerification covering every required check, in order",
+    "verification_stale": "Dispatcher refuses a verification older than verification_max_age_secs",
+    "product_behavior_on_any_of_the_above": "custodian-daemon::runtime::build_worker returns (None, reason); approved runs answer worker_unavailable; nothing executes unsandboxed"
+  },
+  "ci_capability_probe_only": {
+    "probes": [
+      "unshare --user --pid --mount --net echo ok",
+      "/proc/sys/kernel/unprivileged_userns_clone",
+      "/proc/sys/kernel/apparmor_restrict_unprivileged_userns (if present)",
+      "/proc/sys/kernel/seccomp/actions_avail (kernel seccomp support; this repository installs no seccomp filter)",
+      "bwrap --version",
+      "prlimit --version"
+    ],
+    "outcomes": ["supported", "blocked", "untested"],
+    "untested_means": "the tool or file was absent on this runner; this is not a passing or failing denial",
+    "does_not": [
+      "build a BubblewrapSandbox",
+      "call run_self_check",
+      "launch any evaluation engine, adapter, scanner, or candidate"
+    ]
+  }
+}

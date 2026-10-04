@@ -33,6 +33,7 @@ that the systemd units keep their hardening directives. A new example must pass 
 | `intake-config.example.json` | the GitHub App intake allowlist (docs/github-app.md) | `IntakeConfig::from_json` |
 | `backup-retention.example.json` | backup and retention decisions (docs/backup-recovery.md) | shape only; every number is a decision |
 | `feed-destination.example.json` | the contract a public feed destination must meet (docs/lifecycle-and-revocation.md) | shape only |
+| `arm64-sandbox-image.example.json` | the ARM64 inner-sandbox image/CI-tools-image contract (issue 54, ADR 0137); restates the existing `crates/custodian-worker` `Sandbox` privilege/mount contract for an ARM64 host | shape only; nothing parses or enforces it yet |
 | `ledger-remote.example.md` | how the private ledger remote is created (docs/ledger.md) | none; commands with placeholders |
 | `systemd/*.example` | service units with hardening directives | directive presence |
 | `layout/custodian.tmpfiles.example` | directory and permission layout | modes match docs/deployment-runbook.md |
