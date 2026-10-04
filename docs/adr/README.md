@@ -78,6 +78,8 @@ ADR.
 | [0135](0135-pii-worker-contract-and-synthetic-adoption.md) | PII worker contract and synthetic adoption | Accepted contract design; reference adoption and synthetic gate implemented, not deployed |
 | [0136](0136-authorized-microvm-experiment-findings.md) | Authorized synthetic MicroVM findings | Proposed assessment; live isolation failures, migration NO-GO |
 | [0137](0137-arm64-inner-sandbox-image-and-ci-capability-probe.md) | ARM64 inner-sandbox image design and CI capability probe (S1, issue 54) | Proposed (design); CI probe added, result unverified from this environment |
+| [0138](0138-network-denial-design-dns-link-local-and-unauthorized-paths.md) | Network-denial design: DNS, link-local and unauthorized paths (S2, issue 55) | Proposed (design only); depends on S1, no probe run |
+| [0139](0139-runner-protection-bounded-outputs-hostile-process-containment-design.md) | Runner protection, bounded outputs and hostile process containment design (S3, issue 56) | Proposed (design only); depends on S1, no probe run |
 
 Accepted (design) means the decision is frozen for downstream issues (C2 to C12). It does not mean any of it
 is implemented or deployed. See each ADR's status table.
