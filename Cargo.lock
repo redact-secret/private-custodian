@@ -317,6 +317,8 @@ name = "custodian-worker-microvm"
 version = "0.0.0"
 dependencies = [
  "custodian-contracts",
+ "custodian-core",
+ "custodian-store",
  "custodian-worker",
  "serde",
  "serde_json",
