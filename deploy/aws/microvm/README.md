@@ -23,6 +23,12 @@ archive root, not the full repository. Record SHA-256 of archive, source and
 compiled runner, compiler version, base manifest, managed base version and AWS
 image version. Do not use latest-active version at dispatch. Never add corpus,
 job, keys, environment credentials or worker input to COPY or image environment.
+`image_inventory.py` enumerates this directory's own `.dockerignore`-filtered
+build context and checks it against a reviewed allowlist and an explicit
+corpus/seed/ledger/key/token/identifier denylist; see
+`tests/microvm-conformance/test_image_inventory.py`. That check is offline and
+synthetic only: it proves the in-repo build context, not the restored AWS
+snapshot or build-role residue.
 
 `infra/aws/poc/image.template.json` prepares the CloudFormation image/build role
 with a single build-object read permission, ARM64, no added capabilities, no
