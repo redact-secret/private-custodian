@@ -1,7 +1,7 @@
 # 0137. ARM64 inner-sandbox image design and CI capability probe (S1, issue 54)
 
-- Status: proposed (design); the capability-probe CI job is added but its result on GitHub's
-  infrastructure is **unverified from this environment** (see "Status of the claim")
+- Status: accepted (design); capability probe superseded by a real run — see "Addendum
+  (2026-10-04): the real sandbox, not just the capability probe, actually ran on ARM64"
 - Date: 2026-10-03
 - Deciders (by role): custody maintainer
 - Maintenance: this repository is maintained by the Redact Secret project; its decisions are
@@ -258,3 +258,56 @@ explicit follow-up, not this change.
   (worker-isolation.md section 8, item 2).
 - **cgroup v2 controllers, seccomp filters, and per-run disk I/O shaping remain unimplemented** on any
   architecture; this ADR does not change that scope (worker-isolation.md section 9).
+
+## Addendum (2026-10-04): the real sandbox, not just the capability probe, actually ran on ARM64
+
+The open question this ADR left — whether the real `BubblewrapSandbox` (via `bwrap`, not the raw
+`unshare` CLI the capability probe used) would pass once the same AppArmor
+`restrict_unprivileged_userns` sysctl override the x86_64 `worker-isolation` job has always applied
+is also applied on ARM64 — is answered. A new, separate CI job, `worker-isolation-arm64` in
+`ci.yml` (not a change to the capability-probe workflow above), reused the x86_64 job's steps
+unchanged, including that sysctl override, and ran on `ubuntu-24.04-arm`.
+
+**Result, observed directly from the run's log, not inferred:**
+
+```
+ISOLATION-VERIFIED launcher="bubblewrap 0.9.0" platform=linux-aarch64
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+...
+test a_hostile_engine_inside_real_bubblewrap_still_cannot_carry_protected_bytes_out ... PIPELINE-ISOLATION-VERIFIED
+test the_pipeline_releases_a_verifiable_projection_with_the_engine_inside_real_bubblewrap ... PIPELINE-ISOLATION-VERIFIED
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+All 15 `linux_isolation` tests and both `linux_pipeline` tests passed, zero skipped, on real ARM64
+hardware for the first time — the same `REQUIRED_CHECKS` self-check, the same network-egress
+denial (`--unshare-net`, which denies DNS and link-local as a strict subset of "no interface up at
+all" — not a dedicated DNS-resolution-attempt test), the same host-file/credential/env denial,
+read-only staging, fork-bomb/memory/disk/CPU/stdout-flood bounds, cancellation cleanup, identity
+tampering, and the hostile-engine-cannot-leak-bytes pipeline test, all unmodified from the x86_64
+suite.
+
+**What this changes:**
+- The capability probe's "blocked" result for raw `unshare` (this ADR's original body) is now
+  understood precisely: it was the AppArmor restriction, not a kernel or `bwrap` limitation — the
+  same restriction the x86_64 job has disabled by sysctl since before this ADR existed. Once
+  applied identically on ARM64, the real sandbox passed.
+- This is now real, direct ARM64 evidence for the `Sandbox`/`BubblewrapSandbox` contract and the
+  network/filesystem/process/resource properties `linux_isolation.rs` and `linux_pipeline.rs`
+  cover — not just a capability probe and not a design document. See ADR 0138 and ADR 0139 for
+  what this result means for issues #55 and #56 specifically.
+
+**What this does NOT change:**
+- **ADR 0136's worker and control-plane NO-GO stand unchanged.** This ran on a GitHub-hosted CI
+  runner, not inside an actual AWS Lambda MicroVM. The original live experiment's specific
+  failures (same-uid runner-file read, DNS/link-local reachability, token-TTL enforcement) were
+  found on the unsandboxed AWS diagnostic image — this result says the sandbox mechanism itself
+  works on ARM64 in CI, not that those exact failures are now fixed on the exact AWS MicroVM
+  image. That is issue #57 (S4)'s live-AWS rerun, not attempted here, and not authorized in this
+  round.
+- This does not test DNS resolution or the `169.254.169.254` link-local metadata address by name —
+  it tests that `--unshare-net` leaves no network interface at all, which is a stronger and
+  logically sufficient but not identically-worded property. ADR 0138 should be read with that
+  distinction in mind, not as "DNS was specifically probed and denied."
+- Supplementary-group dropping, cgroup v2, seccomp filters, and per-run disk I/O shaping remain
+  exactly as unimplemented as stated above; this result does not touch them.

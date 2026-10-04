@@ -1,7 +1,8 @@
 # 0138. Network-denial design: DNS, link-local and unauthorized paths (S2, issue 55)
 
 - Status: proposed (design only); no probe code, CI job, or `crates/custodian-worker` change is added
-  by this ADR
+  by this ADR — but see "Addendum (2026-10-04): the existing `egress_denied` check now has real
+  ARM64 evidence" for what changed underneath it without this ADR's matrix being implemented
 - Date: 2026-10-03
 - Deciders (by role): custody maintainer
 - Maintenance: this repository is maintained by the Redact Secret project; its decisions are
@@ -224,3 +225,27 @@ runner — not inventing a new mechanism — followed by S4 (#57)'s exact-image 
 - **A successful denial on a GitHub-hosted ARM64 runner is evidence for that runner's network
   configuration, not for every ARM64 execution environment** (including a future AWS MicroVM base
   image, which may have a materially different network setup than a bare CI runner).
+
+## Addendum (2026-10-04): the existing `egress_denied` check now has real ARM64 evidence
+
+ADR 0137's addendum records that `worker-isolation-arm64` (a new `ci.yml` job, not a change to
+this ADR's scope) ran the full, **unmodified** `linux_isolation.rs` suite on `ubuntu-24.04-arm` and
+every test passed, including `linux_network_egress_is_denied_including_host_loopback` — the
+existing `egress_denied` check this ADR's Context section describes (loopback, public, TEST-NET,
+RFC 1918, UDP, via `--unshare-net`). That row in the "Status of the claim" table above
+("`egress_denied` check: loopback, public, TEST-NET, RFC 1918, UDP (existing targets)") moves from
+"ARM64 run is explicit follow-up to S1, not done" to **done, and passed** — on a real ARM64 host,
+with the two-sided `host_listener_untouched` pattern intact.
+
+**What did NOT change:** none of this ADR's new probe-matrix items (Decision section 2: DNS by
+name and by raw socket, link-local including `169.254.169.254` by name, IPv6 positive control,
+inherited-socket descriptor count, proxy/resolver environment canaries) were implemented or run.
+`--unshare-net`'s "no interface up at all" property makes DNS and link-local reachability
+logically impossible once the sandbox is active — the same reasoning ADR 0137's addendum states —
+but that is an inference from the mechanism now proven to engage on ARM64, not a dedicated,
+named probe for those exact cases. Issue #55 should not be read as closed by this: the specific
+matrix this ADR calls for is still unimplemented, and the AWS-verified column in the "Status of
+the claim" table above (DNS and `169.254.169.254` observed to succeed against the *unsandboxed*
+diagnostic in the original live trial) is unaffected — that is still the open finding S4 (#57) must
+re-test, on real AWS, with the now-ARM64-proven sandbox actually wired into the image, which has
+not happened.
