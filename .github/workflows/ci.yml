@@ -112,3 +112,49 @@ jobs:
           cargo test -p custodian-daemon --locked --test linux_pipeline -- --nocapture --test-threads=1 2>&1 | tee pipeline-isolation.log
           grep -q 'PIPELINE-ISOLATION-VERIFIED' pipeline-isolation.log
           ! grep -q 'ISOLATION-TEST-SKIPPED' pipeline-isolation.log
+
+  # Issue 54 (epic #40, S1/S2/S3; ADR 0137/0138/0139). The real
+  # Sandbox/BubblewrapSandbox self-check and the full linux_isolation /
+  # linux_pipeline suites -- network egress denial (covers DNS and
+  # link-local as a strict subset: --unshare-net leaves no interface up
+  # at all), host-file/credential/env denial, read-only staging,
+  # fork-bomb/memory/disk/CPU/stdout-flood bounds, cancellation cleanup
+  # and identity-tampering -- run unchanged on a real ARM64 host for the
+  # first time, instead of only the kernel/tooling capability probe
+  # arm64-sandbox-probe.yml added. Same steps as worker-isolation above,
+  # deliberately not deduplicated into a matrix so a currently-expected
+  # ARM64-specific failure here cannot be mistaken for a regression in
+  # the existing, already-proven x86_64 job.
+  worker-isolation-arm64:
+    name: "synthetic conformance: ARM64 worker isolation (real sandbox, issue 54)"
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install bubblewrap and allow unprivileged user namespaces
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          bwrap --version
+          command -v prlimit
+          uname -sr
+      - name: Isolation tests (must run, must not skip)
+        shell: bash
+        env:
+          CUSTODIAN_REQUIRE_ISOLATION: "1"
+        run: |
+          cargo test -p custodian-worker --locked --test linux_isolation -- --nocapture --test-threads=4 2>&1 | tee isolation-arm64.log
+          grep -q 'ISOLATION-VERIFIED' isolation-arm64.log
+          ! grep -q 'ISOLATION-TEST-SKIPPED' isolation-arm64.log
+      - name: Daemon pipeline inside the real sandbox (must run, must not skip)
+        shell: bash
+        env:
+          CUSTODIAN_REQUIRE_ISOLATION: "1"
+        run: |
+          cargo test -p custodian-daemon --locked --test linux_pipeline -- --nocapture --test-threads=1 2>&1 | tee pipeline-isolation-arm64.log
+          grep -q 'PIPELINE-ISOLATION-VERIFIED' pipeline-isolation-arm64.log
+          ! grep -q 'ISOLATION-TEST-SKIPPED' pipeline-isolation-arm64.log
