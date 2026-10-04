@@ -1,0 +1,150 @@
+name: arm64-sandbox-probe
+
+# Issue 54 (epic #40, S1); ADR 0137.
+#
+# This is a kernel/tooling CAPABILITY PROBE, not the real worker isolation
+# evidence and not the dispatcher. It never builds a BubblewrapSandbox, never
+# calls run_self_check, and never launches an evaluation engine, adapter,
+# scanner or candidate (crates/custodian-worker is untouched by this
+# workflow). It exists only to find out whether the kernel/tooling features
+# the existing Sandbox/Dispatcher contract depends on (crates/custodian-worker
+# bwrap.rs, sandbox.rs, isolation.rs) are present on an ARM64 GitHub-hosted
+# runner, something no job in this repository has ever checked (the existing
+# `worker-isolation` job in ci.yml runs on ubuntu-latest, which is x86_64).
+#
+# Deliberately a separate workflow from ci.yml: whether `ubuntu-24.04-arm` is
+# actually schedulable on this repository's current GitHub plan/tier is
+# UNCONFIRMED from the environment that authored this workflow (no GitHub
+# Actions run could be observed from there). If the label is unavailable,
+# this workflow alone fails or stalls; it must never be allowed to block
+# ordinary pull requests through ci.yml's required checks.
+#
+# No secrets, no AWS credentials, no protected data. Read-only probes only.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/arm64-sandbox-probe.yml"
+      - "deploy/examples/arm64-sandbox-image.example.json"
+      - "docs/adr/0137-arm64-inner-sandbox-image-and-ci-capability-probe.md"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: "capability probe (unverified until this job is observed to run): ARM64 kernel/tooling"
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Record runner identity (architecture, kernel, no secrets)
+        run: |
+          echo "arch: $(uname -m)"
+          echo "kernel: $(uname -sr)"
+          echo "os-release:"
+          cat /etc/os-release || true
+
+      - name: "Probe: unprivileged user/pid/mount/net namespaces via unshare"
+        run: |
+          result=untested
+          if command -v unshare >/dev/null 2>&1; then
+            if unshare --user --pid --mount --net -- echo ok >/tmp/unshare.out 2>/tmp/unshare.err; then
+              if grep -q '^ok$' /tmp/unshare.out; then
+                result=supported
+              else
+                result=blocked
+              fi
+            else
+              result=blocked
+            fi
+          fi
+          echo "PROBE unshare_user_pid_mount_net=$result"
+          echo "unshare_user_pid_mount_net=$result" >> "$GITHUB_ENV"
+          cat /tmp/unshare.err 2>/dev/null || true
+
+      - name: "Probe: kernel.unprivileged_userns_clone"
+        run: |
+          path=/proc/sys/kernel/unprivileged_userns_clone
+          result=untested
+          if [ -r "$path" ]; then
+            value="$(cat "$path")"
+            if [ "$value" = "1" ]; then result=supported; else result=blocked; fi
+          fi
+          echo "PROBE unprivileged_userns_clone=$result"
+          echo "unprivileged_userns_clone=$result" >> "$GITHUB_ENV"
+
+      - name: "Probe: kernel.apparmor_restrict_unprivileged_userns (if present)"
+        run: |
+          path=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+          result=untested
+          if [ -r "$path" ]; then
+            value="$(cat "$path")"
+            if [ "$value" = "0" ]; then result=supported; else result=blocked; fi
+          fi
+          echo "PROBE apparmor_restrict_unprivileged_userns=$result"
+          echo "apparmor_restrict_unprivileged_userns=$result" >> "$GITHUB_ENV"
+
+      - name: "Probe: kernel seccomp support (no filter is installed anywhere in this repository)"
+        run: |
+          path=/proc/sys/kernel/seccomp/actions_avail
+          result=untested
+          if [ -r "$path" ]; then
+            result=supported
+            cat "$path"
+          fi
+          echo "PROBE seccomp_actions_avail=$result"
+          echo "seccomp_actions_avail=$result" >> "$GITHUB_ENV"
+
+      - name: "Probe: bwrap presence and version (not installed by default; try apt)"
+        run: |
+          result=untested
+          sudo apt-get update -qq || true
+          sudo apt-get install -y -qq bubblewrap || true
+          if command -v bwrap >/dev/null 2>&1; then
+            if bwrap --version >/tmp/bwrap.out 2>&1; then
+              result=supported
+              cat /tmp/bwrap.out
+            else
+              result=blocked
+            fi
+          fi
+          echo "PROBE bwrap_present=$result"
+          echo "bwrap_present=$result" >> "$GITHUB_ENV"
+
+      - name: "Probe: prlimit presence and version (util-linux)"
+        run: |
+          result=untested
+          if command -v prlimit >/dev/null 2>&1; then
+            if prlimit --version >/tmp/prlimit.out 2>&1; then
+              result=supported
+              cat /tmp/prlimit.out
+            else
+              result=blocked
+            fi
+          fi
+          echo "PROBE prlimit_present=$result"
+          echo "prlimit_present=$result" >> "$GITHUB_ENV"
+
+      - name: Summary (supported / blocked / untested per feature; never a sandbox run)
+        run: |
+          {
+            echo "### ARM64 kernel/tooling capability probe (issue 54, ADR 0137)"
+            echo
+            echo "This is a capability probe only. It never built a sandbox, never ran"
+            echo "run_self_check, and never launched an evaluation engine. A result of"
+            echo "\`untested\` means the tool or file was absent on this runner, which is"
+            echo "not a passing or failing isolation denial."
+            echo
+            echo "| Feature | Result |"
+            echo "| --- | --- |"
+            echo "| unshare (user+pid+mount+net) | ${unshare_user_pid_mount_net} |"
+            echo "| kernel.unprivileged_userns_clone | ${unprivileged_userns_clone} |"
+            echo "| kernel.apparmor_restrict_unprivileged_userns | ${apparmor_restrict_unprivileged_userns} |"
+            echo "| kernel seccomp (actions_avail) | ${seccomp_actions_avail} |"
+            echo "| bwrap present | ${bwrap_present} |"
+            echo "| prlimit present | ${prlimit_present} |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
