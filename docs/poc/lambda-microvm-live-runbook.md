@@ -6,6 +6,88 @@ probe, not a custody deployment or a general cleanup service. New experiments
 require their own operator authorization and cost ceiling. Use public synthetic
 data only. AWS authority and reviewed policy remain outside these programs.
 
+## S4 (issue #57): reproducible rerun matrix -- prepared, NOT executed
+
+**This matrix is prepared for execution but has NOT been run.** Live AWS
+execution requires a fresh cost/operational acceptance review and explicit
+authorization (account, region, cost ceiling, cleanup plan) that does not yet
+exist. ADR 0136's authorized US$50 ceiling covered the one experiment that
+already ran and was torn down (see "Decisions and issue disposition" in
+[the dated findings](lambda-microvm-live.md)); it is not a standing budget for
+further paid work, and no quantified remaining ceiling exists anywhere in this
+repository's records. Nothing below invokes AWS; building and reading this
+matrix is pure offline planning.
+
+`infra/aws/poc/rerun_matrix.py` builds, as data (never as an AWS call -- it
+imports no `boto3`, `subprocess`, `socket` or `urllib`, so there is no code
+path capable of one), the exact set of probes issue #57 says the next
+authorized rerun must cover:
+
+- Every control from the one authorized live experiment (ADR 0136 / the
+  [evidence record](lambda-microvm-live-evidence.json)): the same-uid
+  runner-file read, DNS resolution, link-local `169.254.169.254`, the IPv6
+  positive control that could not even connect last time, the `unshare`
+  tool/user-namespace checks, and the full health/lifecycle table including
+  the **token-TTL enforcement failure**, which this matrix keeps explicit
+  (it must never be silently read as "fixed" by a timing observation alone --
+  issue #57 requires proving caller/attempt authorization and a live
+  lease/cancellation refusal independently of provider token TTL, coordinated
+  with #42/#44, which remains absent).
+- Every ARM64 adversarial/positive case from ADR 0137/0138/0139 that already
+  has **real CI evidence** from the `worker-isolation-arm64` job (the
+  self-check's eight required checks, network-egress denial, host-file
+  absence, environment scrubbing, read-only staged artifacts, fork-bomb/
+  memory/disk/CPU/stdout-flood bounds, timeout tree-kill, cancellation
+  cleanup, identity-tampering fail-closed, and the hostile-engine-cannot-
+  leak-bytes pipeline test -- see both ADRs' "Addendum (2026-10-04)"
+  sections), so the live rerun is not scoped narrower than what is already
+  proven in CI.
+- The ADR 0138/0139 probe-matrix items that remain **design-only** as of
+  those addenda (DNS by name, link-local by name and range, a dedicated IPv6
+  probe, inherited-descriptor count, proxy/resolver environment canaries,
+  symlink/hardlink/writable-mount escape, the supplementary-group escape, and
+  a dedicated forged-attestation probe), reported for completeness without
+  ever being marked as proven -- a parallel S2/S3 implementation effort may
+  land some of these independently of this change.
+
+For every probe the matrix states the positive control, the exact `supported`/
+`blocked`/`untested` outcome vocabulary (reused verbatim from ADR 0137 --
+this change invents no new vocabulary), and the immutable pins (image ARN and
+version, zip source hashes, bubblewrap/prlimit versions, the ARM64 sandbox
+image manifest, and the CI run identity backing each "proven" citation) the
+rerun must record before it means anything.
+
+Run it read-only, offline, any time:
+
+```sh
+python3 infra/aws/poc/rerun_matrix.py --summary   # short human-readable plan
+python3 infra/aws/poc/rerun_matrix.py             # full JSON matrix
+```
+
+The committed reference copy, `docs/poc/lambda-microvm-rerun-matrix.json`, is
+regenerated the same way `docs/poc/microvm-preflight.json` mirrors
+`preflight.py`'s output:
+
+```sh
+python3 infra/aws/poc/rerun_matrix.py > docs/poc/lambda-microvm-rerun-matrix.json
+```
+
+`tests/microvm-conformance/test_rerun_matrix.py` is the offline, no-AWS-
+credential CI coverage for this new matrix specifically (distinct from
+`test_live_evidence_consistency.py`, which already covers the existing ADR
+0136 evidence file and is not duplicated here): it checks the module imports
+nothing AWS-capable, that every original-experiment probe field still matches
+the committed evidence record, that every "CI-proven" citation names a real
+test function that actually exists in this repository, that no pending
+ADR 0138/0139 item is ever marked as proven, and that the committed JSON copy
+has not drifted from what the script currently generates.
+
+Once a fresh authorization exists, the actual rerun against real AWS still
+uses `infra/aws/poc/live_health.py` and the diagnostic-image comparison
+procedure described below -- this matrix does not replace that harness, it
+specifies what probe set that harness (or its successor) must exercise and
+record this time, including the controls the original run could not assess.
+
 ## Private inventory and provisioning
 
 Use AWS CLI v2 with `lambda-microvms` and `lambda-core` support. Set
