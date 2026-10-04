@@ -319,3 +319,53 @@ inside an actual AWS Lambda MicroVM with the real sandbox wired into the deploye
 0136's worker NO-GO stands unchanged; S4 (#57)'s live-AWS rerun, with the sandbox actually in the
 image this time, is the step that would make this finding count as resolved on the real target
 infrastructure, and it has not been attempted.
+
+## Addendum (2026-10-04): the new attack-category probes ran for real, on both architectures, and found a nonzero supplementary-group count
+
+Issue #56's symlink/hardlink-escape, descriptor-count, supplementary-group, and forged-attestation
+probes (all listed as "unimplemented and unrun" in the addendum above) were implemented in
+`crates/custodian-worker/tests/linux_isolation.rs` and `crates/custodian-worker/src/bin/fixture.rs`
+and **actually executed** inside a real `BubblewrapSandbox` on both `worker-isolation` (x86_64) and
+`worker-isolation-arm64`, with `CUSTODIAN_REQUIRE_ISOLATION=1`. All 23 tests in the suite passed on
+both runs (up from 15), with no skip. Concretely, each case in this ADR's Decision section 2 moves
+from "specified, no code added" to the following observed result, on **both** architectures:
+
+- **Filesystem.** `linux_symlink_inside_scratch_cannot_escape_to_a_host_path` and
+  `linux_hardlink_cannot_cross_from_scratch_to_a_staged_mount` both passed: a symlink created inside
+  `/scratch` pointing at a host path outside the sandbox could not be read through (the target is
+  absent from the mount namespace, matching the existing `host_files_absent` property, not a new
+  mechanism), and a hardlink from the writable `/scratch` tmpfs to a file on the read-only staged
+  `RoMount` failed (confirmed by `crates/custodian-worker/tests/argv.rs`'s existing
+  `mounts_are_read_only_and_system_roots_are_explicit` that `/scratch` and the staged mounts really
+  are distinct mount points in `build_argv`'s argv, not merely different paths).
+- **Descriptor.** `linux_no_extra_file_descriptor_is_inherited_by_the_payload` passed with exactly
+  3 descriptors counted on both architectures — confirming, for the first time with a real probe
+  rather than an inference from `prepare_command`'s source, that no bwrap-internal sync pipe or
+  socketpair leaks into the final exec'd payload.
+- **Privilege (supplementary groups) — the genuine finding.** `linux_supplementary_groups_are_recorded_not_assumed`
+  passed (it only asserts that a count was parseable, not that the count is zero), and logged
+  `PROBE-RESULT groups: supplementary_group_count=5` on **both** the x86_64 and the ARM64
+  GitHub-hosted runners. **This is new, real evidence that the open risk ADR 0137 flagged
+  ("Supplementary groups: an explicit open risk, not yet a positive control") is not hypothetical:
+  the sandboxed child genuinely retains a nonzero set of supplementary group IDs** — `--unshare-user`
+  and `--cap-drop ALL` do not, by themselves, clear `getgroups()`. The identical count on both
+  architectures is consistent with both runners' `bwrap`-launching user having the same small set of
+  default groups, carried into the child's credentials unchanged. This finding does **not** by
+  itself demonstrate an exploitable escape (no probe here attempted to use a supplementary group to
+  reach anything — that attempt is still future work, as this ADR's Decision section 2 "Privilege"
+  item already said), and it does **not** change ADR 0136's worker NO-GO or authorize any new AWS
+  work. It does mean the open risk should be treated as confirmed-present, not merely theoretical,
+  until a future self-check adds an explicit `getgroups()`-empty assertion (this ADR's own "Open
+  risks" section already named this as the concrete fix, not yet built; it remains not built).
+- **Forged attestation.** The new assertion inside
+  `linux_dispatch_maps_both_domains_and_failures_without_clean_crashes` (the `forged-attestation`
+  fixture mode, a `worker-result/1` document carrying an extra `verification` object shaped like a
+  passing `IsolationVerification`) passed on both architectures: `validate_result`'s
+  `#[serde(deny_unknown_fields)]` parser rejects it with `ResultMalformed`, the same way it already
+  rejects `unknown-field`. No change to the parser was needed; this is confirmation, not a fix.
+
+**What did NOT change:** DNS-by-name-resolution (as opposed to the raw-socket case, which S2's
+addendum below covers), archive-traversal probes (no archive reader exists to probe), and
+descendant/daemonized-process-survival probes beyond `linux_fork_bomb_is_bounded_and_cleaned`
+remain unimplemented. ADR 0136's worker NO-GO is unchanged. No AWS work was authorized or
+performed by this addendum.

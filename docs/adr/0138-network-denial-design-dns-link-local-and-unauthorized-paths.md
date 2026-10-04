@@ -249,3 +249,57 @@ the claim" table above (DNS and `169.254.169.254` observed to succeed against th
 diagnostic in the original live trial) is unaffected — that is still the open finding S4 (#57) must
 re-test, on real AWS, with the now-ARM64-proven sandbox actually wired into the image, which has
 not happened.
+
+## Addendum (2026-10-04): the DNS, link-local, IPv6 and descriptor/environment probes now ran for real, on both architectures, with a working positive control each time
+
+The probe matrix this ADR specified (Decision section 2) was implemented in
+`crates/custodian-worker/tests/linux_isolation.rs` and `crates/custodian-worker/src/bin/fixture.rs`
+and **actually executed** inside a real `BubblewrapSandbox` on both `worker-isolation` (x86_64) and
+`worker-isolation-arm64` (`ubuntu-24.04-arm`), with `CUSTODIAN_REQUIRE_ISOLATION=1`. All 23 tests in
+the suite passed on both runs (up from 15), with no skip. Per the positive-control rule in Decision
+section 3, each case below only counts as a denial when the outside-sandbox control itself
+succeeded; where it did not, the result is recorded as untested, not as a denial — exactly as
+specified, and observed for real for the first time:
+
+- **DNS by raw socket, over TCP to a public resolver.** The positive control (a direct TCP connect
+  to `1.1.1.1:53` or `8.8.8.8:53` from the test process itself, outside the sandbox) succeeded on
+  both GitHub-hosted runners, so `linux_dns_resolver_ports_are_denied_with_a_working_positive_control`
+  asserted, and observed, the sandboxed attempt reporting `blocked` on both x86_64 and ARM64 — the
+  first real run of this case anywhere, resolving the "Not run anywhere yet" row for this item in
+  the "Status of the claim" table above to **done, and passed, on both architectures**. (DNS by name
+  resolution, as opposed to a raw socket connect, was not separately probed; Decision section 2's
+  own reasoning — `--unshare-net` denies transport, not just resolution — is why a raw-socket probe
+  is treated as equivalent.)
+- **Link-local, specifically `169.254.169.254:80`.** The positive control succeeded on both runners
+  (as this ADR anticipated: "GitHub-hosted runners run on cloud infrastructure that commonly exposes
+  its own metadata service on this same address"), and
+  `linux_link_local_metadata_address_is_denied_with_a_working_positive_control` observed `blocked`
+  on both x86_64 and ARM64 — the exact address ADR 0136 found reachable on the unsandboxed AWS
+  diagnostic, now denied for real under the sandbox on a CI host whose own metadata-address exposure
+  made the positive control meaningful rather than vacuous.
+- **IPv6.** The loopback positive control (a listener this test binds on `::1` itself, so it never
+  depends on external routing) succeeded on both runners, and the sandboxed denial held (`blocked`)
+  on both. The public-IPv6 case's positive control **failed** on both runners (`PROBE-UNTESTED
+  ipv6public: this CI host has no IPv6 route to a public address`), so, per Decision section 3's
+  explicit rule, that case was correctly recorded as untested on both architectures, never asserted
+  as a denial — the test passed (because it asserted nothing for that sub-case), and the matrix's
+  IPv6-public row stays genuinely unverified, matching ADR 0136's own original IPv6 finding, not
+  contradicting it.
+- **Inherited sockets.** `linux_no_extra_file_descriptor_is_inherited_by_the_payload` counted exactly
+  3 open descriptors on both architectures (stdin/stdout/stderr only), confirming for the first time
+  with a direct probe — rather than an inference from `prepare_command`'s source — that no
+  bwrap-internal descriptor (a sync pipe, a socketpair used for the `--unshare-pid` monitor) leaks
+  into the final exec'd payload on either architecture.
+- **Proxy/resolver environment canaries.** `linux_proxy_and_resolver_environment_canaries_never_reach_the_worker`
+  passed on both architectures: `HTTP_PROXY`, `http_proxy`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`,
+  `RES_OPTIONS` and `HOSTALIASES` canaries were all scrubbed by the existing `--clearenv`/
+  `ENV_ALLOWLIST` mechanism, the same way the credential-shaped `CANARY_ENV` names already were — no
+  new scrubbing logic was needed.
+
+**What did NOT change:** "VM control/lifecycle service paths" remain deployment-specific and
+unprobed (no deployment image manifest exists yet to name one); DNS by name resolution (as opposed
+to raw socket) was not separately exercised. ADR 0136's worker NO-GO is unchanged by this addendum;
+no AWS work was authorized or performed. The AWS-verified column in the "Status of the claim" table
+above is unaffected and unchanged — these are GitHub-hosted CI runners, not the deployed AWS image,
+and S4 (#57)'s live-AWS rerun remains the step that would make any of these CI-checked rows count on
+the real target infrastructure.
