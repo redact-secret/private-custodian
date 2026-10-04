@@ -1,7 +1,8 @@
 # 0139. Runner protection, bounded outputs and hostile process containment design (S3, issue 56)
 
 - Status: proposed (design only); no probe code, CI job, or `crates/custodian-worker` change is added
-  by this ADR
+  by this ADR — but see "Addendum (2026-10-04): the existing mount/PID/capability/resource checks
+  now have real ARM64 evidence" for what the existing suite (not this ADR's new matrix) proved
 - Date: 2026-10-03
 - Deciders (by role): custody maintainer
 - Maintenance: this repository is maintained by the Redact Secret project; its decisions are
@@ -276,3 +277,45 @@ matrix rerun.
 - **cgroup v2 controllers, seccomp filters, and per-run disk I/O shaping remain unimplemented**
   (`docs/worker-isolation.md` section 9); this ADR does not change that scope, and any adversarial probe
   that relies on one of those being present will correctly find it absent.
+
+## Addendum (2026-10-04): the existing mount/PID/capability/resource checks now have real ARM64 evidence
+
+ADR 0137's addendum records that `worker-isolation-arm64` ran the full, **unmodified**
+`linux_isolation.rs` and `linux_pipeline.rs` suites on `ubuntu-24.04-arm`, 15 and 2 tests
+respectively, all passed, zero skipped. Concretely, these rows in the "Status of the claim" table
+above move from "not yet on ARM64" / "unverified" to **done, and passed, on real ARM64 hardware**:
+
+- Mount namespace (runner state absent), PID namespace, capability drop — `linux_host_files_are_not_reachable`,
+  `linux_launcher_credentials_and_env_never_reach_the_worker`, `linux_staged_artifacts_are_read_only_to_the_worker`,
+  and the self-check's `pid_namespace`/`no_capabilities` checks inside `linux_self_check_records_real_verification`.
+- `prlimit` resource bounds and `supervise`'s wall-clock/output/tree-kill logic —
+  `linux_fork_bomb_is_bounded_and_cleaned`, `linux_memory_exhaustion_is_bounded`,
+  `linux_disk_exhaustion_is_bounded_to_the_scratch_quota`, `linux_cpu_spin_is_stopped_by_the_cpu_limit`,
+  `linux_stdout_flood_is_bounded`, `linux_timeout_kills_the_whole_tree`.
+- Cancellation cleanup and identity tampering — `linux_cancellation_cleans_up_the_worker_tree`,
+  `linux_identity_tampering_fails_closed_under_the_real_sandbox`.
+- The hostile-engine-cannot-leak-bytes property, specifically, at the pipeline level —
+  `a_hostile_engine_inside_real_bubblewrap_still_cannot_carry_protected_bytes_out`
+  (`linux_pipeline.rs`), which is the closest existing test to this ADR's "forged completion or
+  isolation attestation" and "no releasable evidence on hostile leakage" categories, now run end
+  to end through the daemon pipeline on ARM64, not just unit-level on `is_releasable()`.
+
+This is the direct answer, on real ARM64 hardware, to ADR 0136's original same-uid-runner-file-read
+finding: `linux_host_files_are_not_reachable` passing means the mount-namespace-absent design (the
+runner's control file, credentials, and host paths are not present in the child's view, not merely
+permission-denied) **does prevent that exact failure mode on ARM64** — the first real evidence
+either way.
+
+**What did NOT change — this ADR's new matrix items remain unimplemented and unrun:**
+symlink/hardlink/archive-traversal probes against `/scratch`, writable-mount-escape attempts
+through a `RoMount`, the supplementary-group escape probe (still an open risk per ADR 0137, not
+resolved), descendant/daemonized-process-survival probes beyond what `linux_fork_bomb_is_bounded_and_cleaned`
+already covers, and a dedicated forged-`worker-result/1` adversarial probe (distinct from the
+existing parser unit tests). None of these are covered by the suite that ran. Issue #56 should not
+be read as closed by this addendum.
+
+**What did NOT change — ADR 0136's AWS finding itself:** this ran on a GitHub-hosted CI runner, not
+inside an actual AWS Lambda MicroVM with the real sandbox wired into the deployed image. ADR
+0136's worker NO-GO stands unchanged; S4 (#57)'s live-AWS rerun, with the sandbox actually in the
+image this time, is the step that would make this finding count as resolved on the real target
+infrastructure, and it has not been attempted.
