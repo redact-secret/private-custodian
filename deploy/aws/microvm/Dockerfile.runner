@@ -1,0 +1,84 @@
+# syntax=docker/dockerfile:1.7
+# Trusted runner image (issues #42, #54; epic #40). Packages
+# `custodian-worker-runner` -- the binary that runs the REAL
+# `BubblewrapSandbox::detect()` + `run_self_check` mechanism this
+# repository's CI already proves on both x86_64 and ARM64
+# (`worker-isolation`, `worker-isolation-arm64`) -- alongside the pinned
+# `custodian-worker-probe` it self-checks against, then serves `/health`
+# reporting `verified: true` only if every check actually passed, with no
+# fallback mode. This image does NOT implement remote job delivery (issue
+# #42's "remote job delivery" and issue #46's distributed store/signer/
+# export migration remain separate, unimplemented work).
+#
+# Real, deliberate differences from this directory's other two Dockerfiles
+# (`Dockerfile`, `Dockerfile.probe`), not oversights:
+#
+# 1. Network access during build. The other two Dockerfiles compile one
+#    dependency-free source file with bare `rustc`. This one runs
+#    `cargo build --release` over the real Cargo workspace needed to reach
+#    `custodian-worker`'s own dependency graph (serde, serde_json, sha2
+#    directly; `rusqlite` with the bundled-SQLite C sources transitively
+#    through `custodian-store`; ADR 0004, ADR 0020). That means this build
+#    stage DOES reach crates.io during `docker build`, pinned only by the
+#    checked-in `Cargo.lock` (`--locked`), unlike the other two.
+#
+# 2. Compiler base image. `Dockerfile`/`Dockerfile.probe` pin a single
+#    architecture (arm64v8) Alpine/musl `rust` manifest that carries no C
+#    toolchain. `rusqlite`'s bundled-SQLite feature needs `cc` to compile,
+#    and this image must build for both linux/amd64 and linux/arm64, so
+#    this Dockerfile instead pins the official multi-platform `rust`
+#    manifest list built on Debian bookworm (glibc, build-essential
+#    preinstalled). The digest below is the manifest-list digest, not a
+#    single-architecture manifest, so `--platform` selects the matching
+#    per-architecture image from the one pin.
+FROM rust@sha256:59037199c44290f2befcdd58dcc540164763fc296950255aaefeef096a1866b0 AS build
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+RUN rustc --version && cargo --version
+# BuildKit cache mounts for the crates.io registry and the incremental
+# `target/` directory. These speed up repeated local builds under this
+# directory's slow full-workspace compile (unlike Dockerfile/Dockerfile.probe's
+# instant single-file `rustc` compile); they are not part of the final image
+# layer, which is exactly why the built binaries are copied out to /out inside
+# this same RUN before the mounts are torn down.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    cargo build --release --locked -p custodian-worker \
+      --bin custodian-worker-runner --bin custodian-worker-probe \
+    && mkdir -p /out \
+    && cp target/release/custodian-worker-runner target/release/custodian-worker-probe /out/
+
+# Final stage: the same AWS-managed MicroVM base pinned in `Dockerfile` and
+# `Dockerfile.probe`. As of this change that base is published by AWS only
+# for linux/arm64 (every tag in the public `lambda/microvms` repository,
+# dated or "latest", resolves to a single-platform arm64 manifest -- there
+# is no amd64 variant to pin). A `--platform linux/amd64` build of this
+# Dockerfile therefore cannot produce a genuinely amd64 final image; see
+# deploy/aws/microvm/README.md for the exact observed result of attempting
+# one anyway. This is a property of the real AWS target, not a choice made
+# here, and it is not worked around by substituting a different base.
+FROM public.ecr.aws/lambda/microvms@sha256:73a51c3b6eb9f116f75ea89395c9dac70760c172e653121052863ff1f71072af
+# bubblewrap (bwrap) and util-linux (prlimit) are exactly what
+# `.github/workflows/ci.yml`'s `worker-isolation`/`worker-isolation-arm64`
+# jobs install before the real sandbox self-check runs there; prlimit is
+# already present on those jobs' ubuntu runner images, so only bubblewrap
+# is installed explicitly in CI, but neither package is assumed present on
+# this minimal AWS base, so both are installed here.
+RUN dnf -y install bubblewrap util-linux && dnf clean all
+COPY --from=build /out/custodian-worker-runner /app/custodian-worker-runner
+COPY --from=build /out/custodian-worker-probe /app/custodian-worker-probe
+# Default COPY ownership (root) plus this explicit mode keeps the binaries'
+# directory root-owned and not group/other-writable, matching
+# docs/worker-isolation.md section 8 ("Engine artifacts live under a
+# root-owned, non-writable directory that is the allowlist root") and the
+# exact permission bits `ArtifactAllowlist::new`/`resolve` require.
+RUN chmod 0755 /app /app/custodian-worker-runner /app/custodian-worker-probe
+# Same non-root convention as the existing two images. The HOST running
+# this container must have `kernel.unprivileged_userns_clone` enabled (the
+# same sysctl `.github/workflows/ci.yml`'s isolation jobs set) for bwrap's
+# unprivileged user namespaces to work from this uid; Docker containers
+# inherit the host's user-namespace policy rather than setting their own.
+USER 65534:65534
+EXPOSE 8080
+ENTRYPOINT ["/app/custodian-worker-runner"]

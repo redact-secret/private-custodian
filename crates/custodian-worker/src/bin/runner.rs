@@ -24,6 +24,7 @@
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -44,12 +45,27 @@ fn verify() -> Result<IsolationVerification, String> {
         .ok_or_else(|| "current_exe has no parent directory".to_owned())?
         .to_path_buf();
     let probe = dir.join("custodian-worker-probe");
-    let allowlist =
-        ArtifactAllowlist::new(&[dir.clone()]).map_err(|e| format!("allowlist: {e}"))?;
+    let allowlist = ArtifactAllowlist::new(std::slice::from_ref(&dir))
+        .map_err(|e| format!("allowlist: {e}"))?;
     let work_base: PathBuf = std::env::var("CUSTODIAN_RUNNER_WORK_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir().join("custodian-runner-selfcheck"));
-    std::fs::create_dir_all(&work_base).map_err(|e| format!("work_base: {e}"))?;
+    // `run_self_check` (via `Staging::create`) requires `work_base` to be a
+    // private directory with no group/other permission bits at all
+    // (`mode & 0o077 == 0`). `create_dir_all` alone applies the process
+    // umask (commonly 0o022, giving 0o755), which fails that check, so the
+    // mode must be set explicitly and re-asserted even if the directory
+    // already existed with looser permissions.
+    {
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true);
+        builder.mode(0o700);
+        builder
+            .create(&work_base)
+            .map_err(|e| format!("work_base: {e}"))?;
+    }
+    std::fs::set_permissions(&work_base, std::fs::Permissions::from_mode(0o700))
+        .map_err(|e| format!("work_base_perm: {e}"))?;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
