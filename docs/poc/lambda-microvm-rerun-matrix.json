@@ -372,7 +372,9 @@
       "description": "DNS over UDP/TCP to a public resolver and to loopback, by name resolution attempt and by raw socket connect to a well-known DNS port.",
       "id": "dns_by_name_and_raw_socket",
       "note": "Specified, not implemented or run on any architecture as of the ADRs' 2026-10-04 addenda. A parallel S2/S3 implementation effort is reported to be in progress; this matrix does not assume it has landed or passed.",
-      "repo_grep_hint": [],
+      "repo_grep_hint": [
+        "crates/custodian-worker/tests/linux_isolation.rs: fn linux_dns"
+      ],
       "specified_in": "ADR 0138 decision 2"
     },
     {
@@ -381,7 +383,9 @@
       "description": "169.254.169.254 by name, the RFC 3927 IPv4 link-local range generally, and the fe80::/10 IPv6 range.",
       "id": "link_local_by_name_and_range",
       "note": "Specified, not implemented or run on any architecture as of the ADRs' 2026-10-04 addenda. A parallel S2/S3 implementation effort is reported to be in progress; this matrix does not assume it has landed or passed.",
-      "repo_grep_hint": [],
+      "repo_grep_hint": [
+        "crates/custodian-worker/tests/linux_isolation.rs: fn linux_link_local"
+      ],
       "specified_in": "ADR 0138 decision 2"
     },
     {
@@ -391,7 +395,8 @@
       "id": "ipv6_dedicated_probe",
       "note": "Specified, not implemented or run on any architecture as of the ADRs' 2026-10-04 addenda. A parallel S2/S3 implementation effort is reported to be in progress; this matrix does not assume it has landed or passed.",
       "repo_grep_hint": [
-        "crates/custodian-daemon/tests/deploy_examples.rs: fn ipv6"
+        "crates/custodian-daemon/tests/deploy_examples.rs: fn ipv6",
+        "crates/custodian-worker/tests/linux_isolation.rs: fn linux_ipv6"
       ],
       "specified_in": "ADR 0138 decision 2"
     },
@@ -401,7 +406,9 @@
       "description": "Count of open file descriptors visible to the child via /proc/self/fd, asserted to equal exactly the three standard streams.",
       "id": "inherited_descriptor_count",
       "note": "Specified, not implemented or run on any architecture as of the ADRs' 2026-10-04 addenda. A parallel S2/S3 implementation effort is reported to be in progress; this matrix does not assume it has landed or passed.",
-      "repo_grep_hint": [],
+      "repo_grep_hint": [
+        "crates/custodian-worker/tests/linux_isolation.rs: fn linux_no_extra_file_descriptor"
+      ],
       "specified_in": "ADR 0138 decision 2 / ADR 0139 decision 2"
     },
     {
@@ -410,7 +417,11 @@
       "description": "Extended CANARY_ENV-style check for HTTP_PROXY/http_proxy/HTTPS_PROXY/ALL_PROXY/NO_PROXY/RES_OPTIONS/HOSTALIASES.",
       "id": "proxy_resolver_environment_canaries",
       "note": "Specified, not implemented or run on any architecture as of the ADRs' 2026-10-04 addenda. A parallel S2/S3 implementation effort is reported to be in progress; this matrix does not assume it has landed or passed.",
-      "repo_grep_hint": [],
+      "repo_grep_hint": [
+        "crates/custodian-worker/tests/linux_isolation.rs: HOSTALIASES",
+        "crates/custodian-worker/tests/linux_isolation.rs: HTTP_PROXY",
+        "crates/custodian-worker/tests/linux_isolation.rs: RES_OPTIONS"
+      ],
       "specified_in": "ADR 0138 decision 2"
     },
     {
@@ -419,7 +430,10 @@
       "description": "Symlink/hardlink construction inside /scratch confirmed unable to reach outside it.",
       "id": "symlink_hardlink_scratch_escape",
       "note": "Specified, not implemented or run on any architecture as of the ADRs' 2026-10-04 addenda. A parallel S2/S3 implementation effort is reported to be in progress; this matrix does not assume it has landed or passed.",
-      "repo_grep_hint": [],
+      "repo_grep_hint": [
+        "crates/custodian-worker/tests/linux_isolation.rs: fn linux_hardlink",
+        "crates/custodian-worker/tests/linux_isolation.rs: fn linux_symlink"
+      ],
       "specified_in": "ADR 0139 decision 2 (filesystem)"
     },
     {
@@ -437,7 +451,9 @@
       "description": "Attempted escape via an inherited supplementary group; an explicit open risk, not yet a positive control (getgroups() is not asserted by the self-check today).",
       "id": "supplementary_group_escape",
       "note": "Specified, not implemented or run on any architecture as of the ADRs' 2026-10-04 addenda. A parallel S2/S3 implementation effort is reported to be in progress; this matrix does not assume it has landed or passed.",
-      "repo_grep_hint": [],
+      "repo_grep_hint": [
+        "crates/custodian-worker/tests/linux_isolation.rs: fn linux_supplementary_group"
+      ],
       "specified_in": "ADR 0137 privilege-drop step 7; ADR 0139 decision 2 (privilege)"
     },
     {
