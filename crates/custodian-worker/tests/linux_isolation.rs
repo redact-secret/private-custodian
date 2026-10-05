@@ -12,7 +12,7 @@
 mod common;
 
 use std::fs;
-use std::net::TcpListener;
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -189,6 +189,118 @@ fn linux_network_egress_is_denied_including_host_loopback() {
     assert!(matches!(l.accept(), Err(e) if e.kind() == std::io::ErrorKind::WouldBlock));
 }
 
+/// S2 (ADR 0138), decision 2: DNS over UDP and TCP to well-known resolver
+/// ports. A positive control (the same connect attempt run outside the
+/// sandbox, from this test process) must succeed before the sandboxed
+/// denial is asserted; if even the outside-sandbox attempt cannot connect
+/// (a restricted CI network), the case is reported untested, never as a
+/// passing or failing denial.
+#[test]
+fn linux_dns_resolver_ports_are_denied_with_a_working_positive_control() {
+    let Some(h) = need("dns") else { return };
+    let outside: bool = [([1u8, 1, 1, 1], 53u16), ([8, 8, 8, 8], 53)]
+        .iter()
+        .any(|(ip, port)| {
+            TcpStream::connect_timeout(&SocketAddr::from((*ip, *port)), Duration::from_millis(800))
+                .is_ok()
+        });
+    if !outside {
+        eprintln!("PROBE-UNTESTED dns: positive control could not reach a public resolver from the CI host itself");
+        return;
+    }
+    let r = raw(h, "dns", small(), vec![]);
+    assert_eq!(stdout(&r), "blocked");
+}
+
+/// S2 (ADR 0138), decision 2: the exact link-local address ADR 0136 found
+/// reachable (`169.254.169.254:80`) on the unsandboxed AWS diagnostic.
+/// Positive control: GitHub-hosted runners run on cloud infrastructure that
+/// commonly exposes its own metadata service on this same address, so the
+/// outside-sandbox attempt is expected to succeed on CI; if it does not,
+/// this is reported untested rather than asserted as a denial.
+#[test]
+fn linux_link_local_metadata_address_is_denied_with_a_working_positive_control() {
+    let Some(h) = need("linklocal") else { return };
+    let target = SocketAddr::from(([169, 254, 169, 254], 80));
+    let outside = TcpStream::connect_timeout(&target, Duration::from_millis(800)).is_ok();
+    if !outside {
+        eprintln!("PROBE-UNTESTED linklocal: positive control could not reach 169.254.169.254:80 from the CI host itself");
+        return;
+    }
+    let r = raw(h, "linklocal", small(), vec![]);
+    assert_eq!(stdout(&r), "blocked");
+}
+
+/// S2 (ADR 0138), decision 2: IPv6. The loopback case is a positive control
+/// that never depends on external routing (a listener this test binds on
+/// `::1` itself); the public case is best-effort and reported untested if
+/// the CI host has no IPv6 route, per issue #55's explicit acceptance rule
+/// ("if an allowed IPv6 control cannot connect, mark IPv6 unverified rather
+/// than denied").
+#[test]
+fn linux_ipv6_is_denied_or_explicitly_untested_never_silently_passed() {
+    let Some(h) = need("ipv6") else { return };
+    match TcpListener::bind("[::1]:0") {
+        Ok(l) => {
+            let port = l.local_addr().unwrap().port();
+            let r = raw(h, &format!("ipv6loopback {port}"), small(), vec![]);
+            assert_eq!(stdout(&r), "blocked", "IPv6 loopback positive control was reachable outside the sandbox but denial failed");
+        }
+        Err(e) => {
+            eprintln!("PROBE-UNTESTED ipv6loopback: this host cannot bind an IPv6 loopback listener at all ({e})");
+        }
+    }
+    let public: SocketAddr = "[2606:4700:4700::1111]:53".parse().unwrap();
+    if TcpStream::connect_timeout(&public, Duration::from_millis(800)).is_err() {
+        eprintln!("PROBE-UNTESTED ipv6public: this CI host has no IPv6 route to a public address");
+        return;
+    }
+    let r = raw(h, "ipv6public", small(), vec![]);
+    assert_eq!(stdout(&r), "blocked");
+}
+
+/// S2 (ADR 0138), decision 2: inherited sockets. No descriptor beyond the
+/// three explicitly redirected standard streams should be visible to the
+/// payload; this counts them directly rather than relying on the
+/// close-on-exec default being merely "relied upon."
+#[test]
+fn linux_no_extra_file_descriptor_is_inherited_by_the_payload() {
+    let Some(h) = need("fdcount") else { return };
+    let r = raw(h, "fdcount", small(), vec![]);
+    let n: usize = stdout(&r).parse().unwrap_or(usize::MAX);
+    assert_eq!(n, 3, "expected exactly stdin/stdout/stderr, counted {n}");
+}
+
+/// S2 (ADR 0138), decision 2: proxy and resolver environment variables must
+/// be scrubbed the same way credential-shaped names are -- reuses the
+/// existing "env" fixture mode and canary mechanism with a different name
+/// list, so no new fixture behavior is introduced for this case.
+#[test]
+fn linux_proxy_and_resolver_environment_canaries_never_reach_the_worker() {
+    let Some(h) = need("env") else { return };
+    const PROXY_CANARY: &[&str] = &[
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "RES_OPTIONS",
+        "HOSTALIASES",
+    ];
+    let canaries: Vec<(String, String)> = PROXY_CANARY
+        .iter()
+        .map(|n| ((*n).to_owned(), "SYNTHETIC-CANARY-PROXY".to_owned()))
+        .collect();
+    let r = raw(h, "env", small(), canaries);
+    let out = stdout(&r);
+    for name in PROXY_CANARY {
+        assert!(
+            !out.split(',').any(|n| n == *name),
+            "{name} reached the worker environment"
+        );
+    }
+}
+
 #[test]
 fn linux_host_files_are_not_reachable() {
     let Some(h) = need("host_files") else { return };
@@ -228,6 +340,62 @@ fn linux_staged_artifacts_are_read_only_to_the_worker() {
     let r = raw(h, "modify-stage", small(), vec![]);
     assert_eq!(stdout(&r), "denied");
 }
+
+/// S3 (ADR 0139), decision 2 (Filesystem): a symlink created inside the one
+/// writable directory and pointing at a host path outside the sandbox must
+/// not grant a new way to read that path -- the mount namespace denies the
+/// target regardless of how the child tries to reach it.
+#[test]
+fn linux_symlink_inside_scratch_cannot_escape_to_a_host_path() {
+    let Some(h) = need("symlink-escape") else {
+        return;
+    };
+    let f = h.env.root.join("host-credential");
+    fs::write(&f, b"SYNTHETIC-CANARY-HOST-CREDENTIAL").unwrap();
+    let r = raw(
+        h,
+        &format!("symlink-escape {}", f.display()),
+        small(),
+        vec![],
+    );
+    assert_eq!(stdout(&r), "denied");
+}
+
+/// S3 (ADR 0139), decision 2 (Filesystem): a hardlink from the writable
+/// scratch tmpfs to a file on the read-only staged mount must fail with a
+/// cross-device error -- the separate mount itself is the boundary, not a
+/// permission bit a privileged-enough caller could bypass.
+#[test]
+fn linux_hardlink_cannot_cross_from_scratch_to_a_staged_mount() {
+    let Some(h) = need("hardlink-escape") else {
+        return;
+    };
+    let r = raw(h, "hardlink-escape", small(), vec![]);
+    assert_eq!(stdout(&r), "denied");
+}
+
+/// S3 (ADR 0139), decision 2 (Privilege): supplementary groups are an
+/// explicit open risk ADR 0137 flagged as "not yet a positive control."
+/// This records the count directly rather than silently assuming zero;
+/// a nonzero count is reported as a finding, not hidden by the assertion
+/// passing anyway.
+#[test]
+fn linux_supplementary_groups_are_recorded_not_assumed() {
+    let Some(h) = need("groups") else { return };
+    let r = raw(h, "groups", small(), vec![]);
+    let n: usize = stdout(&r).parse().unwrap_or(usize::MAX);
+    eprintln!("PROBE-RESULT groups: supplementary_group_count={n}");
+    assert_ne!(
+        n,
+        usize::MAX,
+        "groups probe did not report a parseable count at all"
+    );
+}
+
+// The forged-attestation case lives inside
+// linux_dispatch_maps_both_domains_and_failures_without_clean_crashes below,
+// next to the structurally identical unknown-field case, rather than as a
+// separate test -- see that function.
 
 #[test]
 fn linux_fork_bomb_is_bounded_and_cleaned() {
@@ -389,6 +557,15 @@ fn linux_dispatch_maps_both_domains_and_failures_without_clean_crashes() {
         );
         assert_eq!(
             dispatch(h, domain, "uf", "unknown-field", 3, &none),
+            (O::Rejected, R::ResultMalformed, false)
+        );
+        // S3 (ADR 0139): a hostile engine printing a verification/attestation
+        // -shaped claim on its result document, distinct from the generic
+        // unknown-field case above -- the strict parser rejects it the same
+        // way, which is the concrete answer to "forged completion or
+        // isolation attestation" in issue #56's attack-category matrix.
+        assert_eq!(
+            dispatch(h, domain, "fa", "forged-attestation", 3, &none),
             (O::Rejected, R::ResultMalformed, false)
         );
         assert_eq!(

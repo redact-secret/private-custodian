@@ -6,7 +6,8 @@
 
 use std::fs;
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpStream, UdpSocket};
+use std::os::unix::fs::symlink;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -228,6 +229,118 @@ fn main() {
                 .is_ok();
             println!("{}", if w || c { "wrote" } else { "denied" });
         }
+        // S2 (ADR 0138): DNS over UDP and TCP to well-known resolver ports.
+        // --unshare-net denies transport, not name resolution specifically,
+        // so a raw socket connect is the same test issue #55 asks for
+        // ("a child that cannot resolve names should also be unable to
+        // open a raw UDP/TCP socket to a well-known DNS port").
+        "dns" => {
+            let targets = [
+                SocketAddr::from(([1, 1, 1, 1], 53)),
+                SocketAddr::from(([8, 8, 8, 8], 53)),
+            ];
+            let tcp = targets
+                .iter()
+                .any(|t| TcpStream::connect_timeout(t, Duration::from_millis(800)).is_ok());
+            let udp = match UdpSocket::bind("0.0.0.0:0") {
+                Ok(s) => s
+                    .connect(("1.1.1.1", 53))
+                    .and_then(|_| s.send(b"x"))
+                    .is_ok(),
+                Err(_) => false,
+            };
+            println!("{}", if tcp || udp { "connected" } else { "blocked" });
+        }
+        // S2 (ADR 0138): the exact address ADR 0136 found reachable on the
+        // unsandboxed diagnostic.
+        "linklocal" => {
+            let t = SocketAddr::from(([169, 254, 169, 254], 80));
+            let ok = TcpStream::connect_timeout(&t, Duration::from_millis(800)).is_ok();
+            println!("{}", if ok { "connected" } else { "blocked" });
+        }
+        // S2 (ADR 0138): IPv6 loopback, a positive-control target that does
+        // not depend on any external network -- arg1 is the port the test
+        // bound on ::1 outside the sandbox.
+        "ipv6loopback" => {
+            let port: u16 = arg1.parse().unwrap_or(9);
+            let t: SocketAddr = format!("[::1]:{port}").parse().unwrap();
+            let ok = TcpStream::connect_timeout(&t, Duration::from_millis(800)).is_ok();
+            println!("{}", if ok { "connected" } else { "blocked" });
+        }
+        // S2 (ADR 0138): a public IPv6 address. Best-effort: CI runners may
+        // not route IPv6 at all, which the test records as untested, never
+        // as a denial.
+        "ipv6public" => {
+            let t: SocketAddr = "[2606:4700:4700::1111]:53".parse().unwrap();
+            let ok = TcpStream::connect_timeout(&t, Duration::from_millis(800)).is_ok();
+            println!("{}", if ok { "connected" } else { "blocked" });
+        }
+        // S3 (ADR 0139): count descriptors actually visible to the payload
+        // via readlink on each candidate /proc/self/fd/N, which does not
+        // itself open or retain a new descriptor on the target.
+        "fdcount" => {
+            let n = (0..32)
+                .filter(|i| fs::read_link(format!("/proc/self/fd/{i}")).is_ok())
+                .count();
+            println!("{n}");
+        }
+        // S3 (ADR 0139): supplementary groups the payload is a member of.
+        // ADR 0137's open risk: not yet an automated positive control, only
+        // reported here.
+        "groups" => {
+            let line = fs::read_to_string("/proc/self/status")
+                .ok()
+                .and_then(|s| {
+                    s.lines()
+                        .find(|l| l.starts_with("Groups:"))
+                        .map(String::from)
+                })
+                .unwrap_or_default();
+            let n = line
+                .trim_start_matches("Groups:")
+                .split_whitespace()
+                .count();
+            println!("{n}");
+        }
+        // S3 (ADR 0139): symlink inside the one writable directory pointing
+        // at a path outside it; reading through the link must fail exactly
+        // like reading the target directly (the "hostfile" case), proving
+        // the link does not grant a new path out of the sandbox.
+        "symlink-escape" => {
+            let link = format!("{scratch}/escape-link");
+            let _ = fs::remove_file(&link);
+            let made = symlink(&arg1, &link).is_ok();
+            let read = made
+                && fs::File::open(&link)
+                    .and_then(|mut f| {
+                        let mut s = String::new();
+                        f.read_to_string(&mut s).map(|_| s)
+                    })
+                    .is_ok();
+            println!("{}", if read { "read" } else { "denied" });
+        }
+        // S3 (ADR 0139): a hardlink across the scratch tmpfs and a read-only
+        // mount must fail with a cross-device error (EXDEV), not merely be
+        // denied by permission -- the mount boundary itself, not a mode bit.
+        "hardlink-escape" => {
+            let target = format!("{stage}/engine");
+            let link = format!("{scratch}/escape-hardlink");
+            let _ = fs::remove_file(&link);
+            let made = fs::hard_link(&target, &link).is_ok();
+            println!("{}", if made { "linked" } else { "denied" });
+        }
+        // S3 (ADR 0139): a hostile engine printing a verification/attestation
+        // -shaped claim on stdout, distinct from the generic "unknown-field"
+        // case, naming exactly the forged-attestation scenario the issue
+        // describes. The real IsolationVerification is #[non_exhaustive] and
+        // constructed only by run_self_check in the trusted process; this
+        // proves the *result parser* rejects a payload-side imitation too.
+        "forged-attestation" => println!(
+            "{{\"schema\":\"private-custodian.worker-result/1\",\"domain\":\"{domain}\",\
+             \"protocol\":{{\"name\":\"synthetic-protocol\",\"version\":\"1\"}},\
+             \"status\":\"complete\",\"roster\":{{\"expected\":{n},\"observed\":{n},\"failed\":0}},\
+             \"verification\":{{\"sandbox\":\"bubblewrap\",\"all_passed\":true}}}}"
+        ),
         _ => std::process::exit(64),
     }
 }
