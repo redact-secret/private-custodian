@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Synthetic health-only MicroVM image experiment; never protected execution authority",
+  "Description": "Synthetic health-only MicroVM image experiment; never protected execution authority. NOTE (2026-10-05, ADR 0140): deploying this template currently fails CloudFormation's own early property validation -- the AWS::Lambda::MicrovmImage resource-provider schema requires Logging.Disabled to be a boolean, but the real lambda-microvms service API requires it to be an empty object ({}), confirmed directly against the raw CreateMicrovmImage call and by live_health.py's own exact-configuration check. Neither value satisfies both; this is an AWS-side mismatch between the CFN provider and its underlying service, not a bug fixable in this template. The 2026-10-05 rerun used the raw lambda-microvms CLI directly instead of this template for that reason.",
   "Parameters": {
     "ImageName": {"Type": "String", "AllowedPattern": "custodian-poc-[a-z0-9-]+", "MaxLength": 64},
     "ArtifactUri": {"Type": "String", "AllowedPattern": "s3://[^ ]+"},
