@@ -6,6 +6,14 @@ probe, not a custody deployment or a general cleanup service. New experiments
 require their own operator authorization and cost ceiling. Use public synthetic
 data only. AWS authority and reviewed policy remain outside these programs.
 
+A second authorized rerun (2026-10-05, identical $50/profile/region terms) followed
+this exact procedure plus a new third image build (the real sandboxed runner,
+`Dockerfile.runner`) that did not exist for the first experiment. See
+[ADR 0140](../adr/0140-s4-live-rerun-real-sandbox-runner-findings.md) for the findings
+and the "image build egress" note below (`egressNetworkConnectors` must be an empty
+list for a build to succeed; supplying the denied connector there fails the build, not
+just the runtime test).
+
 ## S4 (issue #57): reproducible rerun matrix -- prepared, NOT executed
 
 **This matrix is prepared for execution but has NOT been run.** Live AWS
