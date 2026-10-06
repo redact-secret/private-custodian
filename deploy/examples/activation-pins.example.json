@@ -1,0 +1,31 @@
+{
+  "schema": "private-custodian.example.activation-pins/0",
+  "note": "Shape only (issue 72, ADR 0146, docs/pii-operational-activation-checklist.md). The exact pins a restricted activation review must fill from the real deployment, kept in the private operations store and never in this repository. Every value here is a placeholder and every status is PENDING: nothing is authorized, provisioned or activated. The first protected evaluation and the benchmark authority cutover are separate approvals and are not granted by this file.",
+  "status": "PENDING",
+  "approvals": {
+    "restricted_activation": {"status": "PENDING", "approver_role": "maintainer", "second_reviewer": "procedural if solo-maintainer (ADR 0103)"},
+    "first_protected_evaluation": {"status": "NOT_AUTHORIZED", "separate_from": "restricted_activation"},
+    "benchmark_authority_cutover": {"status": "NOT_AUTHORIZED", "separate_from": ["restricted_activation", "first_protected_evaluation"]}
+  },
+  "pins": {
+    "control_binary_sha256": {"owner": "operations", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "signer_binary_sha256": {"owner": "signer custodian", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "daemon_config_sha256": {"owner": "operations", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "operator_policy_sha256": {"owner": "maintainer", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "disclosure_policy_sha256": {"owner": "maintainer", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "policy_activation": {"owner": "maintainer", "activation_id": "pac_placeholderreplacewithreal", "sequence": 0, "status": "PENDING"},
+    "signer_public_key_hex": {"owner": "signer custodian", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "signer_key_id": {"owner": "signer custodian", "value": "key_placeholder00000000003", "status": "PENDING"},
+    "engine_sha256": {"owner": "engineering", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "adapter_sha256": {"owner": "engineering", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "scanner_candidate_sha256": {"owner": "engineering", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "node_runtime_sha256_aarch64": {"owner": "engineering", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "engine_config_sha256": {"owner": "engineering", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "worker_image_manifest_sha256": {"owner": "operations", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "epoch_id": {"owner": "maintainer", "value": "epoch_placeholder0000000001", "status": "PENDING"},
+    "epoch_commitment_sha256": {"owner": "maintainer", "value": "0000000000000000000000000000000000000000000000000000000000000000", "status": "PENDING"},
+    "feed_id": {"owner": "maintainer", "value": "fed_placeholder00000000001", "status": "PENDING"},
+    "destination_id": {"owner": "maintainer", "value": "placeholder-destination", "status": "PENDING"},
+    "ledger_checkpoint_seq_chain": {"owner": "maintainer", "value": "UNSET", "status": "PENDING"}
+  }
+}

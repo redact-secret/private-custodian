@@ -1,0 +1,37 @@
+{
+  "schema": "private-custodian.example.ec2-worker-host/0",
+  "note": "Shape only (issue 72, ADRs 0142 to 0145). Placeholders for the per-attempt worker host pins that custodian-worker-ec2 binds (HostPins). No account, region, subnet, instance or image exists. Every UNMEASURED value stays UNMEASURED until recorded from the exact host under an authorized experiment (docs/arm64-sizing-measurement-plan.md).",
+  "status": "PENDING",
+  "image": {
+    "ami_id": "ami-00000000",
+    "ami_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "architecture": "aarch64",
+    "rule": "an immutable id built by a reviewed recipe, never a mutable alias or latest tag"
+  },
+  "launch": {
+    "instance_class": "DECIDE (sizing is UNMEASURED)",
+    "lifecycle": "fresh per attempt; terminate after settlement; no stop, start, hibernate or reuse",
+    "root_and_data_volumes": "delete on termination; encrypted",
+    "imds": "v2 required, hop limit 1",
+    "ssh_ingress": "none",
+    "idempotency_token": "derived from the full attempt identity by the adapter, never hand written",
+    "max_lifetime_secs": "DECIDE (janitor bound; UNMEASURED)",
+    "janitor_sweep_interval_secs": "DECIDE (UNMEASURED)"
+  },
+  "pins_recorded_per_attempt": [
+    "request, approval, reservation, execution, attempt and fence",
+    "plan, candidate, config, job digest",
+    "runner image digest and version",
+    "engine, adapter and scanner file digests (Node is the scanner-0 runtime artifact, architecture-specific)",
+    "ami_id and ami_manifest_sha256"
+  ],
+  "permissions": {
+    "control_role_for_provider": "launch, describe, terminate and list on the owned inventory only; separate from the worker role",
+    "worker_role": "read the inbound object prefix, write the outbound result prefix; nothing else"
+  },
+  "acceptance_pending": [
+    "run_self_check on this exact image: Verified, no skipped success",
+    "isolation probes with positive controls",
+    "measured startup, resident memory and headroom recorded as UNMEASURED until run"
+  ]
+}

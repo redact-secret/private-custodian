@@ -16,6 +16,28 @@ being private, and publishing code does not change authorized data use.
 > None of it is an independent protected evaluation.** No server, host, cloud resource, production key, ledger
 > write, webhook activation, protected corpus or protected run exists or was used.
 
+## Reconciliation, 2026-10-06 (issue 72; ADR 0135, 0140 to 0146)
+
+The sections below are the historical S6 record (2026-10-03) and are preserved, not rewritten. Where a later ADR
+changed a statement, this section governs. State vocabulary used from here on, in increasing strength, each
+needing its own evidence: **planned**, **implemented** (code exists), **synthetic-tested** (public synthetic
+data, test keys, doubles), **host-verified** (run on the exact real host and image), **operational** (provisioned
+and authorized). Today nothing is host-verified or operational.
+
+| Topic | Superseding position | State |
+| --- | --- | --- |
+| Custodian-owned PII contracts (entry unit, embedded aggregates, nine-label `overall` profile, file vs tree digest, Node placement) | **Decided**, not awaiting a decision: ADR 0127, 0135, 0145. The #37 open-question list is closed on the custodian side | synthetic-tested (`pii_engine.rs`, `contract_compat.rs`, `aggregate_contract.rs`) |
+| Engine side (HG-5, R-3, D2) | pii-eval adoption (#30) is downstream work; a reference-patched CLI is a separate synthetic artifact; both pinned engines are NOT yet run on the exact host | planned; synthetic reference only |
+| Remote worker | ADR 0140: the Lambda MicroVM self-check failed. ADR 0141 to 0144: EC2 on-demand, fresh pinned-AMI instance per attempt, terminated after settlement, write-ahead attempt record, fence, verified terminate, independent janitor. Adapter `custodian-worker-ec2` is not selectable in the daemon; the durable attempt table is not built | synthetic-tested (provider double, crash matrix); not host-verified |
+| Sizing | ADR 0145: all ARM64 values UNMEASURED; x86_64 Node numbers are not ARM64 proof | planned |
+| Operational PII policy (HG-9) | Not activated. The synthetic test policy is never operational. Procedure and activation order: ADR 0146 | planned |
+| Catalog, epoch, signer key, delivery transport | Authoring/sealing CLI, key publish/retire command and authenticated transport are NOT IMPLEMENTED; procedure in ADR 0146 | planned |
+| Deployment shapes | `deploy/examples/` templates for the control/signer/exporter/worker arrangement, PENDING only | implemented as templates; synthetic-tested for placeholders |
+| Verdicts in section 1 | Unchanged: NO-GO for publication and for any protected run | n/a |
+
+The restricted activation list is [pii-operational-activation-checklist.md](pii-operational-activation-checklist.md);
+the first protected evaluation and the benchmark authority cutover are separate approvals, not granted by it.
+
 ## Completion report
 
 Facts only, in four parts. Detail and evidence paths are in the sections that follow.
@@ -60,11 +82,11 @@ decision.
 
 ### 4. Remaining issues and the exact next-work order
 
-1. **Engines** (issue 37 and the engine repositories): emit `worker-result/1` with `private-custodian.aggregates/1`
+1. **Engines** (the custodian contract is decided, ADR 0127/0135/0145; adoption is pii-eval #30 and the engine repositories): emit `worker-result/1` with `private-custodian.aggregates/1`
    (ADR 0127; HG-5 and R-3). Nothing real can be released before this.
 2. **Decide how GitHub is reached** (HG-7): an HTTPS client behind its own ADR, or keep intake off and use the operator CLI
    path for the first deployment. The webhook stays Inactive either way until the checklist is done.
-3. **Hosting feasibility** (epic 40, the Lambda MicroVM proofs of concept) informs the host choice for checklist
+3. **Hosting feasibility** (epic 40; the Lambda MicroVM path failed its self-check, ADR 0140, and the EC2 per-attempt worker was selected, ADR 0141 to 0145, unmeasured and not host-verified) informs the host choice for checklist
    section 1; it does not replace the recovery verification done here.
 4. **Resolve the private-ledger repository** (checklist section 4): it is private but not empty.
 5. **Publication gate** (separate from deployment): the clean one-commit snapshot excluding `.claude/` and

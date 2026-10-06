@@ -1,0 +1,26 @@
+{
+  "schema": "private-custodian.example.protected-delivery/0",
+  "note": "Shape only (issue 72, ADR 0146). The delivery requirements for approved projections and the revocation feed. Implemented today: the signed v2 destination-bound projection, the revocation feed envelope and the FeedDestination contract exercised against in-memory and directory doubles, and the reference consumer verification. NOT implemented: any authenticated network transport, object-store destination, TLS endpoint or consumer-side fetch client. No destination exists.",
+  "status": "PENDING",
+  "destination": {
+    "id": "placeholder-destination",
+    "public_url": "https://feed.example.invalid/custodian/",
+    "binding": "the destination id is inside the signed v2 projection payload and in the release approval digest; a consumer rejects destination_mismatch",
+    "write_identity": "control service publishing identity only",
+    "read": "anonymous read of signed documents only"
+  },
+  "bounds": {
+    "max_projection_bytes": "DECIDE (must stay within the bridge response limits)",
+    "max_feed_entries_per_envelope": 128,
+    "feed_ttl_secs": "DECIDE (short; the consumer treats an expired head as stale)",
+    "cache_ttl_secs": "DECIDE (shorter than the feed ttl)"
+  },
+  "publication_rules": {
+    "atomic": "create-if-absent per object; identical bytes accepted; different bytes refused as a conflict",
+    "in_order": "feed sequence N+1 is never written before N is confirmed",
+    "replay": "identical bytes are idempotent; conflicting bytes are refused and recorded, never overwritten",
+    "revocation_first": "after a contamination or revocation the feed is published before any further release"
+  },
+  "consumer_rejects": ["wrong_feed", "destination_mismatch", "revoked", "superseded", "stale", "expired", "bad signature", "unknown key or domain", "wrong candidate, population or configuration binding"],
+  "evidence_class": "synthetic evidence is never labelled live protected"
+}

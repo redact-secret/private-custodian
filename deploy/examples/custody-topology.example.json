@@ -1,0 +1,54 @@
+{
+  "schema": "private-custodian.example.custody-topology/0",
+  "note": "Shape only (issue 72, ADR 0146). No host, account, key, ledger remote or feed exists. Nothing parses or enforces this file. It names the zones of the selected arrangement (ADRs 0141 to 0144) and keeps the control functions on a long-lived custody control host: it does NOT assume the optional, unimplemented serverless migration (issue 46). Every status is PENDING and unauthorized.",
+  "status": "PENDING",
+  "zones": [
+    {
+      "zone": "control_host",
+      "runs": ["custodiand", "operator CLI", "exporter (repair export)", "release and feed publisher"],
+      "identity": "custodian-svc (dedicated, non-root)",
+      "holds": ["runtime store (SQLite)", "protected root (encrypted volume)", "operator policy", "disclosure policy", "ledger clone"],
+      "never_holds": ["the signing key", "provider launch credentials for the worker role", "any consumer credential"],
+      "serverless": false,
+      "status": "PENDING"
+    },
+    {
+      "zone": "signer",
+      "runs": ["custodian-signer"],
+      "identity": "custodian-signer (separate uid the control uid cannot become; separate host preferred)",
+      "holds": ["the Ed25519 root key, generated on this host"],
+      "reachable_from": "control_host over the Unix socket, one allowed peer uid",
+      "status": "PENDING"
+    },
+    {
+      "zone": "exporter_and_ledger_writer",
+      "runs": ["outbox export to the private ledger"],
+      "identity": "ledger-writer (own deploy key, one repository, not shared with CI, the App or a person)",
+      "independent_checkpoint_copy": "written by an identity neither the ledger writer nor the host root controls (decision recorded by the maintainer)",
+      "status": "PENDING"
+    },
+    {
+      "zone": "ephemeral_worker",
+      "runs": ["one attempt inside the bubblewrap sandbox"],
+      "lifecycle": "fresh launch from a pinned immutable ARM64 image per attempt, terminated after settlement, never stopped or reused (ADR 0142)",
+      "holds_no": ["database credential", "Git credential", "signer access", "ledger credential", "provider launch credential"],
+      "adapter": "custodian-worker-ec2 (not selectable in the daemon; not built into any deployment)",
+      "status": "PENDING"
+    },
+    {
+      "zone": "feed_and_projection_destination",
+      "contract": "feed-destination.example.json",
+      "written_by": "control service publishing identity only",
+      "read_by": "benchmark consumer, anonymously, signed outputs only",
+      "status": "PENDING"
+    },
+    {
+      "zone": "benchmark_consumer",
+      "reads": ["approved signed projections", "signed revocation feed"],
+      "never_reads": ["private ledger", "runtime store", "protected root", "operator policy"],
+      "pins_out_of_band": ["verification public keys per domain", "feed id", "evaluation domain", "channel label", "destination"],
+      "status": "PENDING"
+    }
+  ],
+  "separate_ci_runner": "if any self-hosted CI runner exists it is on a different host outside custody credentials and data paths (ADR 0142)"
+}

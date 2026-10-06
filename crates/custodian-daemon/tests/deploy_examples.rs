@@ -467,3 +467,84 @@ fn the_layout_matches_the_runbook_and_nothing_is_group_or_other_writable() {
     assert!(has("/srv/custodian/backups", "0700", "custodian-backup"));
     assert!(has("/var/lib/custodian-signer", "0700", "custodian-signer"));
 }
+
+// ---- issue 72: the control/signer/exporter/worker templates -------------------------
+
+fn pending_everywhere(v: &Value, path: &str, bad: &mut Vec<String>) {
+    match v {
+        Value::Object(m) => {
+            for (k, child) in m {
+                if k == "status" {
+                    let ok = matches!(child.as_str(), Some("PENDING") | Some("NOT_AUTHORIZED"));
+                    if !ok {
+                        bad.push(format!("{path}/{k}"));
+                    }
+                }
+                pending_everywhere(child, &format!("{path}/{k}"), bad);
+            }
+        }
+        Value::Array(a) => {
+            for (i, child) in a.iter().enumerate() {
+                pending_everywhere(child, &format!("{path}/{i}"), bad);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn the_custody_arrangement_templates_are_pending_and_authorize_nothing() {
+    for name in [
+        "custody-topology.example.json",
+        "ec2-worker-host.example.json",
+        "protected-delivery.example.json",
+        "activation-pins.example.json",
+    ] {
+        let v: Value = serde_json::from_str(&example(name)).unwrap_or_else(|_| panic!("{name}"));
+        assert_eq!(v["status"], "PENDING", "{name} must be PENDING at the top");
+        let mut bad = Vec::new();
+        pending_everywhere(&v, "", &mut bad);
+        assert!(
+            bad.is_empty(),
+            "{name}: a status other than PENDING: {bad:?}"
+        );
+    }
+}
+
+#[test]
+fn the_activation_pins_keep_the_three_approvals_separate_and_every_pin_empty() {
+    let v: Value = serde_json::from_str(&example("activation-pins.example.json")).unwrap();
+    let a = &v["approvals"];
+    assert_eq!(a["first_protected_evaluation"]["status"], "NOT_AUTHORIZED");
+    assert_eq!(a["benchmark_authority_cutover"]["status"], "NOT_AUTHORIZED");
+    let pins = v["pins"].as_object().unwrap();
+    assert!(pins.len() >= 15);
+    for (k, p) in pins {
+        assert_eq!(p["status"], "PENDING", "{k}");
+        assert!(p["owner"].as_str().is_some_and(|o| !o.is_empty()), "{k}");
+        if let Some(val) = p["value"].as_str() {
+            let empty = val.chars().all(|c| c == '0')
+                || val == "UNSET"
+                || !val.starts_with(char::is_numeric);
+            assert!(empty, "{k} carries a non-placeholder value");
+        }
+    }
+}
+
+#[test]
+fn the_topology_keeps_control_functions_off_serverless_and_the_signer_key_off_the_control_host() {
+    let v: Value = serde_json::from_str(&example("custody-topology.example.json")).unwrap();
+    let zones = v["zones"].as_array().unwrap();
+    let control = zones.iter().find(|z| z["zone"] == "control_host").unwrap();
+    assert_eq!(control["serverless"], false);
+    let never = control["never_holds"].to_string();
+    assert!(never.contains("signing key"));
+    let worker = zones
+        .iter()
+        .find(|z| z["zone"] == "ephemeral_worker")
+        .unwrap();
+    assert!(worker["lifecycle"]
+        .as_str()
+        .unwrap()
+        .contains("never stopped or reused"));
+}
