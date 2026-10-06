@@ -53,6 +53,8 @@ jobs:
         run: python3 -m unittest discover -s tests/microvm-conformance
       - name: EC2 worker template static controls (offline, deploys nothing)
         run: python3 -m unittest discover -s tests/ec2-conformance
+      - name: P7 cost estimator refuses totals with unmeasured inputs (offline)
+        run: python3 -m unittest discover -s tests/poc-cost
 
   # C12: dependency audit with a pinned tool and the policy in deny.toml
   # (RustSec advisories, yanked crates, licenses of third-party crates, crate
