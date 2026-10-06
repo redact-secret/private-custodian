@@ -8,13 +8,16 @@
 //! whose stdout is one `worker-result/1`. Instance identity is NOT a wire field:
 //! it is established by the authenticated provider port and the durable record.
 
+mod janitor;
 mod memory;
 mod port;
+
+pub use janitor::{Janitor, JanitorPolicy, SweepReport};
 
 pub use memory::{MemoryStore, SyntheticProvider};
 pub use port::{
     AttemptKey, AttemptRecord, AttemptStore, Gates, HostPins, InstanceId, InstanceReport,
-    InstanceState, Phase, Provider, ProviderError, StoreError,
+    InstanceState, Outcome, OwnedInstance, Phase, Provider, ProviderError, StoreError,
 };
 
 use custodian_contracts::common::{EvaluationDomain, ProtocolRef};
@@ -39,6 +42,10 @@ pub enum AdapterError {
     /// Provider-reported instance does not match the recorded identity or pins.
     InstanceMismatch,
     Oversized,
+    /// Another attempt of this execution still owns the live fence.
+    FenceHeld,
+    /// Provider terminate was not verified by a follow-up describe.
+    TerminateUnverified,
     Result(Refusal),
     Provider(ProviderError),
     Store(StoreError),
@@ -106,6 +113,19 @@ impl<P: Provider, S: AttemptStore, G: Gates> Adapter<P, S, G> {
             }
             return Ok(key);
         }
+        // Single live-fence owner per execution: fences strictly increase and a
+        // new attempt needs every earlier attempt closed (termination verified).
+        for (other_key, other) in self.store.list()? {
+            if other_key.execution != key.execution {
+                continue;
+            }
+            if other.binding.fence.get() >= binding.fence.get() {
+                return Err(AdapterError::StaleFence);
+            }
+            if !other.terminated {
+                return Err(AdapterError::FenceHeld);
+            }
+        }
         let rec = AttemptRecord {
             binding: binding.clone(),
             pins: pins.clone(),
@@ -113,6 +133,8 @@ impl<P: Provider, S: AttemptStore, G: Gates> Adapter<P, S, G> {
             phase: Phase::LaunchIntent,
             instance: None,
             result_digest: None,
+            exposed: false,
+            terminated: false,
             version: 0,
         };
         self.store.insert(&key, rec)?;
@@ -169,6 +191,7 @@ impl<P: Provider, S: AttemptStore, G: Gates> Adapter<P, S, G> {
         self.check_instance(&rec, &instance)?;
         let mut next = rec.clone();
         next.phase = Phase::Delivering;
+        next.exposed = true;
         let version = self.store.update(key, rec.version, next.clone())?;
         self.provider
             .deliver(&instance, &rec.token, job)
@@ -217,25 +240,53 @@ impl<P: Provider, S: AttemptStore, G: Gates> Adapter<P, S, G> {
         Ok(validated)
     }
 
-    /// Idempotent terminate; legal in every phase that has an instance, and the
-    /// way an ambiguous, failed or settled attempt ends. Never reuses the instance.
+    /// Idempotent, verified terminate; legal in every phase and the way an
+    /// ambiguous, failed or settled attempt ends. The attempt only counts as
+    /// closed (`terminated`) after a follow-up describe reports `Terminated`, or
+    /// when no instance can be found. Never stops or reuses an instance, never
+    /// clears exposure.
     pub fn terminate(&self, key: &AttemptKey) -> Result<(), AdapterError> {
         let rec = self.require(key)?;
-        if let Some(i) = &rec.instance {
-            self.provider.terminate(i).map_err(AdapterError::Provider)?;
+        if rec.terminated {
+            return Ok(());
         }
-        if rec.phase != Phase::Terminated {
-            let mut next = rec.clone();
-            next.phase = if rec.phase == Phase::Settled {
-                Phase::Terminated
-            } else {
-                Phase::Failed
-            };
-            if rec.phase != Phase::Failed {
-                self.store.update(key, rec.version, next)?;
+        let instance = match &rec.instance {
+            Some(i) => Some(i.clone()),
+            None => self
+                .provider
+                .find_by_token(&rec.token)
+                .map_err(AdapterError::Provider)?,
+        };
+        if let Some(i) = &instance {
+            self.provider.terminate(i).map_err(AdapterError::Provider)?;
+            let report = self.provider.describe(i).map_err(AdapterError::Provider)?;
+            if report.state != InstanceState::Terminated {
+                return Err(AdapterError::TerminateUnverified);
             }
         }
+        let mut next = rec.clone();
+        next.instance = instance;
+        next.exposed = rec.is_exposed();
+        next.terminated = true;
+        next.phase = if matches!(rec.phase, Phase::Settled | Phase::Terminated) {
+            Phase::Terminated
+        } else {
+            Phase::Failed
+        };
+        self.store.update(key, rec.version, next)?;
         Ok(())
+    }
+
+    /// Cancellation: verified terminate, then the deterministic outcome. An
+    /// exposed run stays `ExposedConsumed`; this crate never refunds, and a late
+    /// result for a cancelled attempt is refused (`collect` needs `Delivered`).
+    pub fn cancel(&self, key: &AttemptKey) -> Result<Outcome, AdapterError> {
+        self.terminate(key)?;
+        self.outcome(key)
+    }
+
+    pub fn outcome(&self, key: &AttemptKey) -> Result<Outcome, AdapterError> {
+        Ok(self.require(key)?.outcome())
     }
 
     /// Restart reconciliation from custodian-owned state only. Intent without an
@@ -246,25 +297,25 @@ impl<P: Provider, S: AttemptStore, G: Gates> Adapter<P, S, G> {
         let rec = self.require(key)?;
         match rec.phase {
             Phase::LaunchIntent | Phase::Ambiguous => {
-                if let Some(id) = self
+                let found = self
                     .provider
                     .find_by_token(&rec.token)
-                    .map_err(AdapterError::Provider)?
-                {
-                    let mut next = rec.clone();
-                    next.instance = Some(id);
-                    next.phase = Phase::Failed;
-                    if rec.phase == Phase::LaunchIntent {
+                    .map_err(AdapterError::Provider)?;
+                match (found, rec.phase) {
+                    (None, Phase::LaunchIntent) => {}
+                    (Some(id), Phase::LaunchIntent) => {
+                        let mut next = rec.clone();
+                        next.instance = Some(id);
                         next.phase = Phase::Launched;
+                        self.store.update(key, rec.version, next)?;
                     }
-                    self.store.update(key, rec.version, next)?;
-                    if rec.phase == Phase::Ambiguous {
+                    (found, _) => {
+                        let mut next = rec.clone();
+                        next.instance = found;
+                        next.phase = Phase::Failed;
+                        self.store.update(key, rec.version, next)?;
                         self.terminate(key)?;
                     }
-                } else if rec.phase == Phase::Ambiguous {
-                    let mut next = rec.clone();
-                    next.phase = Phase::Failed;
-                    self.store.update(key, rec.version, next)?;
                 }
             }
             Phase::Delivering => self.terminate(key)?,

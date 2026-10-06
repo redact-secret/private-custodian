@@ -278,7 +278,12 @@ fn launch_is_idempotent_and_one_instance_per_attempt() {
     let (k, id) = ready(&a);
     assert_eq!(a.launch(&k).unwrap(), id);
     assert_eq!(a.provider.launches(), 1);
-    // A new attempt is a new instance, never reuse.
+    // A new attempt needs the earlier one closed, and is a new instance, never reuse.
+    assert_eq!(
+        a.begin(&binding_with(2, 2), &pins()).err(),
+        Some(AdapterError::FenceHeld)
+    );
+    a.terminate(&k).unwrap();
     let k2 = a.begin(&binding_with(2, 2), &pins()).unwrap();
     assert_ne!(a.launch(&k2).unwrap(), id);
     assert_eq!(a.provider.launches(), 2);

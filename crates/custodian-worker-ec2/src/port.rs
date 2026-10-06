@@ -66,9 +66,21 @@ pub struct InstanceReport {
 pub enum ProviderError {
     Unavailable,
     Unknown,
+    /// More than one owned instance answers to one token: never guess.
+    Ambiguous,
     /// Token reused with different pins.
     TokenConflict,
     Refused,
+}
+
+/// One instance from the exact owned inventory (provider-side tag match, never a
+/// worker claim). `launched_at` is provider-reported seconds on the janitor clock.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnedInstance {
+    pub instance: InstanceId,
+    pub client_token: String,
+    pub state: InstanceState,
+    pub launched_at: u64,
 }
 
 /// Authenticated transport and lifecycle. Implementations must be idempotent on
@@ -81,6 +93,9 @@ pub trait Provider {
     fn deliver(&self, id: &InstanceId, token: &str, job: &[u8]) -> Result<(), ProviderError>;
     fn fetch_result(&self, id: &InstanceId, token: &str) -> Result<Vec<u8>, ProviderError>;
     fn terminate(&self, id: &InstanceId) -> Result<(), ProviderError>;
+    /// Exact inventory of instances carrying this custodian's ownership tag,
+    /// including terminated ones still reported. Never a name or prefix match.
+    fn list_owned(&self) -> Result<Vec<OwnedInstance>, ProviderError>;
 }
 
 /// Custodian-owned gates, answered from the durable store/ledger, never from
@@ -141,7 +156,50 @@ pub struct AttemptRecord {
     pub phase: Phase,
     pub instance: Option<InstanceId>,
     pub result_digest: Option<String>,
+    /// Set durably BEFORE the first input byte is sent; never cleared. Exposed
+    /// uncertainty stays consumed.
+    pub exposed: bool,
+    /// True only after provider termination was verified (or no instance can
+    /// exist). An attempt is the live-fence owner until this is true.
+    pub terminated: bool,
     pub version: u64,
+}
+
+impl AttemptRecord {
+    /// Exposure is monotonic: the flag or any phase at or past delivery start.
+    pub fn outcome(&self) -> Outcome {
+        if let Some(d) = &self.result_digest {
+            Outcome::ResultAccepted(d.clone())
+        } else if !self.terminated {
+            Outcome::Open
+        } else if self.is_exposed() {
+            Outcome::ExposedConsumed
+        } else {
+            Outcome::NotExposed
+        }
+    }
+
+    pub fn is_exposed(&self) -> bool {
+        self.exposed
+            || matches!(
+                self.phase,
+                Phase::Delivering | Phase::Delivered | Phase::Settled
+            )
+    }
+}
+
+/// Deterministic accounting outcome. This crate never refunds; `NotExposed` only
+/// states that no input reached any instance, leaving release to the ledger policy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Outcome {
+    /// Not closed yet.
+    Open,
+    /// Result digest accepted exactly once.
+    ResultAccepted(String),
+    /// Possible or certain exposure without an accepted result: stays consumed.
+    ExposedConsumed,
+    /// Closed with no input ever sent.
+    NotExposed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,6 +212,7 @@ pub enum StoreError {
 /// Durable, compare-and-swap attempt mapping. `update` returns the new version.
 pub trait AttemptStore {
     fn load(&self, key: &AttemptKey) -> Result<Option<AttemptRecord>, StoreError>;
+    fn list(&self) -> Result<Vec<(AttemptKey, AttemptRecord)>, StoreError>;
     fn insert(&self, key: &AttemptKey, rec: AttemptRecord) -> Result<(), StoreError>;
     fn update(
         &self,
