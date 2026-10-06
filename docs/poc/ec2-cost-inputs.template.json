@@ -1,0 +1,96 @@
+{
+  "schema": "p7-cost-inputs/1",
+  "note": "Template. Every value is UNMEASURED; fill only from an authorized live experiment (#40) with billed units from the account's own billing data. Synthetic public data only.",
+  "components": {
+    "compute_burst": {
+      "description": "EC2 on-demand instance-seconds while running (launch to terminate)",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    },
+    "ebs_volumes": {
+      "description": "EBS GiB-month and any provisioned IOPS/throughput for root/data volumes (until deleted)",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    },
+    "ami_snapshot_storage": {
+      "description": "AMI backing snapshot GiB-month plus any copy/restore reads",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    },
+    "interface_endpoint_hours": {
+      "description": "interface VPC endpoint hours (per AZ) for the control channel",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    },
+    "endpoint_data_processing": {
+      "description": "GB processed through interface endpoints",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    },
+    "gateway_endpoint_and_transfer": {
+      "description": "S3 gateway endpoint (no hourly charge) plus request and data transfer charges",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    },
+    "logs": {
+      "description": "log ingestion GB and retained GB-month",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    },
+    "janitor_and_control_services": {
+      "description": "independent janitor and control-service compute and requests",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    },
+    "signing": {
+      "description": "signer operations and key-provider charges (the worker never signs)",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    },
+    "retained_resources": {
+      "description": "anything intentionally retained with owner and expiry (else zero, measured)",
+      "status": "UNMEASURED",
+      "billed_unit": null,
+      "basis": null,
+      "quantity": null,
+      "unit_price_usd": null,
+      "source": null
+    }
+  }
+}

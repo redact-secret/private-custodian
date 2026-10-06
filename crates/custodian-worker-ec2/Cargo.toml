@@ -1,0 +1,17 @@
+[package]
+name = "custodian-worker-ec2"
+description = "Offline EC2 remote worker adapter port and synthetic provider double; not a deployed or verified host."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+custodian-contracts = { path = "../custodian-contracts" }
+custodian-worker = { path = "../custodian-worker" }
+custodian-worker-microvm = { path = "../custodian-worker-microvm" }
+sha2 = "=0.10.9"
+serde_json = "=1.0.151"

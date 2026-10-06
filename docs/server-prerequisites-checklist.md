@@ -12,6 +12,20 @@ This repository is maintained by the Redact Secret project. Every verification n
 project-maintained evidence of functional behavior on public synthetic data, never an independent protected
 evaluation, and a passing item here does not by itself authorize a protected run.
 
+## Reconciliation (issue 72, 2026-10-06)
+
+This list is unchanged as history of the host-independent steps, with these amendments. The worker host is now the
+per-attempt EC2 arrangement of ADR 0141 to 0145 (fresh pinned ARM64 image per attempt, terminated after
+settlement) rather than a single shared host or the failed Lambda MicroVM path (ADR 0140); item 1.1 and section 5
+apply to that exact image, and nothing is host-verified. Custodian-owned PII contracts are decided (ADR 0127, 0135,
+0145); what remains is operational. States are planned, implemented, synthetic-tested, host-verified, operational;
+every item below is at most planned. The PII-specific pins, owners and the separation of the restricted activation,
+the first protected evaluation and the benchmark cutover are in
+[pii-operational-activation-checklist.md](pii-operational-activation-checklist.md) (ADR 0146); the placeholder
+shapes are `deploy/examples/{custody-topology,ec2-worker-host,protected-delivery,activation-pins}.example.json`.
+Not implemented and needing engineering first: operator epoch-sealing command (8.3 is programmatic), key
+publish/retire command (3.5), authenticated feed transport (section 7), daemon selection of the EC2 adapter.
+
 ## How to use it
 
 - Work in order. A later section assumes the evidence of the earlier ones exists. Stop at the first item that
@@ -157,7 +171,7 @@ Only when **every** item in sections 0 to 10 is done. The webhook stays **Inacti
 
 | # | What | Who | Evidence to record | Verified by |
 | --- | --- | --- | --- | --- |
-| 12.1 | Engines emit `worker-result/1` with the aggregates artifact (an engineering blocker in the engine repositories; HG-5, R-3). | engineering | the engine versions and a conformance run | [release-readiness.md](release-readiness.md) |
+| 12.1 | Engines emit `worker-result/1` with the aggregates artifact (custodian contract decided, ADR 0127/0135/0145; engine adoption pii-eval #30 is the remaining engineering blocker; HG-5, R-3). | engineering | the engine versions and a conformance run | [release-readiness.md](release-readiness.md) |
 | 12.2 | The first protected run is a human-approved request with the exact plan digest typed by an approver who is not the requester, a budget no larger than needed, and the incident owner on call. | maintainer | the approval itself | `custodian request approve`; operator-runbook section 4 |
 | 12.3 | Each later protected run is a separate approval. Releasing a projection is a further, distinct human approval bound to the exact projection digest and destination. | an approver | the approvals | disclosure.md; ADR 0120 |
 

@@ -17,6 +17,7 @@ members = [
     "crates/custodian-signer",
     "crates/custodian-daemon",
     "crates/custodian-worker-microvm",
+    "crates/custodian-worker-ec2",
 ]
 
 [workspace.package]

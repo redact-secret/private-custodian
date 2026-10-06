@@ -16,7 +16,7 @@ Every value is a placeholder:
 | Identities | `act_placeholder...`, `key_synthetic...` style strings; no person, no email address |
 | Policy numbers | the defaults the code ships with or an obvious stand-in; real values are **(decide)** items in `docs/backup-recovery.md` and the checklist |
 
-`crates/custodian-cli/tests/deploy_examples.rs` scans this whole directory and fails if a real-looking value
+`crates/custodian-daemon/tests/deploy_examples.rs` scans this whole directory and fails if a real-looking value
 appears (an address outside the documentation ranges, a real domain, key material, a token, an email address or
 an absolute home path). It also checks that each JSON example parses with the real parser for its component and
 that the systemd units keep their hardening directives. A new example must pass both.
@@ -34,6 +34,10 @@ that the systemd units keep their hardening directives. A new example must pass 
 | `backup-retention.example.json` | backup and retention decisions (docs/backup-recovery.md) | shape only; every number is a decision |
 | `feed-destination.example.json` | the contract a public feed destination must meet (docs/lifecycle-and-revocation.md) | shape only |
 | `arm64-sandbox-image.example.json` | the ARM64 inner-sandbox image/CI-tools-image contract (issue 54, ADR 0137); restates the existing `crates/custodian-worker` `Sandbox` privilege/mount contract for an ARM64 host | shape only; nothing parses or enforces it yet |
+| `custody-topology.example.json` | the control host / signer / exporter / ephemeral worker / feed / consumer arrangement (issue 72, ADR 0146); control functions stay on a long-lived host, not serverless | JSON, all statuses PENDING, control not serverless, signer key off the control host |
+| `ec2-worker-host.example.json` | per-attempt EC2 worker pins and bounds (ADRs 0142 to 0145); every sizing value DECIDE or UNMEASURED | JSON, all statuses PENDING |
+| `protected-delivery.example.json` | projection and feed delivery requirements with destination binding; the transport is NOT IMPLEMENTED | JSON, all statuses PENDING |
+| `activation-pins.example.json` | exact pin placeholders and owners for the restricted activation; first protected evaluation and benchmark cutover are NOT_AUTHORIZED | JSON, pins empty, approvals separate |
 | `ledger-remote.example.md` | how the private ledger remote is created (docs/ledger.md) | none; commands with placeholders |
 | `systemd/*.example` | service units with hardening directives | directive presence |
 | `layout/custodian.tmpfiles.example` | directory and permission layout | modes match docs/deployment-runbook.md |
