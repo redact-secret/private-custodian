@@ -51,6 +51,8 @@ jobs:
         run: python3 -m unittest discover -s tools/engines -p 'test_*.py'
       - name: MicroVM read-only preflight negative controls (no AWS credentials)
         run: python3 -m unittest discover -s tests/microvm-conformance
+      - name: EC2 worker template static controls (offline, deploys nothing)
+        run: python3 -m unittest discover -s tests/ec2-conformance
 
   # C12: dependency audit with a pinned tool and the policy in deny.toml
   # (RustSec advisories, yanked crates, licenses of third-party crates, crate

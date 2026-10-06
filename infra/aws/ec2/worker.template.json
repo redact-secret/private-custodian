@@ -1,0 +1,206 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "private-custodian EC2 worker host (ADR 0142). Design artifact: never deployed by this repository, public synthetic only. Fresh instance per attempt, terminated after settlement.",
+  "Parameters": {
+    "PinnedAmiId": {
+      "Type": "String",
+      "AllowedPattern": "^ami-[0-9a-f]{8,17}$",
+      "Description": "Immutable ARM64 AMI built from the reviewed image recipe; no mutable alias or tag."
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "WorkerSubnetId": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "Private subnet with no route to an internet gateway or NAT."
+    },
+    "ArtifactBucketArn": {
+      "Type": "String",
+      "AllowedPattern": "^arn:aws:s3:::[a-z0-9.-]{3,63}$"
+    },
+    "AuthorizationCeilingUsd": {
+      "Type": "Number",
+      "MinValue": 1,
+      "MaxValue": 50,
+      "Description": "Verified budget ceiling for a live rehearsal; the live run itself needs a separate authorization record."
+    }
+  },
+  "Resources": {
+    "WorkerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Worker: no ingress; egress only to the private-transport endpoint group",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "127.0.0.1/32",
+            "Description": "Placeholder that denies all real egress; replaced by endpoint group rules below"
+          }
+        ]
+      }
+    },
+    "EndpointSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Interface endpoints for dispatcher/control/signer transport (#42); accepts only the worker group on 443",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "SourceSecurityGroupId": {
+              "Ref": "WorkerSecurityGroup"
+            }
+          }
+        ]
+      }
+    },
+    "WorkerToEndpointEgress": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "WorkerSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "DestinationSecurityGroupId": {
+          "Ref": "EndpointSecurityGroup"
+        }
+      }
+    },
+    "WorkerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "attempt-artifact-delivery",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ArtifactBucketArn}/inbound/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ArtifactBucketArn}/outbound/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "WorkerProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "WorkerRole"
+          }
+        ]
+      }
+    },
+    "WorkerLaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateData": {
+          "ImageId": {
+            "Ref": "PinnedAmiId"
+          },
+          "InstanceType": "t4g.medium",
+          "InstanceInitiatedShutdownBehavior": "terminate",
+          "IamInstanceProfile": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "WorkerProfile",
+                "Arn"
+              ]
+            }
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled"
+          },
+          "NetworkInterfaces": [
+            {
+              "DeviceIndex": 0,
+              "AssociatePublicIpAddress": false,
+              "SubnetId": {
+                "Ref": "WorkerSubnetId"
+              },
+              "Groups": [
+                {
+                  "Ref": "WorkerSecurityGroup"
+                }
+              ],
+              "DeleteOnTermination": true
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "DeviceName": "/dev/xvda",
+              "Ebs": {
+                "VolumeSize": 30,
+                "VolumeType": "gp3",
+                "Encrypted": true,
+                "DeleteOnTermination": true
+              }
+            }
+          ],
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "custody-lifecycle",
+                  "Value": "fresh-per-attempt"
+                }
+              ]
+            },
+            {
+              "ResourceType": "volume",
+              "Tags": [
+                {
+                  "Key": "custody-lifecycle",
+                  "Value": "fresh-per-attempt"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

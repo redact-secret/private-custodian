@@ -1,6 +1,6 @@
 # 0141. Pivot the remote worker target from Lambda MicroVM to on-demand EC2
 
-- Status: proposed (design decision only); no infrastructure provisioned, no code
+- Status: proposed (design decision only); lifecycle choice amended by ADR 0142 (fresh instance per attempt); no infrastructure provisioned, no code
   written, no custody authority changed
 - Date: 2026-10-05
 - Deciders (by role): custody maintainer
