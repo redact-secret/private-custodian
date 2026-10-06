@@ -313,6 +313,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "custodian-worker-ec2"
+version = "0.0.0"
+dependencies = [
+ "custodian-contracts",
+ "custodian-worker",
+ "custodian-worker-microvm",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "custodian-worker-microvm"
 version = "0.0.0"
 dependencies = [
